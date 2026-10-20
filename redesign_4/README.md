@@ -1,0 +1,213 @@
+# Coordinated AWS football agent
+
+This project in `redesign_4/` consolidates the three reference redesigns using `redesign_2`
+as its baseline. It is a deterministic five-player controller with a separate
+SQLite-backed offline trainer. It has **not run against the intended AWS
+infrastructure**. See [the audit](docs/redesign_audit.md) for findings, selection,
+local evidence and the mandatory future AWS acceptance checklist.
+
+Requires Python 3.11+. The core runtime, CLI and trainer use only the standard
+library. AWS serving is an optional, pinned extra.
+
+```sh
+cd redesign_4
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[deployment,dev]'
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+Local tests do not need AWS credentials. Without the deployment extra, the actual
+SDK transport test is explicitly skipped; the rest of the suite still runs.
+All subsequent commands run from `redesign_4/`, the project root. The package
+contains only its own `agent/`; the sibling reference implementations remain unchanged.
+
+## Try one local decision
+
+The supplied invocation and manifest are **synthetic examples**, not captured AWS
+traffic or real match results.
+
+```sh
+mkdir -p local
+.venv/bin/python -m agent decide \
+  --input examples/invocation.json \
+  --match-id example-match --opponent-id example-opponent \
+  > local/commands.json 2> local/decisions.jsonl
+```
+
+Stdout is one JSON command array. Stderr contains structured JSONL for training.
+The callable `Runtime.handle(payload)` instead returns a JSON-array **string**.
+Each invocation controls exactly one player. Five independent invocations of the
+same snapshot and pinned settings compute the same presser, interceptor, cover
+and distinct marking assignments.
+
+The CLI writes the response before draining telemetry for up to one second.
+Incomplete logging makes the CLI exit nonzero with a diagnostic, even if the
+command was already printed. Do not ingest a mixed stderr diagnostic stream as
+JSONL after a failed CLI run.
+
+## Supported input contract
+
+The sample-compatible envelope is either
+`{"prompt": {"gameState": ..., "teamId": 0, "myPlayers": [2]}}`,
+the same `prompt` as a JSON string, or that inner object directly.
+
+| Input | Contract |
+|---|---|
+| Team/player routing | `teamId`: integer 0/1 or home/away (case-insensitive); one `myPlayers` element: integer 0-4 or `agentId_N` |
+| Players | Exactly five distinct indices per team; `teamCode`/`agentId` or legacy `teamId`/`playerId`; finite `position.x/y`, optional velocity and stamina |
+| Geometry | Centered 110 x 70 sample pitch; home attacks +x, away -x. Halftime switching and shot-label orientation require real-contract verification |
+| Stamina | 0..1 by default; explicitly select scale 100 for percentage input. Never guess scale per player |
+| Ball | Finite position, optional velocity; boolean `isFree`; otherwise `possessionAgentId` or `possessionPlayerId` plus `possessionTeamId` for known ownership |
+| Clock | Nonnegative integer `tick`, finite nonnegative `gameTime` seconds; positive `matchDuration` seconds, default **120** from original requirements |
+| Score | `{"home": nonnegative_integer, "away": nonnegative_integer}` |
+| Coach | Optional `gameState.coachInstruction`; recognized exact presets listed below. Other text has no tactical effect |
+
+**Unknown possession is not free possession.** Reused IDs without an owner team
+remain unknown, producing `unresolved_possession` telemetry and conservative
+shape, not guessed passes/shots/interceptions. Explicit `isFree=true` wins over
+stale ownership. Competition acceptance is blocked until actual ownership can be
+resolved authoritatively.
+
+Recognized coach presets are `go_all_out_attack`, `slow_the_tempo`, `press_high`,
+and `shoot_on_sight`. They adjust posture, eligibility or bounded shot range
+without bypassing lane safety or the single-presser assignment. The actual coach
+delivery channel and any additional presets remain unverified; no shout-sending
+service or arbitrary-text model is implemented.
+
+Outputs use a conservative public-sample subset: MOVE_TO, PASS, SHOOT,
+GK_DISTRIBUTE, PRESS_BALL, MARK, INTERCEPT and balanced SET_STANCE. Numeric fields
+are finite JSON numbers, IDs are integers, parameters are command-specific and
+duration is integer zero. No DRIBBLE, CLEAR, TACKLE or IDLE is invented from the
+older descriptive requirements. No reset/destructive command is emitted.
+
+Identifiable bad game state produces a validated balanced stance with sanitized
+error telemetry. Missing/invalid routing identity raises an explicit error:
+there is no safe way to manufacture the intended team/player. A valid command
+shape is **not** evidence that a server accepted or executed it.
+
+## Offline coaching
+
+```sh
+.venv/bin/python -m agent learn \
+  --db local/coach.db --manifest examples/match.json \
+  --records local/decisions.jsonl --output local/candidate.json
+.venv/bin/python -m agent report --db local/coach.db --match-id example-match
+```
+
+`learn` imports, analyzes, trains and exports. Separate `ingest` and `train`
+commands are available. A six-field manifest contains `match_id`, `opponent_id`,
+`team_id`, timezone-aware `played_at`, boolean `complete`, and `result`. A complete
+result is `[our_goals, opponent_goals]`, **not always home/away**; a partial match
+uses `result: null`. Complete means the final result is available, not that the
+replay is complete. Do not invent results for the examples.
+
+Use exactly one match and one pinned profile version per import. All five players'
+records can be merged: snapshot/tick and action/player duplicates are deduplicated;
+conflicting duplicates roll the transaction back. Partial matches may be finalized
+with unchanged identity/time/profile. Final scores cannot decrease or contradict
+observed scores. Runtime records without trusted match/opponent IDs can only be
+bound with explicit `--bind-context` after independently isolating the match.
+
+Pass/distribution attempts can be followed across explicit free-ball snapshots
+for up to **4.1 elapsed game seconds** with increasing ticks and unchanged score.
+Ticks need not be decision ordinals. Unknown ownership, score changes, expiry or
+unchanged original ownership leave the attempt unknown. Arriving at the intended
+receiver or opponent possession produces a **possible**, not confirmed, outcome.
+Missing observations and another touch can still confound this inference. Goals
+are never attributed to shots solely from score changes.
+
+General corrections require at least **three distinct supporting observation
+ticks in each of three complete matches within 30 days** for the same lesson.
+Unrelated observations cannot satisfy this gate. Weaker evidence remains a
+stored proposal; bounded, recency-weighted opponent adaptations are separate.
+All candidates are recomputed from baseline settings and retained evidence,
+not cumulatively applied to an unknown previously played profile.
+
+Inspect/export/approve a version using the exact `trained-...` identifier emitted
+by `learn` or `train`:
+
+```sh
+.venv/bin/python -m agent audit --db local/coach.db --version trained-REPLACE
+.venv/bin/python -m agent promote --db local/coach.db \
+  --version trained-REPLACE --note "approved for controlled practice"
+.venv/bin/python -m agent export --db local/coach.db \
+  --version trained-REPLACE --output local/candidate.json
+```
+
+`promote` records operator approval; **it does not deploy or demonstrate an
+improvement**. Rollback exports an older stored version and explicitly repackages
+it into all five runtimes. Preserve the SQLite database and immutable exported
+profiles; do not treat an ephemeral container filesystem as durable memory.
+SQLite transaction errors and file export failures surface explicitly. Profile
+export uses temporary-file fsync and atomic replacement; no remote store,
+background S3 refresh or automatic deployment is involved.
+
+## Optional AgentCore serving
+
+After local setup, `python -m agent.main` (or `afc-agentcore`) starts the SDK server.
+**Real-infrastructure practice requires separate authorization; competition use
+requires completing the audit's AWS acceptance checklist first.** Local ASGI
+tests exercise `/ping` and `/invocations` without opening a network connection.
+The current pinned SDK streams one SSE data event containing the JSON-array
+string; the tournament consumer's handling of this framing remains unverified.
+
+| Environment variable | Behavior |
+|---|---|
+| `AFC_PROFILE` | Optional path to validated exported JSON; loaded once at startup; invalid/missing supplied file fails startup |
+| `AFC_MATCH_ID` | Optional trusted single-match context for telemetry only; omit if autoplay match binding is not established |
+| `AFC_OPPONENT_ID` | Optional trusted opponent identity for startup profile selection and telemetry |
+| `AFC_STAMINA_SCALE` | `1` (default) or `100`; invalid values fail startup |
+
+There is intentionally no `MY_PLAYER_ID`, `LLM_ENABLED`, S3 bucket, Bedrock model
+ID or credential environment setting in this implementation. Routing is explicit
+in each invocation. Do not reuse pinned match/opponent context across unrelated
+autoplay matches. All five runtimes must load the same version and opponent
+context before a match; updating individual endpoints mid-match breaks the
+shared-plan prerequisite.
+
+The controller makes **no AWS service calls** and needs no S3, Bedrock inference,
+Memory or Gateway permissions. The platform caller still needs appropriately
+scoped `bedrock-agentcore:InvokeAgentRuntime` authorization for the actual
+runtimes; execution-role trust, artifact access, region, endpoint authorization
+and CloudWatch delivery depend on the as-yet-unprovided deployment topology.
+Do not substitute guessed ARNs or wildcard administrative policies.
+
+## Telemetry and deadline limits
+
+Application telemetry is best-effort: one background writer, at most 128 queued
+records plus one in flight, drop-newest on overflow, no retry loop. Records carry
+cumulative `telemetry.dropped`, `failed` and `last_error` (exception class only).
+`Runtime.log_status` exposes current counters and pending work;
+`flush_logs(timeout)` and `close(timeout)` are explicit bounded lifecycle methods,
+never called per live tick. Expected sink I/O/serialization failures cannot veto
+a command. A permanently blocked sink can lose logs; a frozen/killed runtime
+can lose its tail. Monitor counters and keep incomplete replay inference
+conservative. Application logs omit the raw envelope, credentials and arbitrary
+coach text; they contain football snapshots, actions and supplied match IDs.
+
+`latency_ms` measures planning/record construction, not AWS end-to-end latency.
+Queue isolation does not make process scheduling, framework logging, cold starts,
+network transit or large-input parsing bounded. The pinned SDK itself currently
+emits synchronous framework logs and dependency deprecation warnings. Only
+future deployed timing can establish the approximately one-second deadline.
+
+## Development and architecture
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m ruff check agent tests
+.venv/bin/python -m ruff format --check --quiet agent tests
+.venv/bin/python -m mypy
+```
+
+`protocol.py` owns normalization/validation, `model.py` the snapshot/profile
+types, `tactics.py` the pure team plan and choices, `runtime.py`/`telemetry.py`
+the response and logging boundary, `profile.py` profile validation/publication,
+and `trainer.py` offline evidence and coaching. `main.py` is the optional SDK
+adapter; `__main__.py` is the local CLI.
+
+See [terminology](CONTEXT.md), [state machines](state_machines.md), and
+[data flow](data_flow.md). The [single audit report](docs/redesign_audit.md)
+records baseline selection, source findings, verification and unresolved AWS
+acceptance work. Reference implementations are historical evidence, not packages
+to import from the root application.
