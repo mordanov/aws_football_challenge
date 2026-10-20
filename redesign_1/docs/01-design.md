@@ -62,13 +62,15 @@ redesign_1/
 
 ### S3 layout (bucket from env `AFC_BUCKET`, prefix `AFC_PREFIX`, default `afc/`)
 ```
-matches/<match_id>/p<N>.jsonl     per-player tick log (5 copies of the same world; ingest dedups)
+matches/<match_id>/p<N>.jsonl     per-runtime tick log (5 copies of the same world; ingest dedups)
+matches/<match_id>/meta-p<N>.json playbook name/version, score, active nudges, fingerprint
 matches/<match_id>/report.json    trainer output: KPIs, events summary, lessons fired, analyst notes
 dossiers/<key>.json               opponent profile + counter-nudges + results vs them
+dossiers/index.json               compact [{key, fp, nudges}] read by the runtimes
 playbooks/champion.json
 playbooks/challenger.json
-playbooks/history/<ts>-<name>.json
-active.json                       {"playbook": "champion"|"challenger", "version": n}
+playbooks/history/v<NNNN>-<name>.json
+active.json                       {"name", "version", "playbook": {full playbook}} - one GET per refresh
 lessons.json                      persistent error catalog with outcomes
 league.json                       results per playbook version
 ```
@@ -79,9 +81,9 @@ No network I/O. The recorder only appends to an in-memory buffer.
 
 ### Match identity
 There is no match id in the payload. A new match starts when `gameTime` goes
-backwards (or the first tick ever is seen). `match_id = <teamId>-<UTC YYYYmmddTHHMM
-of first tick>`, computed independently by each runtime; ingest groups files whose
-ids differ by at most one minute.
+backwards, after 120 s of silence, or on the first tick ever seen. `match_id =
+t<teamId>-<UTC YYYYmmddTHHMMSS of first tick>`, computed independently by each runtime;
+ingest groups ids of the same team that started within 90 s and merges them by tick.
 
 ### Playbook consistency across 5 runtimes
 Coordination functions (presser, markers, interceptor) depend only on the World and
@@ -142,7 +144,11 @@ N contrary observations). Nudges are additive deltas applied via `Playbook.with_
 | Opp carrier flank share >= 65 % (>= 10 samples) | lateral_bias 0.15 toward it |
 | Opp line high (their outfielders' mean progress in our frame < -5 m) | through_bonus +15, aerial_bonus +5 |
 | Opp deep block (mean progress > 15 m) | shot_clear_min +0.5, shape_shift +0.05 |
-| >= 2 GOAL_AGAINST on counter | def_line -0.1, press_height -0.1 |
+| >= 2 GOAL_AGAINST on counter | def_line -0.1, shape_shift -0.05 |
+
+Note: team coordination (presser, markers, posture) always uses the *base* playbook so
+the five runtimes agree; that is why in-match nudges never touch `press_height` /
+`counter_trigger` (they would have no effect). Cross-match lessons change the base, so they can.
 
 ## 7. Lessons (cross-match error catalog, `trainer/lessons.py`)
 
@@ -162,6 +168,11 @@ that contained it is discarded, it becomes `hurt` and is suppressed for 5 matche
 | gk_dist_lost | >= 2 GK distributions lost | gk_kick_min +5 |
 | stamina_collapse | mean outfield stamina < 0.25 in final 60 s | sprint_stamina_min +0.05 |
 | press_futile | 0 press wins in opp half and >= 8 opp-half presser ticks | press_height -0.1 |
+| passing_too_safe | < 10 % of >= 10 passes lost and < 3 shots | pass_lane_min -0.3 |
+| no_threat | >= 55 % possession and <= 1 shot | shape_shift +0.05 |
+
+The last two are counterweights so knobs cannot drift only in the "safe" direction.
+Lifecycle: watch -> ready -> trial -> adopted | hurt.
 
 ## 8. Opponent dossiers (`trainer/dossier.py`)
 
