@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Football lab wiring check</title>
+  <script src="app.js" defer></script>
+  <style>
+    body { font: 16px system-ui; max-width: 1100px; margin: 24px auto; padding: 16px; }
+    main { display: flex; gap: 24px; flex-wrap: wrap; }
+    svg { width: min(100%, 660px); background: #14532d; }
+    pre { white-space: pre-wrap; max-height: 420px; overflow: auto; }
+    aside { flex: 1; min-width: 260px; }
+  </style>
+</head>
+<body>
+  <h1>Football lab wiring check</h1>
+  <p>This is a saved wiring demonstration, not a playable match or benchmark.</p>
+  <label>Load local replay <input id="artifact" type="file" accept=".json"></label>
+  <p id="status" role="status">Choose a replay file</p>
+  <p id="metadata"></p>
+  <main>
+    <svg viewBox="0 0 660 420" aria-label="Saved wiring-check frame" role="img">
+      <rect x="1" y="1" width="658" height="418" fill="none" stroke="white"></rect>
+      <path d="M330 0V420" stroke="white"></path>
+      <circle cx="330" cy="210" r="54" fill="none" stroke="white"></circle>
+      <g id="players"></g>
+    </svg>
+    <aside><h2>Recorded attempts</h2><pre id="attempts"></pre></aside>
+  </main>
+</body>
+</html>
