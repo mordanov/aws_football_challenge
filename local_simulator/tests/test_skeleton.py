@@ -37,9 +37,7 @@ class SkeletonTests(unittest.TestCase):
             self.assertEqual(replay["status"], "complete")
             self.assertEqual(replay["seed"], 7)
             self.assertEqual(len(replay["observations"]), 2)
-            self.assertEqual(
-                replay["observations"][0]["frame"], replay["observations"][1]["frame"]
-            )
+            self.assertEqual(replay["observations"][0]["frame"], replay["observations"][1]["frame"])
             self.assertEqual(len(replay["frames"][-1]["players"]), 10)
             self.assertEqual(replay["frames"][-1]["tick"], 1)
             self.assertEqual(

@@ -15,9 +15,7 @@ from playwright.sync_api import sync_playwright
 class ViewerTests(unittest.TestCase):
     def test_saved_cli_artifact_renders_and_bad_version_is_visible(self):
         viewer = importlib.resources.files("football_lab").joinpath("viewer")
-        handler = functools.partial(
-            http.server.SimpleHTTPRequestHandler, directory=str(viewer)
-        )
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(viewer))
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()

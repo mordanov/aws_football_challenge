@@ -30,8 +30,6 @@ class ProcessAgentTests(unittest.TestCase):
             agent.decide(self.observation())
 
     def test_watchdog_stops_nonresponsive_stub(self):
-        agent = ProcessAgent(
-            (sys.executable, "-c", "import time; time.sleep(5)"), timeout=0.1
-        )
+        agent = ProcessAgent((sys.executable, "-c", "import time; time.sleep(5)"), timeout=0.1)
         with self.assertRaises(subprocess.TimeoutExpired):
             agent.decide(self.observation())
