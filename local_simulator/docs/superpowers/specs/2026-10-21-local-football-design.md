@@ -2,8 +2,8 @@
 
 Date: 2026-10-21
 
-Status: Design sections approved in conversation; written specification awaiting
-user review. No simulator implementation is authorized by this document alone.
+Status: Written specification approved by the user on 2026-10-21. Implementation
+planning is authorized; simulator implementation requires a separate decision.
 
 ## 1. Purpose and limits
 
