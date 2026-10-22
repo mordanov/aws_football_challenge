@@ -300,6 +300,66 @@ class TestStamina(unittest.TestCase):
         self.assertAlmostEqual(mover["stamina"], 0.58, delta=0.02)
 
 
+class TestPassShootRelease(unittest.TestCase):
+    def _carrier(self, team_id: int, player_id: int, x: float, y: float) -> list[EnginePlayerState]:
+        """One carrier plus bench players far away."""
+        carrier = _player(team_id, player_id, x=x, y=y)
+        others = [_player(team_id, i, x=-50.0, y=float(i) * 5) for i in range(5) if i != player_id]
+        opponents = [_player(1 - team_id, i, x=50.0, y=float(i) * 5) for i in range(5)]
+        return [carrier] + others + opponents
+
+    def _pass_intent(self, team_id: int, player_id: int, target_id: int) -> Intent:
+        return {
+            "team_id": team_id,
+            "player_id": player_id,
+            "command_type": "PASS",
+            "parameters": {"type": "GROUND", "target_player_id": target_id},
+            "is_one_shot": True,
+            "executed": False,
+        }
+
+    def _shoot_intent(self, team_id: int, player_id: int) -> Intent:
+        return {
+            "team_id": team_id,
+            "player_id": player_id,
+            "command_type": "SHOOT",
+            "parameters": {"aim_location": "CENTER"},
+            "is_one_shot": True,
+            "executed": False,
+        }
+
+    def test_pass_releases_ball_from_carrier(self) -> None:
+        """After PASS fires the ball must move away; carrier must not re-own it immediately."""
+        players = self._carrier(0, 0, x=0.0, y=0.0)
+        # teammate at y=25 so no other player is near the ball
+        players[1] = _player(0, 1, x=0.0, y=25.0)
+        ball = _ball(owner_team=0, owner_player=0)
+        state = _state(players=players, ball=ball)
+        # Carrier passes; everyone else holds stance
+        intents: list[Intent] = [self._pass_intent(0, 0, 1)]
+        intents += [_stance_intent(p["team_id"], p["player_id"]) for p in players if not (p["team_id"] == 0 and p["player_id"] == 0)]
+        state, _ = step(state, intents)
+        self.assertIsNone(state["ball"]["owner_team"],
+                          "Ball must be free immediately after PASS fires")
+
+    def test_shoot_sends_ball_toward_goal_not_retained(self) -> None:
+        """A SHOOT near the goal scores — ball must leave the carrier."""
+        # Place team-0 carrier just inside shooting range (53 units from centre = 2 from line)
+        players = self._carrier(0, 0, x=53.0, y=0.0)
+        ball = _ball(x=53.0, y=0.0, owner_team=0, owner_player=0)
+        state = _state(players=players, ball=ball)
+        intents: list[Intent] = [self._shoot_intent(0, 0)]
+        intents += [_stance_intent(p["team_id"], p["player_id"]) for p in players if not (p["team_id"] == 0 and p["player_id"] == 0)]
+        # Run a few steps; ball should cross goal line
+        goal_scored = False
+        for _ in range(5):
+            state, events = step(state, intents)
+            if any(e["kind"] == "GOAL" for e in events):
+                goal_scored = True
+                break
+        self.assertTrue(goal_scored, "SHOOT from close range must score a GOAL")
+
+
 class TestDeterminism(unittest.TestCase):
     def test_deterministic_step(self) -> None:
         """Same state + intents produces identical state after 40 steps."""

@@ -181,6 +181,7 @@ def step(
             ball["y"] = owner["y"]
 
     # ── 3. One-shot commands (PASS, SHOOT, GK_DISTRIBUTE) ─────────────────────
+    just_released: tuple[int, int] | None = None  # (team_id, player_id) that released the ball
     for intent in intents:
         if intent.get("executed"):
             continue
@@ -213,6 +214,7 @@ def step(
                 ball["owner_player"] = None
                 ball["in_flight"] = True
                 intent["executed"] = True
+                just_released = (team_id, player_id)
                 player["stamina"] = _clamp(player["stamina"] + _STAMINA_DRAIN["PASS"], 0.0, 1.0)
 
         elif cmd == "SHOOT" and ball["owner_team"] == team_id and ball["owner_player"] == player_id:
@@ -229,6 +231,7 @@ def step(
             ball["owner_player"] = None
             ball["in_flight"] = True
             intent["executed"] = True
+            just_released = (team_id, player_id)
             player["stamina"] = _clamp(player["stamina"] + _STAMINA_DRAIN["SHOOT"], 0.0, 1.0)
 
         elif (
@@ -249,6 +252,7 @@ def step(
             ball["owner_player"] = None
             ball["in_flight"] = True
             intent["executed"] = True
+            just_released = (team_id, player_id)
             player["stamina"] = _clamp(
                 player["stamina"] + _STAMINA_DRAIN["GK_DISTRIBUTE"], 0.0, 1.0
             )
@@ -258,6 +262,9 @@ def step(
         closest: EnginePlayerState | None = None
         closest_dist = PICKUP_RADIUS
         for p in players:
+            # Carrier that just released cannot immediately re-pick up the ball
+            if just_released and (p["team_id"], p["player_id"]) == just_released:
+                continue
             d = _dist(p["x"], p["y"], ball["x"], ball["y"])
             if d <= closest_dist:
                 closest_dist = d
