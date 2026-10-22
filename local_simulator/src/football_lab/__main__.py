@@ -33,6 +33,9 @@ def main() -> int:
         from .bench import main as bench_main
         bench_main()
         return 0
+    if len(sys.argv) > 1 and sys.argv[1] == "campaign":
+        from .cli_campaign import main as campaign_main
+        return campaign_main(sys.argv[2:])
     return _wiring_check()
 
 

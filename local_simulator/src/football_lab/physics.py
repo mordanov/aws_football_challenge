@@ -3,6 +3,7 @@
 One "decision window" = 40 physics steps = 2 simulated seconds.
 All coordinates in pitch units (1 unit ≈ 1 m, origin = centre).
 """
+
 from __future__ import annotations
 
 import math
@@ -41,10 +42,12 @@ _BALL_SPEED: dict[str, float] = {
     "GK_KICK": 2.0,
 }
 
+
 # ── Player ────────────────────────────────────────────────────────────────────
 # speed = (4.0 + 2.0 * stamina) / 40.0  per step  (from redesign_2 arrival())
 def _max_speed(stamina: float) -> float:
     return (4.0 + 2.0 * stamina) / 40.0
+
 
 # Stamina deltas per step
 _STAMINA_DRAIN = {
@@ -52,7 +55,7 @@ _STAMINA_DRAIN = {
     "SLIDE_TACKLE": -0.005,
     "MOVE_TO": -0.002,
     "INTERCEPT": -0.002,
-    "PASS": -0.002,     # burst; only on one-shot step
+    "PASS": -0.002,  # burst; only on one-shot step
     "SHOOT": -0.002,
     "GK_DISTRIBUTE": -0.002,
 }
@@ -60,6 +63,7 @@ _STAMINA_RECOVERY = 0.002
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _dist(ax: float, ay: float, bx: float, by: float) -> float:
     return math.hypot(ax - bx, ay - by)
@@ -69,9 +73,7 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
-def _intent_for(
-    team_id: int, player_id: int, intents: list[Intent]
-) -> Intent | None:
+def _intent_for(team_id: int, player_id: int, intents: list[Intent]) -> Intent | None:
     for intent in intents:
         if intent["team_id"] == team_id and intent["player_id"] == player_id:
             return intent
@@ -79,6 +81,7 @@ def _intent_for(
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def step(
     state: EngineState,
@@ -90,7 +93,7 @@ def step(
 
     # Deep-copy mutable parts
     ball: EngineBallState = dict(state["ball"])  # type: ignore[assignment]
-    players: list[EnginePlayerState] = [dict(p) for p in state["players"]]  # type: ignore[assignment]
+    players: list[EnginePlayerState] = [dict(p) for p in state["players"]]  # type: ignore[misc]
     score: list[int] = list(state["score"])
 
     # ── 1. Move players ───────────────────────────────────────────────────────
@@ -166,9 +169,11 @@ def step(
     else:
         # Owned ball travels with owner
         owner = next(
-            (p for p in players
-             if p["team_id"] == ball["owner_team"]
-             and p["player_id"] == ball["owner_player"]),
+            (
+                p
+                for p in players
+                if p["team_id"] == ball["owner_team"] and p["player_id"] == ball["owner_player"]
+            ),
             None,
         )
         if owner:
@@ -226,7 +231,11 @@ def step(
             intent["executed"] = True
             player["stamina"] = _clamp(player["stamina"] + _STAMINA_DRAIN["SHOOT"], 0.0, 1.0)
 
-        elif cmd == "GK_DISTRIBUTE" and ball["owner_team"] == team_id and ball["owner_player"] == player_id:
+        elif (
+            cmd == "GK_DISTRIBUTE"
+            and ball["owner_team"] == team_id
+            and ball["owner_player"] == player_id
+        ):
             dtype = str(params.get("type", "THROW")).upper()
             key = "GK_THROW" if dtype == "THROW" else "GK_KICK"
             tx = float(params.get("target_x", 0.0))
@@ -240,7 +249,9 @@ def step(
             ball["owner_player"] = None
             ball["in_flight"] = True
             intent["executed"] = True
-            player["stamina"] = _clamp(player["stamina"] + _STAMINA_DRAIN["GK_DISTRIBUTE"], 0.0, 1.0)
+            player["stamina"] = _clamp(
+                player["stamina"] + _STAMINA_DRAIN["GK_DISTRIBUTE"], 0.0, 1.0
+            )
 
     # ── 4. Possession pickup ──────────────────────────────────────────────────
     if ball["owner_team"] is None:
@@ -267,23 +278,27 @@ def step(
             # GOAL: team whose goal line was crossed is the defending team
             scoring_team = 0 if bx > 0 else 1
             score[scoring_team] += 1
-            events.append({
-                "tick": tick,
-                "kind": "GOAL",
-                "team_id": scoring_team,
-                "player_id": None,
-                "x": bx,
-                "y": by,
-            })
+            events.append(
+                {
+                    "tick": tick,
+                    "kind": "GOAL",
+                    "team_id": scoring_team,
+                    "player_id": None,
+                    "x": bx,
+                    "y": by,
+                }
+            )
         else:
-            events.append({
-                "tick": tick,
-                "kind": "GOAL_KICK",
-                "team_id": None,
-                "player_id": None,
-                "x": bx,
-                "y": by,
-            })
+            events.append(
+                {
+                    "tick": tick,
+                    "kind": "GOAL_KICK",
+                    "team_id": None,
+                    "player_id": None,
+                    "x": bx,
+                    "y": by,
+                }
+            )
         # Reset ball to centre (simplified restart)
         ball["x"] = 0.0
         ball["y"] = 0.0
@@ -294,14 +309,16 @@ def step(
         ball["in_flight"] = False
 
     elif abs(by) > PITCH_HALF_W:
-        events.append({
-            "tick": tick,
-            "kind": "THROW_IN",
-            "team_id": None,
-            "player_id": None,
-            "x": bx,
-            "y": by,
-        })
+        events.append(
+            {
+                "tick": tick,
+                "kind": "THROW_IN",
+                "team_id": None,
+                "player_id": None,
+                "x": bx,
+                "y": by,
+            }
+        )
         ball["y"] = math.copysign(PITCH_HALF_W, by)
         ball["vy"] = 0.0
         ball["vx"] = 0.0

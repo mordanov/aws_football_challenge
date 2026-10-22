@@ -1,4 +1,5 @@
 """Match replay v2 save / load."""
+
 from __future__ import annotations
 
 import json
@@ -37,4 +38,4 @@ def load_match_replay(path: Path) -> MatchReplay:
         raise ValueError(f"expected schema_version 2, got {data.get('schema_version')}")
     if data.get("kind") != "match-replay":
         raise ValueError(f"expected kind 'match-replay', got {data.get('kind')}")
-    return data  # type: ignore[return-value]
+    return data
