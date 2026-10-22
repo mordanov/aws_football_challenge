@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,22 @@ def bedrock_llm() -> Any:
     if not model:
         raise AdvisorError("set AFC_ADVISOR_MODEL to a Bedrock model id")
     return ChatBedrockConverse(model=model, temperature=0)
+
+
+def write_atomic(path: Path, text: str) -> None:
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None, llm: Any = None) -> int:
@@ -49,7 +66,7 @@ def main(argv: list[str] | None = None, llm: Any = None) -> int:
             "advice": advice.model_dump(),
             "profile": profile.to_dict(),
         }
-        Path(args.output).write_text(json.dumps(proposal, indent=2, sort_keys=True) + "\n")
+        write_atomic(Path(args.output), json.dumps(proposal, indent=2, sort_keys=True) + "\n")
     except (AdvisorError, OSError, ValueError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from agent.model import Profile
 
@@ -116,6 +117,14 @@ class AdvisorTest(unittest.TestCase):
             with redirect_stderr(StringIO()):
                 self.assertEqual(main(argv, llm=FakeListChatModel(responses=["junk"])), 2)
             self.assertFalse(out.exists())
+            out.write_text("previous\n")
+            with (
+                mock.patch("agent.advisor.__main__.os.replace", side_effect=OSError("disk")),
+                redirect_stderr(StringIO()),
+            ):
+                self.assertEqual(main(argv, llm=FakeListChatModel(responses=[reply])), 2)
+            self.assertEqual(out.read_text(), "previous\n")
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["m.json", out.name])
 
 
 if __name__ == "__main__":

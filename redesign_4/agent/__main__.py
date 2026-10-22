@@ -79,13 +79,15 @@ def main(argv: list[str] | None = None) -> int:
                     for key in ("match_id", "opponent_id"):
                         if record.get(key) is None:
                             record[key] = manifest.get(key)
+        base = None
+        if args.operation in ("train", "learn") and args.base_profile:
+            base = load_profile(args.base_profile)
         trainer = Trainer(args.db)
         try:
             result = None
             if args.operation in ("ingest", "learn"):
                 result = trainer.ingest(manifest, records)
             if args.operation in ("train", "learn"):
-                base = load_profile(args.base_profile) if args.base_profile else None
                 profile = trainer.train(base=base)
                 trainer.export(profile.version, args.output)
                 result = {

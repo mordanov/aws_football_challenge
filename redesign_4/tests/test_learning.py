@@ -125,6 +125,35 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(load_profile(out).style, base.style)
 
+    def test_cli_learn_bad_base_profile_writes_nothing(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+
+        from agent.__main__ import main
+
+        (self.path / "match.json").write_text(json.dumps(manifest()))
+        (self.path / "records.jsonl").write_text("\n".join(json.dumps(r) for r in records()) + "\n")
+        database = self.path / "fresh.db"
+        with redirect_stderr(StringIO()):
+            code = main(
+                [
+                    "learn",
+                    "--db",
+                    str(database),
+                    "--manifest",
+                    str(self.path / "match.json"),
+                    "--records",
+                    str(self.path / "records.jsonl"),
+                    "--output",
+                    str(self.path / "trained.json"),
+                    "--base-profile",
+                    str(self.path / "missing.json"),
+                ]
+            )
+        self.assertEqual(code, 2)
+        self.assertFalse(database.exists())
+        self.assertFalse((self.path / "trained.json").exists())
+
     def test_idempotent_sorted_import_survives_fresh_process(self):
         data = records()
         first = self.trainer.ingest(manifest(), list(reversed(data)))

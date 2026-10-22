@@ -306,7 +306,7 @@ def decide(
             assignments=plan,
         )
     if plan["presser"] == player_id:
-        if tackle_ok(s, p, style):
+        if s.owner is not None and tackle_ok(s, p, style):
             return Decision(
                 command(s, player_id, "SLIDE_TACKLE", target_player_id=s.owner[1]),
                 f"slide tackle; aggression={style.tackle_aggression:.1f}",
