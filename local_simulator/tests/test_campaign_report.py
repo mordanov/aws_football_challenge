@@ -221,3 +221,39 @@ def test_winner_claim_operational_failure_provisional():
     ]
     claim = winner_claim(results, ["a", "b"], bootstrap_seed=0)
     assert claim["reason"] == "incomplete_data"
+
+
+def test_cmd_report_sections(tmp_path, capsys):
+    """_cmd_report output contains all required sections."""
+    import argparse
+
+    from football_lab.campaign import round_robin_fixtures, save_manifest
+    from football_lab.cli_campaign import _cmd_report
+    from football_lab.entrant_contracts import CampaignManifest
+    fixtures = round_robin_fixtures(["a", "b"], seed_pool_start=0, n_blocks=2)
+    manifest: CampaignManifest = {
+        "campaign_id": "t", "track": "primary", "entrants": [],
+        "seed_pool_start": 0,
+        "budget": {"startup_timeout_s": 5.0, "request_timeout_s": 5.0, "output_size_limit": 65536},
+        "rules_version": "v1", "locked": False,
+        "fixtures": fixtures,
+        "results": [
+            {"fixture_id": f["fixture_id"], "status": "complete",
+             "score": [1, 0] if f["leg"] == 0 else [0, 1],
+             "failure_reason": None, "replay_path": None,
+             "duration_ms": 100.0, "team0_rejections": 1, "team1_rejections": 2}
+            for f in fixtures
+        ],
+    }
+    path = tmp_path / "manifest.json"
+    save_manifest(manifest, path)
+
+    args = argparse.Namespace(manifest=str(path))
+    _cmd_report(args)
+    out = capsys.readouterr().out
+
+    assert "Campaign:" in out
+    assert "Standings" in out
+    assert "Head-to-head" in out
+    assert "Operational" in out
+    assert "Winner claim" in out
