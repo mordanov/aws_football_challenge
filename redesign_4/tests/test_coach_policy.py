@@ -7,6 +7,7 @@ from golden import payloads
 from test_runtime import payload
 from test_style_tactics import snap
 
+from agent.archetypes import ARCHETYPES
 from agent.coach import choose_preset
 from agent.model import Profile
 from agent.runtime import Runtime
@@ -57,7 +58,7 @@ class RuntimeCoachTest(unittest.TestCase):
         self.assertEqual(self.coach_seen("none"), [""] * 5)
 
     def test_p99_latency_under_50ms(self):
-        profile = Profile(coach_policy="rules")
+        profile = replace(ARCHETYPES["hard_tackle"], coach_policy="rules")
         runtime = Runtime(profile, emit=lambda _record: None)
         timings = []
         try:
