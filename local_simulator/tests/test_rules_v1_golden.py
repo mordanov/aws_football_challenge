@@ -52,3 +52,7 @@ def test_v1_replay_is_byte_identical() -> None:
 
 if __name__ == "__main__":
     print(replay_digest())
+
+
+def test_explicit_v1_matches_golden() -> None:
+    assert replay_digest(rules_version="v1") == GOLDEN_V1_SHA256

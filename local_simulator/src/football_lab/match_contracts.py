@@ -127,3 +127,6 @@ ContestHook = Callable[
 
 Mutates its arguments in place and returns the events it produced.
 """
+
+CoachFn = Callable[[EngineState, int], str]
+"""Scripted coach: (state, team_id) -> preset text written to coachInstruction."""

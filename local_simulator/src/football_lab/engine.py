@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import random
+from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 from typing import Any, Protocol
 
+from football_lab import rules_v2
 from football_lab.actions import resolve_command
 from football_lab.match_contracts import (
     ActionResult,
+    CoachFn,
+    ContestHook,
     EngineBallState,
     EnginePlayerState,
     EngineState,
@@ -15,6 +21,7 @@ from football_lab.match_contracts import (
     Intent,
     MatchEvent,
     MatchReplay,
+    RulesVersion,
 )
 from football_lab.physics import (
     STEPS_PER_DECISION,
@@ -200,16 +207,35 @@ class MatchEngine:
         team0_agent: EngineAgent,
         team1_agent: EngineAgent,
         store: EngineStore,
+        *,
+        rules_version: RulesVersion = "v1",
+        rules_config: rules_v2.RulesV2Config | None = None,
+        coaches: tuple[CoachFn | None, CoachFn | None] = (None, None),
     ) -> None:
+        if rules_version not in ("v1", "v2"):
+            raise ValueError(f"unknown rules_version: {rules_version!r}")
+        if rules_config is not None and rules_version != "v2":
+            raise ValueError("rules_config requires rules_version='v2'")
         self._seed = seed
         self._agents = (team0_agent, team1_agent)
         self._store = store
+        self._rules_version = rules_version
+        self._rules_config = (
+            (rules_config or rules_v2.RulesV2Config()) if rules_version == "v2" else None
+        )
+        self._coaches = coaches
 
     def run(self, output: Path) -> MatchReplay:
         state = _initial_state(self._seed)
         frames: list[FrameRecord] = [_frame(state)]
         all_results: list[ActionResult] = []
         all_events: list[MatchEvent] = []
+
+        contest: ContestHook | None = None
+        if self._rules_config is not None:
+            contest = partial(
+                rules_v2.contest, rng=random.Random(self._seed), cfg=self._rules_config
+            )
 
         for window in range(DECISION_WINDOWS):
             tick = window * STEPS_PER_DECISION
@@ -218,6 +244,9 @@ class MatchEngine:
             cmds: list[list[dict[str, Any]]] = []
             for tid, agent in enumerate(self._agents):
                 obs = _build_observation(state, tid, self._seed)
+                coach = self._coaches[tid]
+                if coach is not None:
+                    obs["coach"] = coach(state, tid)
                 try:
                     raw = agent.decide(obs)
                     # Ensure exactly 5 commands
@@ -276,7 +305,7 @@ class MatchEngine:
 
             # ── Run 40 physics steps ───────────────────────────────────────
             for _ in range(STEPS_PER_DECISION):
-                state, events = step(state, intents)
+                state, events = step(state, intents, contest)
                 all_events.extend(events)
                 frames.append(_frame(state))
 
@@ -284,12 +313,14 @@ class MatchEngine:
             "schema_version": 2,
             "kind": "match-replay",
             "status": "complete",
-            "rules_version": "v1",
+            "rules_version": self._rules_version,
             "seed": self._seed,
             "duration_ticks": TOTAL_TICKS,
             "action_results": all_results,
             "events": all_events,
             "frames": frames,
         }
+        if self._rules_config is not None:
+            replay["rules_params"] = asdict(self._rules_config)
         self._store.save(replay, Path(output))
         return replay
