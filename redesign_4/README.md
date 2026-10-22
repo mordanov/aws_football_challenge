@@ -283,6 +283,24 @@ decisions, the goalkeeper distributed, and CloudWatch snapshots confirmed
 normalized stamina 1.0, 0.01 and 0.0 without error fallbacks. These are synthetic
 integration checks; rerun the portal Fitness Check to establish its verdict.
 
+AgentCore sessions can continue serving their original runtime version after
+redeployment. The portal reused the same Fitness Check session IDs across
+runs, so an existing session still returned the old stamina error despite
+`DEFAULT` pointing to the updated version. CloudWatch's `sessionId` identifies
+the affected session. Outside a live match, stop each affected session explicitly:
+
+```bash
+aws bedrock-agentcore stop-runtime-session \
+  --agent-runtime-arn '<runtime ARN>' --runtime-session-id '<CloudWatch sessionId>'
+```
+
+The next invocation, including one using the same session ID, starts on the
+updated version. Verified by reproducing the old fallback on all five original
+Fitness Check sessions, stopping those sessions, and receiving normal decisions
+with percentage stamina using those same IDs. Do not stop unrelated match
+sessions. A fresh-session smoke test alone does not establish that the portal
+has stopped using a stale session.
+
 The model-allowlist check expects a Bedrock model, and how it treats an
 LLM-free agent is unverified. The portal locks matches only on a `DENIED`
 verdict, and "Not verified yet" does not lock.
