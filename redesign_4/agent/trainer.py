@@ -443,7 +443,7 @@ class Trainer:
             raise KeyError(f"unknown match: {match_id}")
         return json.loads(row[0])
 
-    def train(self) -> Profile:
+    def train(self, base: Profile | None = None) -> Profile:
         rows = self.db.execute(
             "SELECT manifest, report, profile FROM matches ORDER BY id"
         ).fetchall()
@@ -558,7 +558,11 @@ class Trainer:
                 "effective_possession_losses": round(effective_losses, 6),
                 "settings": {key: round(value, 6) for key, value in tuned.items()},
             }
-        material = {"settings": asdict(settings), "opponents": scouts}
+        material: dict[str, object] = {"settings": asdict(settings), "opponents": scouts}
+        if base is not None:
+            # Learning tunes settings only; the shipped archetype and coach policy carry over.
+            material["style"] = asdict(base.style)
+            material["coach_policy"] = base.coach_policy
         digest = hashlib.sha256(
             canonical(
                 {"material": material, "matches": rows, "as_of": reference.isoformat()}

@@ -37,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
                 action="store_true",
                 help="explicitly label missing match/opponent IDs in a match-scoped export",
             )
+        if name in ("learn", "train"):
+            sub.add_argument("--base-profile", dest="base_profile")
         if name in ("learn", "train", "export"):
             sub.add_argument("--output", required=True)
         if name == "report":
@@ -83,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.operation in ("ingest", "learn"):
                 result = trainer.ingest(manifest, records)
             if args.operation in ("train", "learn"):
-                profile = trainer.train()
+                base = load_profile(args.base_profile) if args.base_profile else None
+                profile = trainer.train(base=base)
                 trainer.export(profile.version, args.output)
                 result = {
                     "report": result,

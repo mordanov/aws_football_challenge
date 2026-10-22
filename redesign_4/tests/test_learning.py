@@ -7,7 +7,7 @@ from pathlib import Path
 
 from test_runtime import edit, payload, position
 
-from agent.model import Profile, Settings
+from agent.model import Profile, Settings, Style
 from agent.profile import effective_settings, load_profile, save_profile
 from agent.protocol import decode, snapshot_dict
 from agent.runtime import Runtime
@@ -85,6 +85,45 @@ class LearningTests(unittest.TestCase):
     def tearDown(self):
         self.trainer.close()
         self.tmp.cleanup()
+
+    def test_train_keeps_base_style_and_coach_policy(self):
+        self.trainer.ingest(manifest(), records())
+        base = Profile(style=Style(0.1, 1, 0.4, 0.3, "2-1-1"), coach_policy="rules")
+        plain = self.trainer.train()
+        kept = self.trainer.train(base=base)
+        self.assertEqual((plain.style, plain.coach_policy), (Profile().style, "none"))
+        self.assertEqual((kept.style, kept.coach_policy), (base.style, base.coach_policy))
+        self.assertEqual(kept.settings, plain.settings)
+        self.assertNotEqual(kept.version, plain.version)
+        self.trainer.export(kept.version, self.path / "kept.json")
+        self.assertEqual(load_profile(self.path / "kept.json"), kept)
+
+    def test_cli_base_profile(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        from agent.__main__ import main
+
+        self.trainer.ingest(manifest(), records())
+        self.trainer.close()
+        base = Profile(style=Style(0.5, 1, 0.2, 0.0, "1-2-1"))
+        save_profile(base, self.path / "base.json")
+        out = self.path / "trained.json"
+        with redirect_stdout(StringIO()):
+            code = main(
+                [
+                    "train",
+                    "--db",
+                    str(self.path / "coach.db"),
+                    "--output",
+                    str(out),
+                    "--base-profile",
+                    str(self.path / "base.json"),
+                ]
+            )
+        self.trainer = Trainer(self.path / "coach.db")
+        self.assertEqual(code, 0)
+        self.assertEqual(load_profile(out).style, base.style)
 
     def test_idempotent_sorted_import_survives_fresh_process(self):
         data = records()
