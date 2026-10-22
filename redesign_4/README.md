@@ -209,7 +209,7 @@ string, the same framing as the official sample (`yield json.dumps(commands)`).
 | `AFC_PROFILE` | Optional path to validated exported JSON; loaded once at startup; invalid/missing supplied file fails startup |
 | `AFC_MATCH_ID` | Optional trusted single-match context for telemetry only; omit if autoplay match binding is not established |
 | `AFC_OPPONENT_ID` | Optional trusted opponent identity for startup profile selection and telemetry |
-| `AFC_STAMINA_SCALE` | `1` (default) or `100`; invalid values fail startup |
+| `AFC_STAMINA_SCALE` | `1` (local default) or `100` (set by `deploy/` for AWS percentage inputs); invalid values fail startup |
 | `AFC_PLAYER_ID` | Optional seat `0`-`4` used **only** when an invocation omits `myPlayers`; explicit routing always wins. Set per runtime by `deploy/` |
 
 There is intentionally no `LLM_ENABLED`, S3 bucket, Bedrock model ID or
@@ -229,6 +229,14 @@ Memory or Gateway permissions.
 `deploy/app/player`. `deploy.py` stages `agent/` and the chosen profile
 (default `profiles/recommended.json`) there. Each runtime differs only in its
 `AFC_PLAYER_ID` seat.
+
+All five deployments explicitly set `AFC_STAMINA_SCALE=100`: the live Fitness
+Check sends percentage stamina, unlike the public sample's fractional values.
+This normalizes 100 to 1.0 and 1 to 0.01 without guessing per player. Keep scale
+1 for local simulator inputs. Omitting the AWS setting causes
+`ValueError: stamina outside configured scale` and safe `SET_STANCE` responses,
+which fail fitness realism checks. The documented stamina range is in the
+[workshop game mechanics](https://github.com/aws-samples/sample-ai-possibilities/blob/main/agentic-football-coach/kiro-football-coach/content-reference/en/game-mechanics.md).
 
 Prerequisites: Node >= 20, `npm install -g @aws/agentcore aws-cdk`, `uv`, the AWS
 CLI, and credentials for the competition account in **us-east-1 or us-west-2**
@@ -259,13 +267,21 @@ The platform invokes from account 793938076386 by assuming
 with this role. Check that it exists with
 `aws iam get-role --role-name afwc-cross-account-agent-invoker`.
 
-Verified on the deployed runtimes with the official sample state:
+Initial transport smoke checks used the official sample state, not the live
+Fitness Check (which exposed the stamina-scale mismatch above):
 - every response is a single SSE `data:` event holding a JSON command array;
 - the GK holding the ball returns `GK_DISTRIBUTE`, and PASS carries `target_player_id`;
 - a payload without `myPlayers` uses the seat;
 - latency is about 3 s on a cold session (new microVM) and about 0.2 s warm
   from Europe, against the 5 s fitness limit;
-- no error records appeared in the CloudWatch logs.
+- those sample calls produced no CloudWatch error records; this did not prove
+  compatibility with the live Fitness Check.
+
+After correcting the scale, direct AWS checks exercised all five runtimes on
+both teams with stamina 100, 1 and 0 (30 invocations). Commands matched local
+decisions, the goalkeeper distributed, and CloudWatch snapshots confirmed
+normalized stamina 1.0, 0.01 and 0.0 without error fallbacks. These are synthetic
+integration checks; rerun the portal Fitness Check to establish its verdict.
 
 The model-allowlist check expects a Bedrock model, and how it treats an
 LLM-free agent is unverified. The portal locks matches only on a `DENIED`

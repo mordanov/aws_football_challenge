@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from test_runtime import payload
@@ -13,6 +16,46 @@ from agent.runtime import Runtime
     importlib.util.find_spec("bedrock_agentcore"), "optional deployment SDK absent"
 )
 class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
+    def test_deployed_startup_handles_percentage_stamina(self):
+        spec = json.loads(
+            (Path(__file__).resolve().parents[1] / "deploy/agentcore/agentcore.json").read_text()
+        )
+        for seat, deployment in enumerate(spec["runtimes"]):
+            for stamina in (100, 1, 0):
+                with self.subTest(runtime=deployment["name"], stamina=stamina):
+                    data = json.loads(payload(owner=(0, 0), ball=(-50.5, 0), pid=seat)["prompt"])
+                    del data["myPlayers"]
+                    for player in data["gameState"]["players"]:
+                        player["stamina"] = stamina
+                    records = []
+
+                    def serve(runtime, default_player):
+                        def invoke():
+                            result = runtime.handle(
+                                main.with_default_player({"prompt": data}, default_player)
+                            )
+                            command = json.loads(result)[0]
+                            self.assertEqual(command["playerId"], seat)
+                            self.assertNotEqual(command["commandType"], "SET_STANCE")
+                            if seat == 0:
+                                self.assertEqual(command["commandType"], "GK_DISTRIBUTE")
+                            self.assertTrue(runtime.flush_logs())
+                            self.assertEqual(records[-1]["type"], "decision")
+                            self.assertEqual(
+                                records[-1]["snapshot"]["players"][0]["stamina"],
+                                stamina / 100,
+                            )
+
+                        return SimpleNamespace(run=invoke)
+
+                    env = {item["name"]: item["value"] for item in deployment["envVars"]}
+                    with (
+                        patch.dict(os.environ, env, clear=True),
+                        patch.object(main, "create_app", side_effect=serve),
+                        patch("agent.runtime.emit_json", side_effect=records.append),
+                    ):
+                        main.main()
+
     async def test_actual_sdk_transport_preserves_command_string_and_identity(self):
         from httpx import ASGITransport, AsyncClient
 

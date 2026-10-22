@@ -16,7 +16,10 @@
       "networkMode": "PUBLIC",
       "protocol": "HTTP",
       "instrumentation": { "enableOtel": false },
-      "envVars": [{ "name": "AFC_PLAYER_ID", "value": "0" }]
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "0" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" }
+      ]
     },
     {
       "name": "r4_def",
@@ -28,7 +31,10 @@
       "networkMode": "PUBLIC",
       "protocol": "HTTP",
       "instrumentation": { "enableOtel": false },
-      "envVars": [{ "name": "AFC_PLAYER_ID", "value": "1" }]
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "1" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" }
+      ]
     },
     {
       "name": "r4_mid",
@@ -40,7 +46,10 @@
       "networkMode": "PUBLIC",
       "protocol": "HTTP",
       "instrumentation": { "enableOtel": false },
-      "envVars": [{ "name": "AFC_PLAYER_ID", "value": "2" }]
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "2" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" }
+      ]
     },
     {
       "name": "r4_fwd1",
@@ -52,7 +61,10 @@
       "networkMode": "PUBLIC",
       "protocol": "HTTP",
       "instrumentation": { "enableOtel": false },
-      "envVars": [{ "name": "AFC_PLAYER_ID", "value": "3" }]
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "3" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" }
+      ]
     },
     {
       "name": "r4_fwd2",
@@ -64,7 +76,10 @@
       "networkMode": "PUBLIC",
       "protocol": "HTTP",
       "instrumentation": { "enableOtel": false },
-      "envVars": [{ "name": "AFC_PLAYER_ID", "value": "4" }]
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "4" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" }
+      ]
     }
   ]
 }
