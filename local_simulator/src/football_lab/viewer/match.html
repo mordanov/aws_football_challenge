@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Match Replay</title>
+<style>
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+:root {
+  --bg:       #0f1117;
+  --surface:  #1a1f2b;
+  --border:   #2a3045;
+  --fg:       #e8ecf4;
+  --muted:    #8a92a8;
+  --team0:    #4a9eff;
+  --team1:    #ff7a44;
+  --ball:     #f8f8f2;
+  --pitch:    #1d4d2a;
+  --line:     rgba(255,255,255,0.55);
+  --accent:   #38d9a9;
+  --ok:       #51cf66;
+  --bad:      #ff6b6b;
+  --font-ui:  'IBM Plex Mono', 'Courier New', monospace;
+  --font-body: system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 14px; line-height: 1.5; }
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "status  status"
+    "pitch   aside"
+    "controls controls";
+  height: 100%;
+  max-height: 100vh;
+  gap: 0;
+}
+
+/* ── Status bar ──────────────────────────────────────────────────────────── */
+#status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+#status span { white-space: nowrap; }
+#status .score { color: var(--fg); font-weight: 700; font-size: 14px; }
+#status .mode  { color: var(--accent); }
+#status .seed  { color: var(--muted); }
+
+/* ── Load overlay ────────────────────────────────────────────────────────── */
+#load-overlay {
+  grid-area: 1 / 1 / 4 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg);
+}
+#load-overlay h1 { font-size: 22px; font-weight: 600; color: var(--fg); }
+#load-overlay p  { color: var(--muted); font-size: 13px; }
+#load-overlay .err { color: var(--bad); font-family: var(--font-ui); font-size: 12px; }
+#load-btn {
+  padding: 10px 24px;
+  background: var(--accent);
+  color: #0f1117;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+#load-btn:hover { opacity: 0.88; }
+#file-input { display: none; }
+
+/* ── Pitch ───────────────────────────────────────────────────────────────── */
+#pitch-wrap {
+  grid-area: pitch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px;
+  background: #0b0e14;
+}
+#pitch-svg {
+  width: 100%;
+  height: 100%;
+  max-width: 880px;
+  max-height: 560px;
+  display: block;
+}
+.pitch-bg    { fill: var(--pitch); }
+.pitch-line  { fill: none; stroke: var(--line); stroke-width: 0.4; }
+.pitch-spot  { fill: var(--line); }
+.goal-box    { fill: rgba(255,255,255,0.04); }
+.goal        { fill: none; stroke: rgba(255,255,255,0.8); stroke-width: 0.5; }
+.player0     { fill: var(--team0); stroke: #0f1117; stroke-width: 0.3; cursor: pointer; transition: r 0.1s; }
+.player1     { fill: var(--team1); stroke: #0f1117; stroke-width: 0.3; cursor: pointer; transition: r 0.1s; }
+.player-label { fill: #0f1117; font-family: var(--font-ui); font-size: 1.4px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.ball-circle  { fill: var(--ball); stroke: rgba(0,0,0,0.4); stroke-width: 0.3; }
+.selected-ring { fill: none; stroke: var(--accent); stroke-width: 0.5; stroke-dasharray: 1 0.7; }
+
+/* ── Aside ───────────────────────────────────────────────────────────────── */
+#aside {
+  grid-area: aside;
+  width: 220px;
+  min-width: 220px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 14px 12px;
+  font-size: 12px;
+}
+#aside h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+#aside .hint { color: var(--muted); font-size: 11px; }
+.player-card { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 10px; margin-bottom: 8px; }
+.player-card .name { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot0 { background: var(--team0); }
+.dot1 { background: var(--team1); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; color: var(--muted); }
+.kv .v { color: var(--fg); font-family: var(--font-ui); text-align: right; }
+.tag { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+.tag-ok  { background: rgba(81,207,102,0.18); color: var(--ok); }
+.tag-bad { background: rgba(255,107,107,0.18); color: var(--bad); }
+
+.events-list { margin-top: 10px; }
+.events-list h2 { margin-top: 0; }
+.event-row { padding: 4px 0; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; display: flex; gap: 4px; }
+.event-row .ek { color: var(--accent); font-family: var(--font-ui); }
+.event-row .et { color: var(--muted); font-size: 10px; margin-left: auto; white-space: nowrap; }
+
+/* ── Controls ────────────────────────────────────────────────────────────── */
+#controls {
+  grid-area: controls;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ctrl-btn {
+  padding: 6px 14px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  white-space: nowrap;
+}
+.ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.ctrl-btn.primary { background: var(--accent); color: #0f1117; border-color: transparent; font-weight: 700; }
+.ctrl-btn.primary:hover { opacity: 0.85; color: #0f1117; }
+#seek { flex: 1 1 180px; accent-color: var(--accent); min-width: 80px; cursor: pointer; }
+select.ctrl-btn { padding: 5px 10px; }
+.tick-label { font-family: var(--font-ui); font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* ── Stamina bar ─────────────────────────────────────────────────────────── */
+.stamina-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 4px; }
+.stamina-fill { height: 100%; border-radius: 2px; background: var(--ok); transition: width 0.1s; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Load overlay (shown until replay loaded) -->
+  <div id="load-overlay">
+    <h1>Match Replay Viewer</h1>
+    <p>Load a v2 match replay file to begin</p>
+    <button id="load-btn" class="load-btn">Open replay file…</button>
+    <input type="file" id="file-input" accept=".json">
+    <span id="load-err" class="err" hidden></span>
+  </div>
+
+  <!-- Status bar -->
+  <div id="status" hidden>
+    <span class="seed" id="st-seed">seed —</span>
+    <span>tick <span id="st-tick">0</span></span>
+    <span id="st-time">0:00.0</span>
+    <span class="score" id="st-score">0 – 0</span>
+    <span class="mode" id="st-mode">KICK_OFF</span>
+  </div>
+
+  <!-- Pitch SVG -->
+  <div id="pitch-wrap" hidden>
+    <svg id="pitch-svg" viewBox="-57 -37 114 74" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Football pitch">
+      <!-- Pitch background -->
+      <rect class="pitch-bg" x="-57" y="-37" width="114" height="74"/>
+      <!-- Pitch stripe pattern -->
+      <defs>
+        <pattern id="stripes" x="0" y="-35" width="10" height="70" patternUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="5" height="70" fill="rgba(0,0,0,0.06)"/>
+        </pattern>
+      </defs>
+      <rect x="-55" y="-35" width="110" height="70" fill="url(#stripes)"/>
+
+      <!-- Pitch boundary -->
+      <rect class="pitch-line" x="-55" y="-35" width="110" height="70"/>
+      <!-- Halfway line -->
+      <line class="pitch-line" x1="0" y1="-35" x2="0" y2="35"/>
+      <!-- Centre circle -->
+      <circle class="pitch-line" cx="0" cy="0" r="9.15"/>
+      <!-- Centre spot -->
+      <circle class="pitch-spot" cx="0" cy="0" r="0.4"/>
+      <!-- Centre kick-off arc -->
+      <circle class="pitch-line" cx="0" cy="0" r="9.15"/>
+
+      <!-- Left penalty area (team1 defends) -->
+      <rect class="goal-box" x="-55" y="-16.5" width="16.5" height="33"/>
+      <rect class="pitch-line" x="-55" y="-16.5" width="16.5" height="33"/>
+      <!-- Left 6-yard box -->
+      <rect class="pitch-line" x="-55" y="-9.16" width="5.5" height="18.32"/>
+      <!-- Left penalty spot -->
+      <circle class="pitch-spot" cx="-44" cy="0" r="0.4"/>
+      <!-- Left penalty arc -->
+      <path class="pitch-line" d="M -38.5 -7 A 9.15 9.15 0 0 0 -38.5 7" fill="none"/>
+
+      <!-- Right penalty area (team0 defends) -->
+      <rect class="goal-box" x="38.5" y="-16.5" width="16.5" height="33"/>
+      <rect class="pitch-line" x="38.5" y="-16.5" width="16.5" height="33"/>
+      <!-- Right 6-yard box -->
+      <rect class="pitch-line" x="49.5" y="-9.16" width="5.5" height="18.32"/>
+      <!-- Right penalty spot -->
+      <circle class="pitch-spot" cx="44" cy="0" r="0.4"/>
+      <!-- Right penalty arc -->
+      <path class="pitch-line" d="M 38.5 -7 A 9.15 9.15 0 0 1 38.5 7" fill="none"/>
+
+      <!-- Corner arcs -->
+      <path class="pitch-line" d="M -55 -33.7 A 1.3 1.3 0 0 1 -53.7 -35"/>
+      <path class="pitch-line" d="M -55 33.7 A 1.3 1.3 0 0 0 -53.7 35"/>
+      <path class="pitch-line" d="M 55 -33.7 A 1.3 1.3 0 0 0 53.7 -35"/>
+      <path class="pitch-line" d="M 55 33.7 A 1.3 1.3 0 0 1 53.7 35"/>
+
+      <!-- Goals (GOAL_HALF_W = 4.5) -->
+      <rect class="goal" x="-57.5" y="-4.5" width="2.5" height="9"/>
+      <rect class="goal" x="55"   y="-4.5" width="2.5" height="9"/>
+
+      <!-- Dynamic layer (populated by JS) -->
+      <g id="players-layer"></g>
+      <g id="ball-layer"></g>
+    </svg>
+  </div>
+
+  <!-- Aside panel -->
+  <div id="aside" hidden>
+    <h2>Selected player</h2>
+    <div id="aside-content">
+      <p class="hint">Click a player on the pitch to see details</p>
+    </div>
+    <div class="events-list" id="events-panel" hidden>
+      <h2 style="margin-top:12px">Events at tick</h2>
+      <div id="events-list"></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls" hidden>
+    <button id="load-again-btn" class="ctrl-btn" title="Load a different replay">Open…</button>
+    <button id="play-btn" class="ctrl-btn primary">▶ Play</button>
+    <button id="prev-btn" class="ctrl-btn" title="Previous decision (−40 ticks)">⏮ −40</button>
+    <button id="next-btn" class="ctrl-btn" title="Next decision (+40 ticks)">+40 ⏭</button>
+    <input type="range" id="seek" min="0" max="2400" value="0" step="1">
+    <span class="tick-label" id="seek-label">0 / 2400</span>
+    <select id="speed-sel" class="ctrl-btn">
+      <option value="0.5">×0.5</option>
+      <option value="1" selected>×1</option>
+      <option value="2">×2</option>
+      <option value="4">×4</option>
+    </select>
+  </div>
+</div>
+
+<script src="match.js"></script>
+</body>
+</html>

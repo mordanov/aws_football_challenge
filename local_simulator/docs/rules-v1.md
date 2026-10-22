@@ -401,6 +401,63 @@ the random seed. The engine is fully deterministic given the same seed and agent
 
 ---
 
+---
+
+## 19. Additional constants (M2 — approved 2026-10-21)
+
+### Player movement
+
+```
+player_max_speed_per_step = (4.0 + 2.0 * stamina) / 40.0   # units per physics step
+```
+
+Range: 0.10 (stamina=0) to 0.15 (stamina=1) units/step = 2–3 units/s.
+No acceleration model: players snap to max_speed each step.
+Source: `redesign_2/agent/tactics.py:arrival()` normalised to physics step size.
+
+### Stamina drain and recovery
+
+| Event | Per physics step |
+|---|---|
+| PRESS_BALL / SLIDE_TACKLE (sprint) | −0.005 |
+| MOVE_TO / INTERCEPT (normal move) | −0.002 |
+| PASS / SHOOT (burst, step 0 only) | −0.002 |
+| SET_STANCE / MARK (low effort) | 0.000 |
+| Recovery (any step not draining) | +0.002 |
+
+Stamina clamped to [0.0, 1.0].
+
+### Ball travel
+
+Launched passes and shots travel at constant speed (no decay during flight):
+
+| Launch type | Speed (units/step) |
+|---|---|
+| PASS GROUND / THROUGH | 1.5 |
+| PASS AERIAL | 1.2 |
+| SHOOT | 2.5 |
+| GK_DISTRIBUTE THROW | 1.5 |
+| GK_DISTRIBUTE KICK | 2.0 |
+
+Free rolling ball (no owner, not freshly launched):
+
+```
+damping_per_step = 0.82 ** (1.0 / 40.0)   # ≈ 0.9951 per step
+ball_vx *= damping_per_step
+ball_vy *= damping_per_step
+```
+
+This applies the approved 0.82/decision-cycle constant correctly at the physics step rate.
+
+### Decision window
+
+Decisions collected every 40 physics steps (2 simulated seconds).
+One-shot commands (PASS, SHOOT, GK_DISTRIBUTE, SLIDE_TACKLE): execute on step 0 only.
+Continuous commands (MOVE_TO, PRESS_BALL, MARK, INTERCEPT): repeat each step.
+SET_STANCE: no movement, earns stamina recovery each step.
+
+---
+
 ## Decisions (approved 2026-10-21)
 
 | # | Question | Decision |
