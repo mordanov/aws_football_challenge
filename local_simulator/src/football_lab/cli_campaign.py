@@ -18,7 +18,13 @@ from .campaign import (
     round_robin_fixtures,
     save_manifest,
 )
-from .campaign_report import bootstrap_ci, compute_standings
+from .campaign_report import (
+    bootstrap_ci,
+    compute_standings,
+    head_to_head_matrix,
+    operational_summary,
+    winner_claim,
+)
 from .engine import MatchEngine
 from .entrant_contracts import BudgetSpec, CampaignManifest, EntrantSpec, FixtureResult
 from .match_contracts import EngineState
@@ -177,30 +183,78 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_report(args: argparse.Namespace) -> int:
     manifest = load_manifest(Path(args.manifest))
-    results = [r for r in manifest["results"] if r["status"] == "complete"]
-    if not results:
-        print("no complete results")
-        return 0
+    all_results = manifest["results"]
+    results = [r for r in all_results if r["status"] == "complete"]
 
-    standings = compute_standings(results)
-    print(
-        f"\n{'Entrant':<20} {'G':>3} {'W':>3} {'D':>3} {'L':>3} {'Pts':>4} {'GF':>4} {'GA':>4} {'GD':>4}"
-    )
-    print("-" * 60)
-    for s in standings:
+    total = len(manifest["fixtures"])
+    n_complete = len(results)
+    n_failed = sum(1 for r in all_results if r["status"] == "failed")
+    is_final = n_complete == total and n_failed == 0
+    status = "[FINAL]" if is_final else f"[PROVISIONAL – {n_failed} failed]"
+    print(f"\nCampaign: {n_complete}/{total} complete {status}")
+
+    entrant_ids = sorted({
+        eid
+        for f in manifest["fixtures"]
+        for eid in (f["team0_entrant"], f["team1_entrant"])
+    })
+
+    # Standings
+    print("\nStandings")
+    print(f"{'Entrant':<22} {'G':>3} {'W':>3} {'D':>3} {'L':>3} {'Pts':>4} {'GF':>4} {'GA':>4} {'GD':>4}")
+    print("-" * 62)
+    for s in compute_standings(results):
         print(
-            f"{s['entrant_id']:<20} {s['games']:>3} {s['wins']:>3} {s['draws']:>3}"
+            f"{s['entrant_id']:<22} {s['games']:>3} {s['wins']:>3} {s['draws']:>3}"
             f" {s['losses']:>3} {s['points']:>4} {s['goals_for']:>4}"
             f" {s['goals_against']:>4} {s['goal_diff']:>+4}"
         )
 
-    ci = bootstrap_ci(results, rng_seed=0)
+    # Head-to-head
+    h2h = head_to_head_matrix(results)
+    col_w = max(12, max((len(e) for e in entrant_ids), default=12) + 2)
+    print("\nHead-to-head (W-D-L)")
+    print(f"{'':22}" + "".join(f"{e:>{col_w}}" for e in entrant_ids))
+    for a in entrant_ids:
+        row = f"{a:<22}"
+        for b in entrant_ids:
+            if a == b:
+                cell = "–"
+            else:
+                rec = h2h.get(a, {}).get(b)
+                cell = f"{rec['wins']}-{rec['draws']}-{rec['losses']}" if rec else "?"
+            row += f"{cell:>{col_w}}"
+        print(row)
+
+    # Operational summary
+    op, rejections = operational_summary(manifest)
+    print("\nOperational summary")
+    print(f"  Total: {op['total']}  Complete: {op['complete']}  Failed: {op['failed']}")
+    print(f"  {'Entrant':<22} {'Rejections':>12}")
+    print(f"  {'-' * 36}")
+    for e in entrant_ids:
+        print(f"  {e:<22} {rejections.get(e, 0):>12}")
+
+    # Pairwise 95% CI
+    ci = bootstrap_ci(results, rng_seed=manifest["seed_pool_start"])
     if ci:
-        print("\nPairwise 95% CI (per-match point differential a − b):")
+        print("\nPairwise 95% CI (per-match point differential)")
         for a, vs in sorted(ci.items()):
             for key, (lo, hi) in sorted(vs.items()):
-                b = key[3:]  # strip "vs_"
-                print(f"  {a} vs {b}: [{lo:+.2f}, {hi:+.2f}]")
+                print(f"  {a} vs {key[3:]}: [{lo:+.2f}, {hi:+.2f}]")
+
+    # Winner claim
+    n_pairs = len(entrant_ids) * (len(entrant_ids) - 1) // 2
+    print(f"\nWinner claim (99.5% CI, Bonferroni over {n_pairs} pairs)")
+    if not is_final:
+        print(f"  PROVISIONAL ({n_failed} failures) — no winner claim made")
+    else:
+        claim = winner_claim(all_results, entrant_ids, bootstrap_seed=manifest["seed_pool_start"])
+        if claim["reason"] == "clear_winner":
+            print(f"  Winner: {claim['winner_id']}")
+            print(f"  Reasoning: positive lower bound vs all {len(entrant_ids) - 1} rivals")
+        else:
+            print(f"  {claim['reason'].upper()}")
     return 0
 
 

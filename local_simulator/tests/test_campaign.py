@@ -1,6 +1,4 @@
 """Tests for campaign harness: fixture scheduling and manifest management."""
-import json
-from pathlib import Path
 
 import pytest
 

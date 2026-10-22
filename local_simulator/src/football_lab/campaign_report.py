@@ -1,11 +1,26 @@
 """Campaign scoring: standings and block-bootstrap confidence intervals."""
 from __future__ import annotations
 
+import itertools
 import random
 from collections import defaultdict
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
 
-from .entrant_contracts import EntrantStanding, FixtureResult
+from .entrant_contracts import CampaignManifest, EntrantStanding, FixtureResult
+
+
+class HeadToHeadRecord(TypedDict):
+    wins: int
+    draws: int
+    losses: int
+    goals_for: int
+    goals_against: int
+
+
+class OperationalSummary(TypedDict):
+    total: int
+    complete: int
+    failed: int
 
 
 def _parse_fixture_id(fixture_id: str) -> tuple[str, str, int, int]:
@@ -70,15 +85,23 @@ class _Block(NamedTuple):
     pts1: float  # points for team1
 
 
+class WinnerClaimResult(TypedDict):
+    winner_id: str | None
+    is_conclusive: bool
+    reason: str  # "clear_winner" | "inconclusive" | "incomplete_data"
+    intervals_99_5: dict[str, dict[str, tuple[float, float]]]
+
+
 def bootstrap_ci(
     results: list[FixtureResult],
     rng_seed: int,
     n_resamples: int = 10_000,
+    confidence: float = 0.95,
 ) -> dict[str, dict[str, tuple[float, float]]]:
-    """95% CI on per-match points for each ordered entrant pair.
+    """Bootstrap CI on per-match points for each ordered entrant pair.
 
     Resamples complete two-leg seed blocks (block integrity).
-    Returns {entrant_a: {vs_entrant_b: (lo95, hi95)}}.
+    Returns {entrant_a: {vs_entrant_b: (lo, hi)}}.
     """
     # Group by canonical ordered pair (a, b) where a < b lexicographically,
     # then by seed block.  Each block collects points from both legs.
@@ -122,13 +145,140 @@ def bootstrap_ci(
             diffs.append(diff)
             neg_diffs.append(-diff)
 
+        alpha = (1 - confidence) / 2
         diffs.sort()
         neg_diffs.sort()
-        lo_a = diffs[int(0.025 * n_resamples)]
-        hi_a = diffs[int(0.975 * n_resamples) - 1]
-        lo_b = neg_diffs[int(0.025 * n_resamples)]
-        hi_b = neg_diffs[int(0.975 * n_resamples) - 1]
+        lo_a = diffs[int(alpha * n_resamples)]
+        hi_a = diffs[int((1 - alpha) * n_resamples) - 1]
+        lo_b = neg_diffs[int(alpha * n_resamples)]
+        hi_b = neg_diffs[int((1 - alpha) * n_resamples) - 1]
         ci[a][f"vs_{b}"] = (lo_a, hi_a)
         ci[b][f"vs_{a}"] = (lo_b, hi_b)
 
     return dict(ci)
+
+
+def head_to_head_matrix(
+    results: list[FixtureResult],
+) -> dict[str, dict[str, HeadToHeadRecord]]:
+    """Return {entrant_a: {entrant_b: record}} from a's perspective (complete fixtures only)."""
+    acc: dict[str, dict[str, HeadToHeadRecord]] = defaultdict(dict)
+
+    def _entry(a: str, b: str) -> HeadToHeadRecord:
+        if b not in acc[a]:
+            acc[a][b] = {"wins": 0, "draws": 0, "losses": 0, "goals_for": 0, "goals_against": 0}
+        return acc[a][b]
+
+    for r in results:
+        if r["status"] != "complete":
+            continue
+        t0, t1, _, _ = _parse_fixture_id(r["fixture_id"])
+        g0, g1 = r["score"]
+        e01, e10 = _entry(t0, t1), _entry(t1, t0)
+        e01["goals_for"] += g0
+        e01["goals_against"] += g1
+        e10["goals_for"] += g1
+        e10["goals_against"] += g0
+        if g0 > g1:
+            e01["wins"] += 1
+            e10["losses"] += 1
+        elif g1 > g0:
+            e01["losses"] += 1
+            e10["wins"] += 1
+        else:
+            e01["draws"] += 1
+            e10["draws"] += 1
+
+    return dict(acc)
+
+
+def operational_summary(
+    manifest: CampaignManifest,
+) -> tuple[OperationalSummary, dict[str, int]]:
+    """Return (summary, rejections_by_entrant_id).
+
+    Rejections are attributed to the entrant that played as team0/team1 in each fixture.
+    """
+    results_by_id = {r["fixture_id"]: r for r in manifest["results"]}
+    rejections: dict[str, int] = defaultdict(int)
+    complete = 0
+    failed = 0
+
+    for fixture in manifest["fixtures"]:
+        fid = fixture["fixture_id"]
+        r = results_by_id.get(fid)
+        if r is None:
+            continue
+        if r["status"] == "complete":
+            complete += 1
+        else:
+            failed += 1
+        rejections[fixture["team0_entrant"]] += r["team0_rejections"]
+        rejections[fixture["team1_entrant"]] += r["team1_rejections"]
+
+    summary: OperationalSummary = {
+        "total": len(manifest["fixtures"]),
+        "complete": complete,
+        "failed": failed,
+    }
+    return summary, dict(rejections)
+
+
+def winner_claim(
+    results: list[FixtureResult],
+    entrant_ids: list[str],
+    bootstrap_seed: int,
+    n_resamples: int = 10_000,
+) -> WinnerClaimResult:
+    """Bonferroni-adjusted winner claim at 99.5% CI.
+
+    Returns incomplete_data if any pair has no complete results or any failure exists.
+    """
+    _empty: WinnerClaimResult = {
+        "winner_id": None,
+        "is_conclusive": False,
+        "reason": "incomplete_data",
+        "intervals_99_5": {},
+    }
+
+    # Require all fixtures complete and all pairs covered
+    if any(r["status"] != "complete" for r in results):
+        return _empty
+
+    complete_pairs: set[tuple[str, str]] = set()
+    for r in results:
+        t0, t1, _, _ = _parse_fixture_id(r["fixture_id"])
+        pair = (min(t0, t1), max(t0, t1))
+        complete_pairs.add(pair)
+
+    required = {
+        (min(a, b), max(a, b))
+        for a, b in itertools.combinations(sorted(entrant_ids), 2)
+    }
+    if not required.issubset(complete_pairs):
+        return _empty
+
+    ci = bootstrap_ci(results, bootstrap_seed, n_resamples, confidence=0.995)
+
+    candidates = [
+        e for e in entrant_ids
+        if all(
+            ci.get(e, {}).get(f"vs_{rival}", (float("-inf"), 0.0))[0] > 0
+            for rival in entrant_ids
+            if rival != e
+        )
+    ]
+
+    if len(candidates) == 1:
+        return {
+            "winner_id": candidates[0],
+            "is_conclusive": True,
+            "reason": "clear_winner",
+            "intervals_99_5": ci,
+        }
+    return {
+        "winner_id": None,
+        "is_conclusive": False,
+        "reason": "inconclusive",
+        "intervals_99_5": ci,
+    }

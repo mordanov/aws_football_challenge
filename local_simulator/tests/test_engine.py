@@ -149,7 +149,7 @@ class TestReplaySaveLoad(unittest.TestCase):
             from football_lab.match_replay import JsonMatchReplayStore, load_match_replay
 
             store = JsonMatchReplayStore()
-            replay = MatchEngine(
+            MatchEngine(
                 seed=42, team0_agent=StubAgent(0), team1_agent=StubAgent(1), store=store
             ).run(path)
             loaded = load_match_replay(path)
