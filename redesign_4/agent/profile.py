@@ -6,7 +6,7 @@ import tempfile
 from dataclasses import fields
 from pathlib import Path
 
-from .model import Profile, Settings
+from .model import DEFAULT_STYLE, Profile, Settings, Style
 from .protocol import number
 
 BOUNDS = {
@@ -15,6 +15,30 @@ BOUNDS = {
     "press_radius": (12.0, 30.0),
     "support_width": (10.0, 22.0),
 }
+STYLE_BOUNDS = {
+    "block_depth": (0.0, 1.0),
+    "tackle_aggression": (0.0, 1.0),
+    "tempo": (0.0, 1.0),
+}
+FORMATIONS = ("1-1-2", "2-1-1", "1-2-1")
+COACH_POLICIES = ("none", "rules")
+_REQUIRED = {"version", "settings", "opponents"}
+_OPTIONAL = {"style", "coach_policy"}
+
+
+def checked_style(data: dict) -> Style:
+    if not isinstance(data, dict) or set(data) != {f.name for f in fields(Style)}:
+        raise ValueError("style must supply all known fields and no unknown fields")
+    values = {key: number(data[key], key) for key in STYLE_BOUNDS}
+    for key, (lo, hi) in STYLE_BOUNDS.items():
+        if not lo <= values[key] <= hi:
+            raise ValueError(f"{key} outside safe bounds {lo}..{hi}")
+    committed = data["attackers_committed"]
+    if type(committed) is not int or not 1 <= committed <= 3:
+        raise ValueError("attackers_committed must be an integer 1..3")
+    if data["formation"] not in FORMATIONS:
+        raise ValueError(f"formation must be one of {FORMATIONS}")
+    return Style(attackers_committed=committed, formation=data["formation"], **values)
 
 
 def checked_settings(data: dict) -> Settings:
@@ -28,7 +52,7 @@ def checked_settings(data: dict) -> Settings:
 
 
 def parse_profile(data: dict) -> Profile:
-    if not isinstance(data, dict) or set(data) != {"version", "settings", "opponents"}:
+    if not isinstance(data, dict) or not _REQUIRED <= set(data) <= _REQUIRED | _OPTIONAL:
         raise ValueError("invalid profile fields")
     version = data["version"]
     if not isinstance(version, str) or not version.strip():
@@ -49,7 +73,11 @@ def parse_profile(data: dict) -> Profile:
             if type(scout["samples"]) is not int or scout["samples"] < 0:
                 raise ValueError("invalid scout samples")
             checked_settings(scout["settings"])
-    return Profile(version, settings, opponents)
+    style = checked_style(data["style"]) if "style" in data else DEFAULT_STYLE
+    coach_policy = data.get("coach_policy", "none")
+    if coach_policy not in COACH_POLICIES:
+        raise ValueError(f"coach_policy must be one of {COACH_POLICIES}")
+    return Profile(version, settings, opponents, style, coach_policy)
 
 
 def load_profile(path: str | Path) -> Profile:
