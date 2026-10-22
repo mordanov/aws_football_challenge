@@ -205,7 +205,8 @@ formations. The baseline is the native `1-1-2`.
 | `1-1-2` | +1.087 [+0.906, +1.275] | baseline | 191-102-27 |
 
 No delta excludes 0, so we keep `1-1-2`. `1-2-1` is the candidate to try next, as a
-between-match change only. `2-1-1` conceded 9 penalties against 1 for the others.
+between-match change only. `2-1-1` was awarded 9 penalties, against 1 for each of
+the other formations, and none of the three conceded any.
 
 ## 8. Decision (rule S2)
 
