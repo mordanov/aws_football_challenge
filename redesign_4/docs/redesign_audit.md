@@ -346,6 +346,15 @@ deployment packaging. Unknown possession remains a **conditional acceptance
 blocker**, not a reason to invent an owner. The safe implementation may hold
 shape until the integration supplies authoritative ownership.
 
+> **Superseded (deployment, Oct 2026):** the official server format and sample
+> (`lib/state.py`, `possessionAgentId` only) confirm no owner-team field is
+> sent, so "authoritative ownership" will never arrive and R2-3 would leave the
+> carrier passive in every real match. `decode` now resolves a team-less holder
+> to the same-index player within 3 m of the ball and at least 1 m nearer than
+> its counterpart; contested or distant cases stay unknown with the existing
+> warning. Real AgentCore deployment and invocation were then performed: see
+> README "AgentCore deployment".
+
 ## E. Consolidation decision record and implementation plan
 
 The design is a hardened second redesign, not a fourth independent architecture.

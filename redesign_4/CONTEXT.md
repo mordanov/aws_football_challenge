@@ -6,8 +6,10 @@ Five coordinated players and their durable offline coaching loop.
 
 **Snapshot**:
 One normalized observation interpreted from our team's perspective.
-Includes a recognized coach preset; missing/ambiguous ownership is explicitly
-unknown, not inferred from player proximity.
+Includes a recognized coach preset. A team-less `agentId_N` holder (official
+server format) is resolved to the same-index player clearly on the ball
+(within 3 m and at least 1 m nearer than the other); otherwise ownership stays
+explicitly unknown.
 _Avoid_: confirmed match event, complete replay.
 
 **Decision**:

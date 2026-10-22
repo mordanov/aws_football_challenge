@@ -57,16 +57,17 @@ the same `prompt` as a JSON string, or that inner object directly.
 | Players | Exactly five distinct indices per team; `teamCode`/`agentId` or legacy `teamId`/`playerId`; finite `position.x/y`, optional velocity and stamina |
 | Geometry | Centered 110 x 70 sample pitch; home attacks +x, away -x. Halftime switching and shot-label orientation require real-contract verification |
 | Stamina | 0..1 by default; explicitly select scale 100 for percentage input. Never guess scale per player |
-| Ball | Finite position, optional velocity; boolean `isFree`; otherwise `possessionAgentId` or `possessionPlayerId` plus `possessionTeamId` for known ownership |
+| Ball | Finite position, optional velocity; boolean `isFree`; otherwise `possessionAgentId` or `possessionPlayerId`, with optional `possessionTeamId`/`possessionTeamCode` |
 | Clock | Nonnegative integer `tick`, finite nonnegative `gameTime` seconds; positive `matchDuration` seconds, default **120** from original requirements |
 | Score | `{"home": nonnegative_integer, "away": nonnegative_integer}` |
 | Coach | Optional `gameState.coachInstruction`; recognized exact presets listed below. Other text has no tactical effect |
 
-**Unknown possession is not free possession.** Reused IDs without an owner team
-remain unknown, producing `unresolved_possession` telemetry and conservative
-shape, not guessed passes/shots/interceptions. Explicit `isFree=true` wins over
-stale ownership. Competition acceptance is blocked until actual ownership can be
-resolved authoritatively.
+**Unknown possession is not free possession.** The official server sends only
+`possessionAgentId: "agentId_N"`, and `agentId_N` exists on both teams. The
+holder is resolved to the same-index player within 3 m of the ball and at least
+1 m nearer than its counterpart. Contested or distant cases remain unknown,
+producing `unresolved_possession` telemetry and conservative shape, not guessed
+passes/shots/interceptions. Explicit `isFree=true` wins over stale ownership.
 
 Recognized coach presets are `go_all_out_attack`, `slow_the_tempo`, `press_high`,
 and `shoot_on_sight`. They adjust posture, eligibility or bounded shot range
@@ -199,11 +200,9 @@ export AFC_ADVISOR_MODEL=<bedrock-model-id>
 ## Optional AgentCore serving
 
 After local setup, `python -m agent.main` (or `afc-agentcore`) starts the SDK server.
-**Real-infrastructure practice requires separate authorization; competition use
-requires completing the audit's AWS acceptance checklist first.** Local ASGI
-tests exercise `/ping` and `/invocations` without opening a network connection.
-The current pinned SDK streams one SSE data event containing the JSON-array
-string; the tournament consumer's handling of this framing remains unverified.
+Local ASGI tests exercise `/ping` and `/invocations` without opening a network
+connection. The pinned SDK streams one SSE data event containing the JSON-array
+string, the same framing as the official sample (`yield json.dumps(commands)`).
 
 | Environment variable | Behavior |
 |---|---|
@@ -211,20 +210,66 @@ string; the tournament consumer's handling of this framing remains unverified.
 | `AFC_MATCH_ID` | Optional trusted single-match context for telemetry only; omit if autoplay match binding is not established |
 | `AFC_OPPONENT_ID` | Optional trusted opponent identity for startup profile selection and telemetry |
 | `AFC_STAMINA_SCALE` | `1` (default) or `100`; invalid values fail startup |
+| `AFC_PLAYER_ID` | Optional seat `0`-`4` used **only** when an invocation omits `myPlayers`; explicit routing always wins. Set per runtime by `deploy/` |
 
-There is intentionally no `MY_PLAYER_ID`, `LLM_ENABLED`, S3 bucket, Bedrock model
-ID or credential environment setting in this implementation. Routing is explicit
-in each invocation. Do not reuse pinned match/opponent context across unrelated
-autoplay matches. All five runtimes must load the same version and opponent
-context before a match; updating individual endpoints mid-match breaks the
-shared-plan prerequisite.
+There is intentionally no `LLM_ENABLED`, S3 bucket, Bedrock model ID or
+credential environment setting in this implementation. Do not reuse pinned
+match/opponent context across unrelated autoplay matches. All five runtimes must
+load the same version and opponent context before a match; updating individual
+endpoints mid-match breaks the shared-plan prerequisite.
 
 The controller makes **no AWS service calls** and needs no S3, Bedrock inference,
-Memory or Gateway permissions. The platform caller still needs appropriately
-scoped `bedrock-agentcore:InvokeAgentRuntime` authorization for the actual
-runtimes; execution-role trust, artifact access, region, endpoint authorization
-and CloudWatch delivery depend on the as-yet-unprovided deployment topology.
-Do not substitute guessed ARNs or wildcard administrative policies.
+Memory or Gateway permissions.
+
+## AgentCore deployment
+
+`deploy/` is an AgentCore CLI v1 project (`agentcore/agentcore.json`, CDK app in
+`agentcore/cdk/`) with five CodeZip runtimes, `r4_gk`, `r4_def`, `r4_mid`,
+`r4_fwd1` and `r4_fwd2` (Python 3.12, PUBLIC, HTTP, OTel off). All five share
+`deploy/app/player`. `deploy.py` stages `agent/` and the chosen profile
+(default `profiles/recommended.json`) there. Each runtime differs only in its
+`AFC_PLAYER_ID` seat.
+
+Prerequisites: Node >= 20, `npm install -g @aws/agentcore aws-cdk`, `uv`, the AWS
+CLI, and credentials for the competition account in **us-east-1 or us-west-2**
+(the only regions the Player Portal accepts).
+
+```bash
+source <credentials file>            # export AWS_ACCESS_KEY_ID=... etc.; never commit it
+python deploy/deploy.py              # stage -> cdk bootstrap if missing -> agentcore deploy -> ARNs
+python deploy/deploy.py --status     # reprint the five runtime ARNs
+python deploy/deploy.py --stage-only # stage only (then e.g. `cd deploy && agentcore build`)
+```
+
+The deploy creates stack `AgentCore-Redesign4-default` with five runtimes and
+their execution roles. Generated state (`aws-targets.json`, `.cli/`, `.cache/`,
+`cdk.out/`) and the staged code are git-ignored. Redeploy the same profile to
+all five runtimes together, never mid-match.
+
+Then, in the Player Portal (https://agentic-football.aws.dev, My Team):
+
+1. Pick the formation (profile was evaluated with **1-1-2**).
+2. Register one runtime ARN per position: GK `r4_gk`, DEF `r4_def`, MID
+   `r4_mid`, FWD `r4_fwd1`, FWD `r4_fwd2`. Use the `:runtime/` ARN, not
+   `:runtime-endpoint/`.
+3. Run the Fitness Check, then a practice match.
+
+The platform invokes from account 793938076386 by assuming
+`afwc-cross-account-agent-invoker` in our account. The workshop account comes
+with this role. Check that it exists with
+`aws iam get-role --role-name afwc-cross-account-agent-invoker`.
+
+Verified on the deployed runtimes with the official sample state:
+- every response is a single SSE `data:` event holding a JSON command array;
+- the GK holding the ball returns `GK_DISTRIBUTE`, and PASS carries `target_player_id`;
+- a payload without `myPlayers` uses the seat;
+- latency is about 3 s on a cold session (new microVM) and about 0.2 s warm
+  from Europe, against the 5 s fitness limit;
+- no error records appeared in the CloudWatch logs.
+
+The model-allowlist check expects a Bedrock model, and how it treats an
+LLM-free agent is unverified. The portal locks matches only on a `DENIED`
+verdict, and "Not verified yet" does not lock.
 
 ## Telemetry and deadline limits
 

@@ -63,6 +63,24 @@ def _xy(value: object, name: str) -> tuple[float, float]:
     return number(value.get("x"), name + ".x"), number(value.get("y"), name + ".y")
 
 
+HOLD_RADIUS = 3.0
+HOLD_MARGIN = 1.0
+
+
+def _nearest_holder(
+    players: list[Player], holder_id: int, ball: tuple[float, float]
+) -> tuple[int, int] | None:
+    """Resolve a team-less agentId_N (present on both teams) by ball proximity.
+
+    The carrier sits on the ball; the same-index opponent rarely does. Close or
+    distant ties stay unknown rather than guessed.
+    """
+    near, far = sorted((math.dist((p.x, p.y), ball), p.team) for p in players if p.id == holder_id)
+    if near[0] <= HOLD_RADIUS and far[0] - near[0] >= HOLD_MARGIN:
+        return near[1], holder_id
+    return None
+
+
 def decode(
     payload: dict, *, stamina_scale: float = 1.0, duration: float = 120.0
 ) -> tuple[Snapshot, int]:
@@ -106,10 +124,11 @@ def decode(
     holder = ball.get("possessionAgentId", ball.get("possessionPlayerId"))
     if not free and holder is not None:
         holder_id = player_index(holder)
-        holder_team = ball.get("possessionTeamId")
+        holder_team = ball.get("possessionTeamId", ball.get("possessionTeamCode"))
         if holder_team is not None:
             owner = (team_index(holder_team), holder_id)
-        # Reused agentId_N without a team is inherently ambiguous.
+        else:
+            owner = _nearest_holder(players, holder_id, xy)
     score = state.get("score")
     if not isinstance(score, dict):
         raise TypeError("score must have home and away entries")

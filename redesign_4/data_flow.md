@@ -17,6 +17,8 @@ the snapshot alone, so all five players agree. The profile `style` (block depth,
 attackers committed, tackle aggression, tempo, fixed formation, carry) shapes
 anchors and option scores inside `decide`.
 The actual pinned AgentCore adapter wraps the array string in one SSE data event.
+On AgentCore each of the five runtimes runs the same staged code and profile;
+its `AFC_PLAYER_ID` seat only fills a missing `myPlayers` (explicit routing wins).
 **Source:** `agent/protocol.py`, `agent/coach.py`, `agent/tactics.py`,
 `agent/runtime.py`, `agent/telemetry.py`, `agent/main.py`.
 

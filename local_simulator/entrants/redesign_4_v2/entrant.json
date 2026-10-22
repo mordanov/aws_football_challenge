@@ -3,7 +3,7 @@
   "source_name": "redesign_4",
   "topology": "per_player",
   "shim": "entrants/redesign_4_v2/shim.py",
-  "entrant_hash": "d912899e0a11b10935b383a54e95a6b1fa252b5c53ffe072da0e5b3975f76f0e",
+  "entrant_hash": "7a258ca10de163ce16cff85788119d4659bf9ef8910c6e83e10e84cb2c332a6a",
   "rules_version": "v1",
   "track": "patched",
   "patches": [

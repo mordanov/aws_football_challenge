@@ -51,6 +51,12 @@ def position(state, team, pid, x, y):
     state["players"][team * 5 + pid]["position"] = {"x": x, "y": y}
 
 
+def ambiguous_owner(state):
+    """Drop the team discriminator and put both agentId_2 players on the ball."""
+    state["ball"].pop("possessionTeamId")
+    position(state, 1, 2, -5.4, 0.3)
+
+
 class ProtocolTests(unittest.TestCase):
     def test_envelope_team_identity_and_legacy_state(self):
         for team in (0, 1):
@@ -69,8 +75,24 @@ class ProtocolTests(unittest.TestCase):
             legacy, _ = decode({"prompt": data})
             self.assertEqual(legacy.owner, snapshot.owner)
 
+    def test_official_possession_without_team_resolves_to_nearest_holder(self):
+        # Official server format: possessionAgentId only; agentId_N exists on both teams.
+        for team, owner, ball in ((0, (0, 0), (-50.5, 0)), (1, (1, 3), (-10, -19.5))):
+            raw = edit(
+                payload(owner=owner, ball=ball, team=team, pid=owner[1]),
+                lambda s: s["ball"].pop("possessionTeamId"),
+            )
+            snapshot, _ = decode(raw)
+            self.assertEqual(snapshot.owner, owner)
+        raw = edit(
+            payload(owner=(0, 0), ball=(-50.5, 0), pid=0),
+            lambda s: s["ball"].pop("possessionTeamId"),
+        )
+        command = json.loads(Runtime(emit=lambda _: None).handle(raw))[0]
+        self.assertEqual(command["commandType"], "GK_DISTRIBUTE")
+
     def test_ambiguous_possession_is_not_a_free_ball(self):
-        raw = edit(payload(), lambda s: s["ball"].pop("possessionTeamId"))
+        raw = edit(payload(), ambiguous_owner)
         snapshot, _ = decode(raw)
         self.assertIsNone(snapshot.owner)
         self.assertFalse(snapshot.free)

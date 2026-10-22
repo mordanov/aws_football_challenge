@@ -16,7 +16,8 @@ over a stale holder, ambiguous reused IDs remain unknown.
 `choose_preset` when `coach_policy` is `rules`) -> plan -> validate -> serialize
 -> enqueue telemetry without waiting -> return. Recoverable errors with known team/player identity
 enqueue a sanitized diagnostic and return validated balanced stance.
-Unrecoverable identity errors fail rather than invent IDs. Unknown ownership
+Unrecoverable identity errors fail rather than invent IDs. A team-less holder
+is resolved by ball proximity when unambiguous; remaining unknown ownership
 keeps defensive shape and adds an explicit warning.
 **Source:** `agent/runtime.py`, `Runtime.handle`.
 

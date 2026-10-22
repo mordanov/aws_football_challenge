@@ -41,3 +41,19 @@ class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(commands[0]["playerId"], 3)
         self.assertTrue(runtime.flush_logs())
         self.assertEqual(logs[0]["command"], commands[0])
+
+    async def test_default_player_only_fills_missing_my_players(self):
+        from httpx import ASGITransport, AsyncClient
+
+        runtime = Runtime(emit=lambda _: None)
+        self.addCleanup(runtime.close)
+        app = main.create_app(runtime, default_player=4)
+        bare = json.loads(payload(team=1, pid=3)["prompt"])
+        del bare["myPlayers"]
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://local") as client:
+            missing = await client.post("/invocations", json={"prompt": bare})
+            explicit = await client.post("/invocations", json=payload(team=1, pid=3))
+        for response, pid in ((missing, 4), (explicit, 3)):
+            event = next(x for x in response.text.splitlines() if x.startswith("data: "))
+            command = json.loads(json.loads(event.removeprefix("data: ")))[0]
+            self.assertEqual((command["teamId"], command["playerId"]), (1, pid))
