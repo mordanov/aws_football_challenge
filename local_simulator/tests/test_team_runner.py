@@ -1,16 +1,13 @@
 """Tests for TeamRunner: shim process management and encode/decode pipeline."""
 import json
-import sys
 import textwrap
 import threading
-import time
 from pathlib import Path
 
 import pytest
 
 from football_lab.entrant_contracts import BudgetSpec, EntrantSpec
 from football_lab.team_runner import RunnerError, TeamRunner
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

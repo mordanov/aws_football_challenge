@@ -5,8 +5,8 @@ After implementation (Task 6) every test must pass.
 """
 import unittest
 
+from football_lab.actions import ONE_SHOT_COMMANDS, resolve_command
 from football_lab.match_contracts import EngineBallState, EnginePlayerState, EngineState
-from football_lab.actions import resolve_command, ONE_SHOT_COMMANDS
 
 
 def _player(team_id: int, player_id: int, x: float = 0.0, y: float = 0.0) -> EnginePlayerState:
