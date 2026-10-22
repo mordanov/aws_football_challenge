@@ -1,7 +1,9 @@
 # Local football lab
 
-Current milestone: wiring skeleton only. No football simulation, rankings,
-real-agent integration or profile evolution exists yet.
+Current milestone: **M5 — tactical-profile evolution**. Bounded Gaussian
+parameter search over redesign_4's four tactical settings, evaluated against
+four frozen opponents, with selection gating, final-test lock, and paired
+bootstrap promotion decision.
 
 Requires Python 3.11+. Run from `local_simulator/`.
 
@@ -38,6 +40,16 @@ Stop the server with Ctrl-C when finished.
 The development browser is required for the full acceptance suite. A browser
 installation failure is not a successful or skipped acceptance check.
 
-Next gate: inventory all five reference agents' commands and approve complete
-numerical local rules before implementing playable football. See
-`docs/superpowers/plans/2026-10-21-local-football-roadmap.md`.
+Run a profile evolution experiment:
+
+```sh
+python -m football_lab evolve init \
+  --dir local/exp1 \
+  --stage1-manifest local/stage1/manifest.json \
+  --experiment-seed 42
+
+python -m football_lab evolve run --dir local/exp1
+python -m football_lab evolve report --dir local/exp1
+```
+
+See `docs/m5-evolution.md` for full protocol details.

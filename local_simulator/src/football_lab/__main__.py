@@ -36,6 +36,9 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "campaign":
         from .cli_campaign import main as campaign_main
         return campaign_main(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] == "evolve":
+        from .evolution.cli import main as evolve_main
+        return evolve_main(sys.argv[2:])
     return _wiring_check()
 
 
