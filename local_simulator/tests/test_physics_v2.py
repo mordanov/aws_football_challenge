@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from football_lab.match_contracts import EngineState, Intent
 from football_lab.physics import is_inactive, step
 
@@ -63,3 +65,48 @@ def test_contest_hook_sees_moved_players_and_ball_follows_new_owner() -> None:
     assert seen["tick"] == 11 and seen["x"] > 0.0
     assert [e["kind"] for e in events] == ["TACKLE_SUCCESS"]
     assert (s["ball"]["x"], s["ball"]["y"]) == (20.0, 5.0)
+
+
+def _shoot(team: int, pid: int, aim: str) -> Intent:
+    return {"team_id": team, "player_id": pid, "command_type": "SHOOT",
+            "parameters": {"aim_location": aim, "power": 1.0}, "is_one_shot": True,
+            "executed": False}
+
+
+def _shot_window(shooter_team: int, aim: str, **kw: Any) -> tuple[EngineState, list[str]]:
+    """Shooter at ±30 owns the ball; opposing keeper (pid 0) stands at the goal centre."""
+    s = 1 if shooter_team == 0 else -1
+    keeper_team = 1 - shooter_team
+    players = [_p(shooter_team, 1, s * 30.0), _p(keeper_team, 0, s * 50.0),
+               _p(shooter_team, 2, 0.0, -30.0), _p(keeper_team, 1, 0.0, 30.0)]
+    state = _state(players, ball={"x": s * 30.0, "owner_team": shooter_team,
+                                  "owner_player": 1})
+    intents = [_shoot(shooter_team, 1, aim)]
+    kinds: list[str] = []
+    for _ in range(40):
+        state, events = step(state, intents, **kw)
+        kinds += [e["kind"] for e in events]
+    return state, kinds
+
+
+@pytest.mark.parametrize("aim", ["BL", "TR"])
+def test_honour_aim_beats_centred_keeper(aim: str) -> None:
+    state, kinds = _shot_window(0, aim, honour_aim=True)
+    assert "GOAL" in kinds and state["score"] == [1, 0]
+
+
+def test_honour_aim_center_is_caught_by_centred_keeper() -> None:
+    state, kinds = _shot_window(0, "CENTER", honour_aim=True)
+    assert "GOAL" not in kinds
+    assert (state["ball"]["owner_team"], state["ball"]["owner_player"]) == (1, 0)
+
+
+def test_default_ignores_aim_so_centred_keeper_catches() -> None:
+    state, kinds = _shot_window(0, "BL")
+    assert "GOAL" not in kinds
+    assert (state["ball"]["owner_team"], state["ball"]["owner_player"]) == (1, 0)
+
+
+def test_honour_aim_team1_shoots_toward_negative_x() -> None:
+    state, kinds = _shot_window(1, "BR", honour_aim=True)
+    assert "GOAL" in kinds and state["score"] == [0, 1]

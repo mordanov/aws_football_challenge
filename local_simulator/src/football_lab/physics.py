@@ -25,6 +25,7 @@ STEPS_PER_DECISION: int = 40
 PITCH_HALF_L: float = 55.0
 PITCH_HALF_W: float = 35.0
 GOAL_HALF_W: float = 4.5
+AIM_Y: float = GOAL_HALF_W - 1.0  # rules v2 shot target |y| for corner aims
 
 # ── Ball ──────────────────────────────────────────────────────────────────────
 PICKUP_RADIUS: float = 2.1
@@ -93,6 +94,8 @@ def step(
     state: EngineState,
     intents: list[Intent],
     contest: ContestHook | None = None,
+    *,
+    honour_aim: bool = False,
 ) -> tuple[EngineState, list[MatchEvent]]:
     """Advance state by one physics step. Returns (new_state, events)."""
     events: list[MatchEvent] = []
@@ -235,6 +238,12 @@ def step(
             s = 1 if team_id == 0 else -1
             gx = s * PITCH_HALF_L
             gy = 0.0
+            if honour_aim:
+                aim = str(params.get("aim_location", "CENTER")).upper()
+                if aim in ("TL", "BL"):
+                    gy = -AIM_Y
+                elif aim in ("TR", "BR"):
+                    gy = AIM_Y
             dx, dy = gx - ball["x"], gy - ball["y"]
             dist = math.hypot(dx, dy) or 1.0
             speed = _BALL_SPEED["SHOOT"]

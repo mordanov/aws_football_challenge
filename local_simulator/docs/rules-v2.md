@@ -65,7 +65,25 @@ are considered; each player's first intent this step counts.
 Events: `FOUL`, `PENALTY`, `SEND_OFF`, `TACKLE_SUCCESS` (also for standing-challenge
 wins). Campaign fixture results record per-team counts in `discipline`.
 
-## 5. Known simplifications
+## 5. Shot aim
+
+v2 honours `SHOOT`'s `aim_location` (`physics.step(..., honour_aim=True)`); the shot
+travels from the ball toward `(±PITCH_HALF_L, target_y)`:
+
+| `aim_location` | `target_y` |
+|---|---|
+| `TL`, `BL` | `-AIM_Y` = −3.5 |
+| `TR`, `BR` | `+AIM_Y` = +3.5 |
+| `CENTER` / anything else | 0.0 |
+
+`AIM_Y = GOAL_HALF_W - 1.0` (3.5). The y values are **world coordinates for both
+teams** (no mirroring for team 1), matching redesign_4's convention.
+
+Why: v1 ignores `aim_location` and aims every shot at the goal centre, and any player
+within `PICKUP_RADIUS` (2.1) of the in-flight ball picks it up, so a keeper standing at
+its goal centre catches every shot (1 goal in 96 local v1 matches). **v1 is unchanged**.
+
+## 6. Known simplifications
 
 - No free-kick restart: after a foul outside the box, play simply continues.
 - No cards UI; fouls and send-offs are only visible as events.
@@ -73,7 +91,7 @@ wins). Campaign fixture results record per-team counts in `discipline`.
 - The carrier is never fouled twice in one step (at most one contest per step).
 - A penalty is resolved instantly; there is no penalty-kick set piece.
 
-## 6. Coach hook
+## 7. Coach hook
 
 `MatchEngine(coaches=(coach0, coach1))` takes one optional coach per team with the
 signature `coach(state, team_id) -> str`. Its output is delivered to that team's
@@ -93,7 +111,7 @@ goals and `r` = remaining match fraction:
 
 The first matching row wins.
 
-## 7. Campaign CLI
+## 8. Campaign CLI
 
 | Option | Command | Meaning |
 |---|---|---|

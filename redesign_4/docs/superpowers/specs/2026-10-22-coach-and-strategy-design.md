@@ -74,6 +74,7 @@ v2 results are never mixed. Every constant is a **local assumption** documented 
 - **Events**: `FOUL`, `PENALTY` (team_id = awarded team), `SEND_OFF`, `TACKLE_SUCCESS`
   (also for standing-challenge wins). Fixture results record per-team counts.
 - **Replays**: campaigns may run with `--discard-replays` (replays are ~3 MB each).
+- **Shot aim**: v2 honours `aim_location` (TL/BL → y = −3.5, TR/BR → y = +3.5, CENTER → 0, world coordinates); v1 aims every shot at the goal centre, which a centred keeper always catches.
 
 ## 4. Opponent pool
 

@@ -305,7 +305,9 @@ class MatchEngine:
 
             # ── Run 40 physics steps ───────────────────────────────────────
             for _ in range(STEPS_PER_DECISION):
-                state, events = step(state, intents, contest)
+                state, events = step(
+                    state, intents, contest, honour_aim=self._rules_version == "v2"
+                )
                 all_events.extend(events)
                 frames.append(_frame(state))
 
