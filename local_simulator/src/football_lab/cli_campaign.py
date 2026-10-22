@@ -78,7 +78,7 @@ class _TeamRunnerEngineAgent:
             "ball": obs["ball"],
             "mode_team": obs.get("mode_team"),
         }
-        return self._runner.decide(cast(EngineState, state))
+        return self._runner.decide(cast(EngineState, state), coach=str(obs.get("coach", "")))
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
