@@ -4,7 +4,7 @@ from __future__ import annotations
 import itertools
 import random
 from collections import defaultdict
-from typing import NamedTuple, TypedDict
+from typing import Any, NamedTuple, TypedDict
 
 from .entrant_contracts import CampaignManifest, EntrantStanding, FixtureResult
 
@@ -282,3 +282,113 @@ def winner_claim(
         "reason": "inconclusive",
         "intervals_99_5": ci,
     }
+
+
+class PooledGoalDiff(TypedDict):
+    entrant_id: str
+    matches: int
+    units: int
+    mean: float
+    lo: float
+    hi: float
+
+
+def _units(results: list[FixtureResult], entrant_id: str) -> dict[tuple[str, int], list[int]]:
+    """Goal differences from `entrant_id`'s view, grouped by (opponent, block)."""
+    units: dict[tuple[str, int], list[int]] = defaultdict(list)
+    for r in results:
+        if r["status"] != "complete":
+            continue
+        t0, t1, block, _ = _parse_fixture_id(r["fixture_id"])
+        g0, g1 = r["score"]
+        if t0 == entrant_id:
+            units[(t1, block)].append(g0 - g1)
+        elif t1 == entrant_id:
+            units[(t0, block)].append(g1 - g0)
+    return units
+
+
+def _percentiles(stats: list[float], confidence: float) -> tuple[float, float]:
+    stats.sort()
+    n = len(stats)
+    alpha = (1 - confidence) / 2
+    return stats[int(alpha * n)], stats[int((1 - alpha) * n) - 1]
+
+
+def pooled_goal_diff_ci(
+    results: list[FixtureResult],
+    entrant_id: str,
+    rng_seed: int,
+    n_resamples: int = 10_000,
+    confidence: float = 0.95,
+) -> PooledGoalDiff:
+    """Mean goal difference per match vs all opponents; block bootstrap over units."""
+    units = list(_units(results, entrant_id).values())
+    if not units:
+        raise ValueError(f"no complete results for {entrant_id!r}")
+    matches = sum(len(u) for u in units)
+    rng = random.Random(rng_seed)
+    stats = []
+    for _ in range(n_resamples):
+        sample = [units[rng.randrange(len(units))] for _ in units]
+        stats.append(sum(sum(u) for u in sample) / sum(len(u) for u in sample))
+    lo, hi = _percentiles(stats, confidence)
+    return {"entrant_id": entrant_id, "matches": matches, "units": len(units),
+            "mean": sum(sum(u) for u in units) / matches, "lo": lo, "hi": hi}
+
+
+def goal_diff_delta_ci(
+    results: list[FixtureResult],
+    a: str,
+    b: str,
+    rng_seed: int,
+    n_resamples: int = 10_000,
+    confidence: float = 0.95,
+) -> tuple[float, float, float]:
+    """(mean, lo, hi) of a's minus b's per-match goal difference, paired on shared units."""
+    ua, ub = _units(results, a), _units(results, b)
+    shared = sorted(set(ua) & set(ub))
+    if not shared:
+        raise ValueError(f"{a!r} and {b!r} share no (opponent, block) units")
+    deltas = [sum(ua[k]) / len(ua[k]) - sum(ub[k]) / len(ub[k]) for k in shared]
+    rng = random.Random(rng_seed)
+    stats = [
+        sum(deltas[rng.randrange(len(deltas))] for _ in deltas) / len(deltas)
+        for _ in range(n_resamples)
+    ]
+    lo, hi = _percentiles(stats, confidence)
+    return sum(deltas) / len(deltas), lo, hi
+
+
+_DISCIPLINE = {
+    "FOUL": "fouls",
+    "SEND_OFF": "send_offs",
+    "TACKLE_SUCCESS": "tackles_won",
+    "PENALTY": "penalties_awarded",
+}
+
+
+def discipline_counts(events: list[Any]) -> dict[str, list[int]]:
+    """Per-team [team0, team1] counts of discipline events in one replay."""
+    out = {name: [0, 0] for name in _DISCIPLINE.values()}
+    for e in events:
+        name = _DISCIPLINE.get(e["kind"])
+        if name is not None and e["team_id"] in (0, 1):
+            out[name][e["team_id"]] += 1
+    return out
+
+
+def discipline_by_entrant(results: list[FixtureResult]) -> dict[str, dict[str, int]]:
+    """Totals per entrant over results that recorded discipline."""
+    totals: dict[str, dict[str, int]] = {}
+    for r in results:
+        d = r.get("discipline")
+        if r["status"] != "complete" or d is None:
+            continue
+        t0, t1, _, _ = _parse_fixture_id(r["fixture_id"])
+        for side, eid in enumerate((t0, t1)):
+            row = totals.setdefault(eid, {"matches": 0, **{n: 0 for n in _DISCIPLINE.values()}})
+            row["matches"] += 1
+            for name in _DISCIPLINE.values():
+                row[name] += d.get(name, [0, 0])[side]
+    return totals
