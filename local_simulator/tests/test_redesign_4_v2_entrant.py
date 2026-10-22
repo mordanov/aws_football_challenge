@@ -39,7 +39,7 @@ def _state() -> dict:
 def test_variants_cover_archetypes_formations_and_pool() -> None:
     variants = json.loads((ENTRANT / "variants.json").read_text())["variants"]
     ids = [v["id"] for v in variants]
-    assert len(ids) == len(set(ids)) == 34
+    assert len(ids) == len(set(ids)) == 40
     for v in variants:
         profile = json.loads((ENTRANT / v["profile"]).read_text())
         assert profile["version"] == v["id"]

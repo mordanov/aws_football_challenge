@@ -1,6 +1,7 @@
 # Coach policy, strategy archetypes and off-tick LLM advisor — design
 
-Date: 2026-10-22. Status: approved design, revision 3 (amended while planning).
+Date: 2026-10-22. Status: approved design, revision 4 (rev 3 amended while planning; rev 4 adds v2 ball
+physics and `carry` after the local simulator produced no goals).
 Scope: `redesign_4/` and `local_simulator/`.
 
 ## 1. Goal
@@ -97,6 +98,7 @@ pre-change agent (golden test).
 | `tackle_aggression` | 0–1 | 0.0 | presser slides within `1 + 2.5·aggr` m; from behind only if ≥ 0.7; no slides at all when 0 |
 | `tempo` | 0–1 | 0.5 | pass score `+ (tempo-0.5)·1.2·gain`; hold score `max(0,0.5-tempo)·120` when no opponent within 8 m |
 | `formation` | `1-1-2`, `2-1-1`, `1-2-1` | `1-1-2` | pinned anchors (outfield DEF-MID-FWD); **immutable in a match** |
+| `carry` | 0–1 | 0.0 | outfield carrier gets a dribble option, `MOVE_TO` (±50, clamp(0.6·y, ±10)) sprinting, scored `carry·(30 + min(12, nearest opponent ahead))`; optional in profiles (older ones load as 0.0) |
 
 Roles by formation (pid 0 is always GK):
 
@@ -114,13 +116,20 @@ Roles by formation (pid 0 is always GK):
 
 ### Archetypes
 
-| Archetype | depth | attackers | tackle | tempo | formation | settings deltas |
-|---|---|---|---|---|---|---|
-| `balanced` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | — |
-| `press_aggressive` | 1.0 | 3 | 0.6 | 0.8 | 1-1-2 | press_radius 30 |
-| `park_the_bus` | 0.1 | 1 | 0.4 | 0.3 | 2-1-1 | press_radius 12 |
-| `time_waster` | 0.5 | 1 | 0.2 | 0.0 | 1-2-1 | pass_margin 4.5, shot_range 20 |
-| `hard_tackle` | 0.7 | 2 | 1.0 | 0.5 | 1-1-2 | press_radius 26 |
+| Archetype | depth | attackers | tackle | tempo | formation | carry | settings deltas |
+|---|---|---|---|---|---|---|---|
+| `balanced` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | 0.0 | — |
+| `direct_carry` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | 1.0 | — |
+| `press_aggressive` | 1.0 | 3 | 0.6 | 0.8 | 1-1-2 | 1.0 | press_radius 30 |
+| `park_the_bus` | 0.1 | 1 | 0.4 | 0.3 | 2-1-1 | 0.3 | press_radius 12 |
+| `time_waster` | 0.5 | 1 | 0.2 | 0.0 | 1-2-1 | 0.0 | pass_margin 4.5, shot_range 20 |
+| `hard_tackle` | 0.7 | 2 | 1.0 | 0.5 | 1-1-2 | 0.7 | press_radius 26 |
+
+`direct_carry` isolates the carry effect against `balanced`. Stand-in carry values:
+`aws_like_balanced` 0.5, `aws_like_attacking` 1.0, `aws_like_defensive` 0.3. Why: the
+redesign_4 carrier could only shoot, make a "safe" pass or hold, so under pressure it held
+until tackled and the family scored about once in 20 local v2 matches. A naive carry
+option alone turned that into W5 D15 L0, GD +6 against the five references.
 
 Each archetype runs with `coach_policy` `none` and `rules`. Time-wasting uses legal
 holding/recycling only (no restart stalling).

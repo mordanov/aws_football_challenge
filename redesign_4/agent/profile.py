@@ -19,6 +19,7 @@ STYLE_BOUNDS = {
     "block_depth": (0.0, 1.0),
     "tackle_aggression": (0.0, 1.0),
     "tempo": (0.0, 1.0),
+    "carry": (0.0, 1.0),
 }
 FORMATIONS = ("1-1-2", "2-1-1", "1-2-1")
 COACH_POLICIES = ("none", "rules")
@@ -27,8 +28,11 @@ _OPTIONAL = {"style", "coach_policy"}
 
 
 def checked_style(data: dict) -> Style:
-    if not isinstance(data, dict) or set(data) != {f.name for f in fields(Style)}:
+    known = {f.name for f in fields(Style)}
+    # carry was added later; older profiles may omit it
+    if not isinstance(data, dict) or set(data) not in (known, known - {"carry"}):
         raise ValueError("style must supply all known fields and no unknown fields")
+    data = {"carry": DEFAULT_STYLE.carry, **data}
     values = {key: number(data[key], key) for key in STYLE_BOUNDS}
     for key, (lo, hi) in STYLE_BOUNDS.items():
         if not lo <= values[key] <= hi:

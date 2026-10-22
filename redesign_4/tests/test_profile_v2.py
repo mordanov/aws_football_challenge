@@ -31,7 +31,7 @@ class ProfileV2Test(unittest.TestCase):
         bad_styles = [
             {"block_depth": 1.5}, {"tempo": -0.1}, {"tackle_aggression": 2},
             {"attackers_committed": 0}, {"attackers_committed": 2.0},
-            {"formation": "3-1"}, {"extra": 1},
+            {"formation": "3-1"}, {"extra": 1}, {"carry": 1.5},
         ]
         for change in bad_styles:
             data = copy.deepcopy(good)
@@ -43,6 +43,13 @@ class ProfileV2Test(unittest.TestCase):
         for data in (missing, {**good, "coach_policy": "llm"}, {**good, "surprise": 1}):
             with self.subTest(data=data), self.assertRaises(ValueError):
                 parse_profile(data)
+
+    def test_style_carry_is_optional_for_older_profiles(self):
+        data = Profile().to_dict()
+        del data["style"]["carry"]
+        self.assertEqual(parse_profile(data).style.carry, 0.0)
+        data["style"]["carry"] = 0.7
+        self.assertEqual(parse_profile(data).style.carry, 0.7)
 
 
 if __name__ == "__main__":

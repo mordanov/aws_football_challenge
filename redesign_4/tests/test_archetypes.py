@@ -1,5 +1,5 @@
 import unittest
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from golden import payloads
 
@@ -13,7 +13,8 @@ class ArchetypeTest(unittest.TestCase):
     def test_names_and_spec_values(self):
         self.assertEqual(
             sorted(ARCHETYPES),
-            ["balanced", "hard_tackle", "park_the_bus", "press_aggressive", "time_waster"],
+            ["balanced", "direct_carry", "hard_tackle", "park_the_bus", "press_aggressive",
+             "time_waster"],
         )
         self.assertEqual(
             sorted(STAND_INS), ["aws_like_attacking", "aws_like_balanced", "aws_like_defensive"]
@@ -28,6 +29,13 @@ class ArchetypeTest(unittest.TestCase):
         self.assertEqual(park.settings.press_radius, 12.0)
         waster = ARCHETYPES["time_waster"]
         self.assertEqual((waster.settings.pass_margin, waster.settings.shot_range), (4.5, 20.0))
+        self.assertEqual(ARCHETYPES["direct_carry"].style, replace(DEFAULT_STYLE, carry=1.0))
+        carry = {name: p.style.carry for name, p in {**ARCHETYPES, **STAND_INS}.items()}
+        self.assertEqual(carry, {
+            "balanced": 0.0, "direct_carry": 1.0, "press_aggressive": 1.0, "park_the_bus": 0.3,
+            "time_waster": 0.0, "hard_tackle": 0.7, "aws_like_balanced": 0.5,
+            "aws_like_attacking": 1.0, "aws_like_defensive": 0.3,
+        })
 
     def test_every_profile_is_valid_and_round_trips(self):
         for name, profile in {**ARCHETYPES, **STAND_INS}.items():

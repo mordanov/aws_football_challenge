@@ -135,3 +135,38 @@ class TempoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CarryTest(unittest.TestCase):
+    PRESSED = [*THEIRS[:3], (-3, 2), THEIRS[4]]
+
+    def kinds(self, decision):
+        return {a["command"]["commandType"] for a in decision.alternatives}
+
+    def test_default_style_never_carries(self):
+        for theirs in (THEIRS, self.PRESSED):
+            with self.subTest(theirs=theirs):
+                self.assertNotIn("MOVE_TO", self.kinds(decide(snap(theirs=theirs), 2)))
+
+    def test_carry_drives_toward_goal_for_both_teams(self):
+        style = replace(DEFAULT_STYLE, carry=1.0)
+        for team, sign in ((0, 1), (1, -1)):
+            with self.subTest(team=team):
+                d = decide(snap(team=team, theirs=self.PRESSED), 2, DEFAULT_SETTINGS, style)
+                self.assertEqual(d.command["commandType"], "MOVE_TO")
+                self.assertGreater(sign * d.command["parameters"]["target_x"], 40)
+                self.assertTrue(d.command["parameters"]["sprint"])
+
+    def test_carry_score_scales_with_style_and_space(self):
+        def carry_score(theirs, carry):
+            d = decide(snap(theirs=theirs), 2, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=carry))
+            return next(a["score"] for a in d.alternatives
+                        if a["command"]["commandType"] == "MOVE_TO")
+        self.assertAlmostEqual(carry_score(self.PRESSED, 0.5), carry_score(self.PRESSED, 1.0) / 2)
+        self.assertGreater(carry_score(THEIRS, 1.0), carry_score(self.PRESSED, 1.0))
+
+    def test_keeper_never_carries(self):
+        s = snap(ball=(-51, 0), owner=(0, 0))
+        d = decide(s, 0, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=1.0))
+        self.assertNotIn("MOVE_TO", self.kinds(d))
+

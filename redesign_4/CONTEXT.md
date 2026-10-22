@@ -68,7 +68,7 @@ _Avoid_: dynamic shape, in-match formation switch.
 
 **Style**:
 Bounded profile section (block depth, attackers committed, tackle aggression,
-tempo, formation) expressing how the team plays.
+tempo, formation, carry) expressing how the team plays.
 _Avoid_: mode, strategy flag.
 
 **Archetype**:
