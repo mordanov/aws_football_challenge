@@ -12,8 +12,9 @@ over a stale holder, ambiguous reused IDs remain unknown.
 
 **States:** received, normalized, planned, validated, serialized, returned; error.
 **Initial:** received.
-**Transitions:** normalize -> plan -> validate -> serialize -> enqueue telemetry
-without waiting -> return. Recoverable errors with known team/player identity
+**Transitions:** normalize -> coach preset (platform preset kept; otherwise
+`choose_preset` when `coach_policy` is `rules`) -> plan -> validate -> serialize
+-> enqueue telemetry without waiting -> return. Recoverable errors with known team/player identity
 enqueue a sanitized diagnostic and return validated balanced stance.
 Unrecoverable identity errors fail rather than invent IDs. Unknown ownership
 keeps defensive shape and adds an explicit warning.
@@ -61,3 +62,16 @@ operator deployment -> pinned runtime.
 Rollback exports an older stored candidate. Deployment is an operational step,
 not implemented infrastructure. No transition proves a tactical improvement.
 **Source:** `agent/trainer.py`, `Trainer.train`/`export`; `agent/profile.py`.
+
+## Strategy profile
+
+**States:** archetype, campaign evidence, recommended, deployed; advisor proposal,
+operator-reviewed.
+**Initial:** archetype (named in `agent/archetypes.py`).
+**Transitions:** local v2 campaigns -> evidence (pooled GD CIs, sensitivity,
+formation follow-up) -> S2 decision rule -> `profiles/recommended.json` ->
+operator deployment via `AFC_PROFILE` to all five runtimes. Advisor `pick`/`review`
+-> bounded proposal file -> operator review -> deployment or discard. Formation and
+style are fixed for the duration of a match; they change only between matches.
+No transition proves the result transfers to the AWS platform.
+**Source:** `agent/archetypes.py`, `agent/advisor/`, `docs/strategy_report.md`.

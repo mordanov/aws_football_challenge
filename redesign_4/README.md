@@ -142,6 +142,60 @@ SQLite transaction errors and file export failures surface explicitly. Profile
 export uses temporary-file fsync and atomic replacement; no remote store,
 background S3 refresh or automatic deployment is involved.
 
+## Strategy profiles
+
+A profile may carry two optional sections: `style` and `coach_policy`. Profiles
+without them load with identity defaults, which reproduce pre-change decisions
+exactly.
+
+`style` fields (bounds are in `agent/profile.py`):
+
+| Field | Meaning |
+|---|---|
+| `block_depth` | How far forward the team defends; 1.0 = full pitch |
+| `attackers_committed` | How many players may cross halfway in possession |
+| `tackle_aggression` | Slide-tackle radius; 0 = never slide |
+| `tempo` | Bias between forward passing and holding |
+| `formation` | `1-1-2`, `2-1-1` or `1-2-1`; fixed for the whole match |
+| `carry` | Weight of the dribble-into-space option |
+
+- `coach_policy: rules` lets every player derive the same preset from the score and
+  the clock, e.g. `press_high` when trailing.
+- A preset sent by the platform always wins.
+- No preset ever changes formation.
+
+Named archetypes (`balanced`, `direct_carry`, `press_aggressive`, `park_the_bus`,
+`time_waster`, `hard_tackle`) live in `agent/archetypes.py`.
+
+The evidence-based choice is `profiles/recommended.json` (`direct_carry`, no coach
+policy). See `docs/strategy_report.md` for the results. Deploy it to all five
+runtimes:
+
+```sh
+AFC_PROFILE=profiles/recommended.json .venv/bin/python -m agent.main
+```
+
+To keep the chosen style when retraining, pass it as the base:
+`agent train|learn ... --base-profile profiles/recommended.json`.
+
+## Advisor (optional)
+
+An off-tick LangChain helper. It is never imported by the live runtime.
+
+```sh
+.venv/bin/python -m pip install -e '.[llm]'
+export AFC_ADVISOR_MODEL=<bedrock-model-id>
+.venv/bin/python -m agent.advisor pick --matrix campaign_a_report.json \
+  --opponent OPPONENT_ID --output local/proposal.json
+.venv/bin/python -m agent.advisor review --report match_report.json \
+  --profile profiles/recommended.json --output local/proposal.json
+```
+
+- Output is validated against the profile bounds and written as a
+  `status: "proposal"` file.
+- Proposals are **never auto-deployed**. An operator reviews one and deploys it
+  with `AFC_PROFILE`.
+
 ## Optional AgentCore serving
 
 After local setup, `python -m agent.main` (or `afc-agentcore`) starts the SDK server.

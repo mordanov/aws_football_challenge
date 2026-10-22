@@ -11,9 +11,14 @@ bounded best-effort telemetry enqueue and independent command return.
 `Decision(command,reason,alternatives,assignments)` -> wire command with
 `commandType,teamId,playerId,parameters,duration` and snapshot/context/warnings.
 Recognized `coachInstruction` survives normalized snapshot serialization.
+The coach preset comes from the platform, or from the in-agent rules coach when
+`coach_policy` is `rules` and no platform preset is present. It is derived from
+the snapshot alone, so all five players agree. The profile `style` (block depth,
+attackers committed, tackle aggression, tempo, fixed formation, carry) shapes
+anchors and option scores inside `decide`.
 The actual pinned AgentCore adapter wraps the array string in one SSE data event.
-**Source:** `agent/protocol.py`, `agent/tactics.py`, `agent/runtime.py`,
-`agent/telemetry.py`, `agent/main.py`.
+**Source:** `agent/protocol.py`, `agent/coach.py`, `agent/tactics.py`,
+`agent/runtime.py`, `agent/telemetry.py`, `agent/main.py`.
 
 ## Durable coaching
 
@@ -40,6 +45,15 @@ export/deployment -> startup profile/opponent selection.
 and audit -> JSON file -> immutable effective `Settings`.
 **Source:** `agent/trainer.py`, `agent/profile.py`, `agent/main.py`.
 
-There is no live database, LLM or network dependency in decision logic.
+Archetype choice runs alongside this. Local campaign evidence
+(`docs/strategy_report.md`) selects an archetype profile, which is committed as
+`profiles/recommended.json` and carried through retraining via `--base-profile`.
+The optional advisor reads a campaign or match report and writes a validated
+`status: "proposal"` JSON file. An operator decides whether to deploy it with
+`AFC_PROFILE`; nothing deploys automatically.
+**Source:** `agent/archetypes.py`, `agent/advisor/`, `profiles/recommended.json`.
+
+There is no live database, LLM or network dependency in decision logic; the
+advisor runs only off-tick.
 Actual platform result/report delivery and trusted match-boundary collection
 remain unverified integration responsibilities.
