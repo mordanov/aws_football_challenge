@@ -1,0 +1,18 @@
+{
+  "coach_policy": "none",
+  "opponents": null,
+  "settings": {
+    "pass_margin": 3.0,
+    "press_radius": 12.0,
+    "shot_range": 29.0,
+    "support_width": 15.0
+  },
+  "style": {
+    "attackers_committed": 1,
+    "block_depth": 0.1,
+    "formation": "1-2-1",
+    "tackle_aggression": 0.4,
+    "tempo": 0.3
+  },
+  "version": "r4v2_park_the_bus_none_f121"
+}
