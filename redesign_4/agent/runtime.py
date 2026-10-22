@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
+from dataclasses import replace
 
+from .coach import choose_preset
 from .model import Profile
 from .profile import effective_settings, parse_profile
 from .protocol import decode, envelope, snapshot_dict, validate_command
@@ -57,7 +59,9 @@ class Runtime:
         }
         try:
             snapshot, _ = decode(payload, stamina_scale=self.stamina_scale)
-            decision = decide(snapshot, pid, self.settings)
+            if self.profile.coach_policy == "rules":
+                snapshot = replace(snapshot, coach=choose_preset(snapshot))
+            decision = decide(snapshot, pid, self.settings, self.profile.style)
             selected = decision.command
             validate_command(selected)
         except (ValueError, KeyError, TypeError, StopIteration, ArithmeticError) as exc:
