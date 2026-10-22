@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import collections
 import json
+import os
 import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from football_lab.cmd_decoder import decode_command
 from football_lab.entrant_contracts import BudgetSpec, EntrantSpec
@@ -31,12 +32,14 @@ class TeamRunner:
         budget: BudgetSpec,
         work_dir: Path,
         seed: int = 0,
+        env: Mapping[str, str] | None = None,
     ) -> None:
         self._spec = spec
         self._team_id = team_id
         self._budget = budget
         self._work_dir = work_dir
         self._seed = seed
+        self._env = dict(env) if env else None
         self._proc: subprocess.Popen[bytes] | None = None
         self._stderr_buf: collections.deque[bytes] = collections.deque(maxlen=_STDERR_RING)
         self._stderr_thread: threading.Thread | None = None
@@ -54,6 +57,7 @@ class TeamRunner:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=str(self._work_dir),
+            env={**os.environ, **self._env} if self._env else None,
         )
         self._stderr_thread = threading.Thread(
             target=self._drain_stderr, daemon=True
