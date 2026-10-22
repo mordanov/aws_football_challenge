@@ -1,4 +1,5 @@
 """Campaign harness: fixture scheduling, manifest persistence, resume support."""
+
 from __future__ import annotations
 
 import itertools
@@ -28,14 +29,16 @@ def round_robin_fixtures(
                 home, away = (t0, t1) if leg == 0 else (t1, t0)
                 seed = fixture_seed(seed_pool_start, block, leg)
                 fixture_id = f"{home}__vs__{away}__b{block:04d}__l{leg}"
-                fixtures.append({
-                    "fixture_id": fixture_id,
-                    "team0_entrant": home,
-                    "team1_entrant": away,
-                    "seed_block": block,
-                    "leg": leg,
-                    "seed": seed,
-                })
+                fixtures.append(
+                    {
+                        "fixture_id": fixture_id,
+                        "team0_entrant": home,
+                        "team1_entrant": away,
+                        "seed_block": block,
+                        "leg": leg,
+                        "seed": seed,
+                    }
+                )
     return fixtures
 
 
@@ -72,5 +75,7 @@ def save_manifest(manifest: CampaignManifest, path: Path) -> None:
 def load_manifest(path: Path) -> CampaignManifest:
     data = json.loads(Path(path).read_text())
     assert "campaign_id" in data, "missing campaign_id"
-    assert data.get("rules_version") == "v1", f"unsupported rules_version: {data.get('rules_version')}"
-    return data  # type: ignore[return-value]
+    assert data.get("rules_version") == "v1", (
+        f"unsupported rules_version: {data.get('rules_version')}"
+    )
+    return data

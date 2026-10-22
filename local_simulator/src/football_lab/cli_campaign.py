@@ -1,4 +1,5 @@
 """CLI subcommand: python -m football_lab campaign init|run|report ..."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,7 +9,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .campaign import (
     add_result,
@@ -20,6 +21,7 @@ from .campaign import (
 from .campaign_report import bootstrap_ci, compute_standings
 from .engine import MatchEngine
 from .entrant_contracts import BudgetSpec, CampaignManifest, EntrantSpec, FixtureResult
+from .match_contracts import EngineState
 from .match_replay import JsonMatchReplayStore
 from .team_runner import RunnerError, TeamRunner
 
@@ -70,15 +72,21 @@ class _TeamRunnerEngineAgent:
             "ball": obs["ball"],
             "mode_team": obs.get("mode_team"),
         }
-        return self._runner.decide(state)
+        return self._runner.decide(cast(EngineState, state))
 
 
 def _cmd_init(args: argparse.Namespace) -> int:
     entrant_ids = [e.strip() for e in args.entrants.split(",")]
     specs = [_load_entrant_spec(eid) for eid in entrant_ids]
-    fixtures = round_robin_fixtures(entrant_ids, seed_pool_start=args.seed_pool_start, n_blocks=args.blocks)
+    fixtures = round_robin_fixtures(
+        entrant_ids, seed_pool_start=args.seed_pool_start, n_blocks=args.blocks
+    )
 
-    campaign_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
+    campaign_id = (
+        datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S")
+        + "-"
+        + uuid.uuid4().hex[:8]
+    )
 
     manifest: CampaignManifest = {
         "campaign_id": campaign_id,
@@ -131,7 +139,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                     store=store,
                 )
                 replay = engine.run(replay_path)
-                score = list(replay["score"])
+                score = list(replay["frames"][-1]["score"])
                 duration_ms = (time.perf_counter() - t0) * 1000
                 result: FixtureResult = {
                     "fixture_id": fid,
@@ -175,7 +183,9 @@ def _cmd_report(args: argparse.Namespace) -> int:
         return 0
 
     standings = compute_standings(results)
-    print(f"\n{'Entrant':<20} {'G':>3} {'W':>3} {'D':>3} {'L':>3} {'Pts':>4} {'GF':>4} {'GA':>4} {'GD':>4}")
+    print(
+        f"\n{'Entrant':<20} {'G':>3} {'W':>3} {'D':>3} {'L':>3} {'Pts':>4} {'GF':>4} {'GA':>4} {'GD':>4}"
+    )
     print("-" * 60)
     for s in standings:
         print(
