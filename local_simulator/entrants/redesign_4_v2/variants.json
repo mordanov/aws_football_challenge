@@ -32,6 +32,36 @@
    "coach": null
   },
   {
+   "id": "r4v2_direct_carry_none",
+   "profile": "profiles/r4v2_direct_carry_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_none_f211",
+   "profile": "profiles/r4v2_direct_carry_none_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_none_f121",
+   "profile": "profiles/r4v2_direct_carry_none_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_rules",
+   "profile": "profiles/r4v2_direct_carry_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_rules_f211",
+   "profile": "profiles/r4v2_direct_carry_rules_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_rules_f121",
+   "profile": "profiles/r4v2_direct_carry_rules_f121.json",
+   "coach": null
+  },
+  {
    "id": "r4v2_press_aggressive_none",
    "profile": "profiles/r4v2_press_aggressive_none.json",
    "coach": null

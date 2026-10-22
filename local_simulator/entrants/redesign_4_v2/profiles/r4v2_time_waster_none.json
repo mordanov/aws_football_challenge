@@ -10,6 +10,7 @@
   "style": {
     "attackers_committed": 1,
     "block_depth": 0.5,
+    "carry": 0.0,
     "formation": "1-2-1",
     "tackle_aggression": 0.2,
     "tempo": 0.0

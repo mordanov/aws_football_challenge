@@ -172,10 +172,26 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     )
 
 
+def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str]:
+    """Dribble toward goal; scored by style.carry and free space ahead (capped at 12 m)."""
+    ahead = [distance(point(p), point(o)) for o in s.opponents if s.direction * (o.x - p.x) > 0]
+    space = min([12.0, *ahead])
+    return (
+        style.carry * (30 + space),
+        command(
+            s, p.id, "MOVE_TO",
+            target_x=s.direction * 50.0, target_y=max(-10.0, min(10.0, p.y * 0.6)), sprint=True,
+        ),
+        f"carry: {space:.1f} m free ahead",
+    )
+
+
 def carrier_options(
     s: Snapshot, p: Player, settings: Settings, style: Style = DEFAULT_STYLE
 ) -> list[tuple[float, dict, str]]:
     options = []
+    if style.carry > 0 and p.id != 0:
+        options.append(carry_option(s, p, style))
     shot = shot_option(s, p, settings)
     if shot is not None and p.id != 0:
         options.append(shot)

@@ -65,6 +65,7 @@ class Style:
     tackle_aggression: float = 0.0
     tempo: float = 0.5
     formation: str = "1-1-2"
+    carry: float = 0.0
 
 
 DEFAULT_STYLE = Style()
