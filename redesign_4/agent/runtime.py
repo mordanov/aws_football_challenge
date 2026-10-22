@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import replace
@@ -8,7 +9,14 @@ from dataclasses import replace
 from .coach import choose_preset
 from .model import Profile
 from .profile import effective_settings, parse_profile
-from .protocol import decode, envelope, snapshot_dict, validate_command
+from .protocol import (
+    MATCH_COORDINATE_SCALE,
+    decode,
+    envelope,
+    match_command,
+    snapshot_dict,
+    validate_command,
+)
 from .tactics import decide
 from .telemetry import DecisionLog
 
@@ -25,6 +33,7 @@ class Runtime:
         match_id: str | None = None,
         opponent_id: str | None = None,
         stamina_scale: float = 1.0,
+        competition_adapter: bool = False,
         emit: Callable[[dict], None] | None = None,
     ):
         self.profile = parse_profile((profile if profile is not None else Profile()).to_dict())
@@ -34,6 +43,7 @@ class Runtime:
         if type(stamina_scale) not in (float, int) or stamina_scale not in (1.0, 100.0):
             raise ValueError("stamina_scale must be 1 or 100")
         self.stamina_scale = stamina_scale
+        self.competition_adapter = competition_adapter
         self._log = DecisionLog(emit if emit is not None else emit_json)
 
     @property
@@ -46,23 +56,36 @@ class Runtime:
     def close(self, timeout: float = 1.0) -> bool:
         return self._log.close(timeout)
 
-    def handle(self, payload: dict) -> str:
+    def handle(self, payload: dict, *, session_id: str | None = None) -> str:
         start = time.perf_counter()
         data, team, pid = envelope(payload)
+        match = re.fullmatch(
+            r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+            r"-team[01]-pos[0-4]",
+            session_id or "",
+        )
+        compact = self.competition_adapter and match is not None
         record: dict
         context = {
-            "match_id": self.match_id,
+            "match_id": self.match_id or (match.group(1) if match is not None else None),
             "opponent_id": self.opponent_id,
             "profile_version": self.profile.version,
             "team_id": team,
             "player_id": pid,
+            "input_format": "compact_match" if compact else "sample",
         }
         try:
-            snapshot, _ = decode(payload, stamina_scale=self.stamina_scale)
+            snapshot, _ = decode(
+                payload,
+                stamina_scale=1.0 if compact else self.stamina_scale,
+                compact_pitch=compact,
+            )
             if self.profile.coach_policy == "rules":
                 snapshot = replace(snapshot, coach=choose_preset(snapshot))
             decision = decide(snapshot, pid, self.settings, self.profile.style)
             selected = decision.command
+            if compact:
+                selected = match_command(selected)
             validate_command(selected)
         except (ValueError, KeyError, TypeError, StopIteration, ArithmeticError) as exc:
             selected = {
@@ -85,21 +108,41 @@ class Runtime:
                 "command": selected,
             }
         else:
+            ball = data["gameState"]["ball"]
+            position = ball["position"]
+            warnings = (
+                ["unresolved_possession"] if snapshot.owner is None and not snapshot.free else []
+            )
+            if (
+                self.competition_adapter
+                and session_id
+                and match is None
+                and not session_id.startswith("scrimmage-drill-")
+            ):
+                warnings.append("unrecognized_competition_session")
             record = {
                 "type": "decision",
                 **context,
                 "snapshot": snapshot_dict(snapshot),
+                "input_contract": {
+                    "coordinate_scale": MATCH_COORDINATE_SCALE if compact else 1.0,
+                    "stamina_scale": 1.0 if compact else self.stamina_scale,
+                    "ball_lateral_axis": "z" if compact and "z" in position else "y",
+                },
                 "command": selected,
                 "reason": decision.reason,
-                "alternatives": decision.alternatives,
+                "alternatives": tuple(
+                    {**option, "command": match_command(option["command"])}
+                    for option in decision.alternatives
+                )
+                if compact
+                else decision.alternatives,
                 "assignments": decision.assignments,
                 "latency_ms": round((time.perf_counter() - start) * 1000, 3),
                 "learning_context": "identified"
                 if self.match_id and self.opponent_id
                 else "missing",
-                "warnings": ["unresolved_possession"]
-                if snapshot.owner is None and not snapshot.free
-                else [],
+                "warnings": warnings,
             }
         response = json.dumps([selected], allow_nan=False)
         self._log.submit(record)

@@ -57,14 +57,33 @@ def envelope(payload: dict) -> tuple[dict, int, int]:
     return data, team, player_index(controlled[0])
 
 
-def _xy(value: object, name: str) -> tuple[float, float]:
+def _xy(value: object, name: str, *, scale: float = 1.0, lateral: str = "y") -> tuple[float, float]:
     if not isinstance(value, dict):
         raise TypeError(f"{name} must contain x/y")
-    return number(value.get("x"), name + ".x"), number(value.get("y"), name + ".y")
+    return (
+        number(value.get("x"), name + ".x") * scale,
+        number(value.get(lateral), name + "." + lateral) * scale,
+    )
 
 
 HOLD_RADIUS = 3.0
 HOLD_MARGIN = 1.0
+MATCH_COORDINATE_SCALE = 8.0
+
+
+def match_command(command: dict) -> dict:
+    """Convert canonical movement to the compact pitch observed in AWS matches."""
+    if command["commandType"] != "MOVE_TO":
+        return command
+    params = command["parameters"]
+    return {
+        **command,
+        "parameters": {
+            **params,
+            "target_x": round(max(-6.4, min(6.4, params["target_x"] / MATCH_COORDINATE_SCALE)), 3),
+            "target_y": round(max(-3.5, min(3.5, params["target_y"] / MATCH_COORDINATE_SCALE)), 3),
+        },
+    }
 
 
 def _nearest_holder(
@@ -82,7 +101,11 @@ def _nearest_holder(
 
 
 def decode(
-    payload: dict, *, stamina_scale: float = 1.0, duration: float = 120.0
+    payload: dict,
+    *,
+    stamina_scale: float = 1.0,
+    duration: float = 120.0,
+    compact_pitch: bool = False,
 ) -> tuple[Snapshot, int]:
     data, team, pid = envelope(payload)
     if stamina_scale not in (1.0, 100.0):
@@ -94,15 +117,16 @@ def decode(
     if not isinstance(raw_players, list):
         raise TypeError("players must be a list")
     players = []
+    scale = MATCH_COORDINATE_SCALE if compact_pitch else 1.0
     for raw in raw_players:
         if not isinstance(raw, dict):
             raise TypeError("player must be an object")
         side = team_index(raw.get("teamCode", raw.get("teamId")))
         idx = player_index(raw.get("agentId", raw.get("playerId")))
-        x, y = _xy(raw.get("position"), "position")
+        x, y = _xy(raw.get("position"), "position", scale=scale)
         if abs(x) > 55 or abs(y) > 35:
             raise ValueError("player outside the sample pitch")
-        vx, vy = _xy(raw.get("velocity", {"x": 0, "y": 0}), "velocity")
+        vx, vy = _xy(raw.get("velocity", {"x": 0, "y": 0}), "velocity", scale=scale)
         stamina = number(raw.get("stamina", stamina_scale), "stamina") / stamina_scale
         if not 0 <= stamina <= 1:
             raise ValueError("stamina outside configured scale")
@@ -115,8 +139,22 @@ def decode(
     ball = state.get("ball")
     if not isinstance(ball, dict):
         raise TypeError("ball must be an object")
-    xy = _xy(ball.get("position"), "ball")
-    velocity = _xy(ball.get("velocity", {"x": 0, "y": 0}), "ball velocity")
+    position = ball.get("position")
+    raw_velocity = ball.get("velocity", {"x": 0, "y": 0})
+    xy = _xy(
+        position,
+        "ball",
+        scale=scale,
+        lateral="z" if compact_pitch and isinstance(position, dict) and "z" in position else "y",
+    )
+    velocity = _xy(
+        raw_velocity,
+        "ball velocity",
+        scale=scale,
+        lateral="z"
+        if compact_pitch and isinstance(raw_velocity, dict) and "z" in raw_velocity
+        else "y",
+    )
     free = ball.get("isFree") is True
     if "isFree" in ball and not isinstance(ball["isFree"], bool):
         raise ValueError("isFree must be boolean")

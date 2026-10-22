@@ -16,6 +16,124 @@ from agent.runtime import Runtime
     importlib.util.find_spec("bedrock_agentcore"), "optional deployment SDK absent"
 )
 class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
+    def test_captured_forward_at_boundary_shoots_instead_of_carrying(self):
+        # Tick 7175: reconstructed from normalized telemetry; original ball z was not logged.
+        positions = (
+            (-6.4, -1.4012938),
+            (-6.4, 0.31446734),
+            (-0.55346316, -3.5),
+            (6.4, -0.22905341),
+            (5.125767, 3.6000004),
+            (-6.4, -0.45149958),
+            (4.8811307, 0.19935137),
+            (5.2075233, -0.3268969),
+            (6.047864, 1.6006875),
+            (5.374957, -0.1920256),
+        )
+        data = json.loads(payload(owner=(0, 3), pid=3)["prompt"])
+        for player, (x, y) in zip(data["gameState"]["players"], positions, strict=True):
+            player["position"] = {"x": x, "y": y}
+            player["stamina"] = 1.0
+        data["gameState"]["ball"]["position"] = {"x": 6.744304, "y": 0.14291038}
+        records = []
+        runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=records.append)
+        self.addCleanup(runtime.close)
+        session = "4e7baceb-646a-4338-b30a-dea31ce9a3b5-team0-pos3"
+        command = json.loads(runtime.handle(data, session_id=session))[0]
+        self.assertEqual(command["commandType"], "SHOOT")
+        self.assertTrue(runtime.flush_logs())
+        self.assertEqual(records[-1]["snapshot"]["players"][3]["x"], 51.2)
+        self.assertEqual(records[-1]["snapshot"]["players"][3]["stamina"], 1.0)
+
+    def test_unrecognized_competition_session_warns_without_guessing_units(self):
+        records = []
+        runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=records.append)
+        self.addCleanup(runtime.close)
+        data = json.loads(payload()["prompt"])
+        for player in data["gameState"]["players"]:
+            player["stamina"] = 1
+        runtime.handle(data, session_id="unknown-server-session-format-12345")
+        self.assertTrue(runtime.flush_logs())
+        self.assertEqual(records[-1]["input_format"], "sample")
+        self.assertEqual(records[-1]["snapshot"]["players"][0]["stamina"], 0.01)
+        self.assertIn("unrecognized_competition_session", records[-1]["warnings"])
+
+    async def test_live_match_uses_compact_geometry_and_fractional_stamina(self):
+        from httpx import ASGITransport, AsyncClient
+
+        match_id = "4e7baceb-646a-4338-b30a-dea31ce9a3b5"
+        records = []
+        runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=records.append)
+        self.addCleanup(runtime.close)
+        app = main.create_app(runtime)
+        data = json.loads(payload(owner=(0, 3), ball=(39, -5), pid=3)["prompt"])
+        state = data["gameState"]
+        state["players"][3]["position"] = {"x": 39, "y": -5}
+        for player in state["players"]:
+            player["position"] = {k: v / 8 for k, v in player["position"].items()}
+            player["stamina"] = 0.01 if player["agentId"] == "agentId_2" else 0.9
+        state["ball"]["position"] = {"x": 39 / 8, "y": 0.14291, "z": -5 / 8}
+        state["ball"]["velocity"] = {"x": 0.25, "y": 4, "z": -0.125}
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://local") as client:
+            response = await client.post(
+                "/invocations",
+                json={"prompt": data},
+                headers={"X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": f"{match_id}-team0-pos3"},
+            )
+        event = next(x[6:] for x in response.text.splitlines() if x.startswith("data: "))
+        command = json.loads(json.loads(event))[0]
+        self.assertEqual(command["commandType"], "SHOOT")
+        self.assertTrue(runtime.flush_logs())
+        record = records[-1]
+        self.assertEqual(record["match_id"], match_id)
+        self.assertEqual(record["input_format"], "compact_match")
+        self.assertEqual(record["snapshot"]["ball"], [39.0, -5.0])
+        self.assertEqual(record["snapshot"]["velocity"], [2.0, -1.0])
+        self.assertEqual(record["snapshot"]["players"][2]["stamina"], 0.01)
+
+    async def test_live_movement_is_converted_back_without_changing_fitness_format(self):
+        from httpx import ASGITransport, AsyncClient
+
+        records = []
+        runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=records.append)
+        self.addCleanup(runtime.close)
+        app = main.create_app(runtime)
+        async with AsyncClient(transport=ASGITransport(app), base_url="http://local") as client:
+            for team in (0, 1):
+                data = json.loads(payload(owner=None, team=team, pid=0)["prompt"])
+                for player in data["gameState"]["players"]:
+                    player["position"] = {k: v / 8 for k, v in player["position"].items()}
+                data["gameState"]["ball"]["position"] = {"x": 0, "y": 0.14, "z": 2}
+                response = await client.post(
+                    "/invocations",
+                    json={"prompt": data},
+                    headers={
+                        "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": f"4e7baceb-646a-4338-b30a-dea31ce9a3b5-team{team}-pos0"
+                    },
+                )
+                event = next(x[6:] for x in response.text.splitlines() if x.startswith("data: "))
+                command = json.loads(json.loads(event))[0]
+                self.assertEqual(command["commandType"], "MOVE_TO")
+                self.assertEqual(command["parameters"]["target_x"], -6.4 if team == 0 else 6.4)
+                self.assertGreater(command["parameters"]["target_y"], 0)
+                self.assertLessEqual(command["parameters"]["target_y"], 3.5)
+            fitness = json.loads(payload(pid=0)["prompt"])
+            for player in fitness["gameState"]["players"]:
+                player["stamina"] = 1
+            response = await client.post(
+                "/invocations",
+                json={"prompt": fitness},
+                headers={
+                    "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": "scrimmage-drill-ede88560-dc5e-418c-8eb4-e06046e19199-pos0"
+                },
+            )
+        event = next(x[6:] for x in response.text.splitlines() if x.startswith("data: "))
+        command = json.loads(json.loads(event))[0]
+        self.assertLess(command["parameters"]["target_x"], -50)
+        self.assertTrue(runtime.flush_logs())
+        self.assertEqual(records[-1]["snapshot"]["players"][0]["stamina"], 0.01)
+        self.assertIsNone(records[-1]["match_id"])
+
     def test_deployed_startup_handles_percentage_stamina(self):
         spec = json.loads(
             (Path(__file__).resolve().parents[1] / "deploy/agentcore/agentcore.json").read_text()

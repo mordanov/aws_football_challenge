@@ -12,13 +12,17 @@ over a stale holder, ambiguous reused IDs remain unknown.
 
 **States:** received, normalized, planned, validated, serialized, returned; error.
 **Initial:** received.
-**Transitions:** normalize -> coach preset (platform preset kept; otherwise
-`choose_preset` when `coach_policy` is `rules`) -> plan -> validate -> serialize
+**Transitions:** SDK session contract selection -> normalize -> coach preset (platform preset kept; otherwise
+`choose_preset` when `coach_policy` is `rules`) -> plan -> convert compact-match
+MOVE_TO commands back to bounded wire coordinates when selected -> validate -> serialize
 -> enqueue telemetry without waiting -> return. Recoverable errors with known team/player identity
 enqueue a sanitized diagnostic and return validated balanced stance.
 Unrecoverable identity errors fail rather than invent IDs. A team-less holder
 is resolved by ball proximity when unambiguous; remaining unknown ownership
 keeps defensive shape and adds an explicit warning.
+With the competition adapter enabled, a recognized match-session ID selects
+compact geometry/fractional stamina. Fitness sessions retain the sample contract;
+unrecognized non-fitness IDs retain it with an explicit diagnostic warning.
 **Source:** `agent/runtime.py`, `Runtime.handle`.
 
 ## Decision telemetry

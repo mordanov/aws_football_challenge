@@ -55,8 +55,8 @@ the same `prompt` as a JSON string, or that inner object directly.
 |---|---|
 | Team/player routing | `teamId`: integer 0/1 or home/away (case-insensitive); one `myPlayers` element: integer 0-4 or `agentId_N` |
 | Players | Exactly five distinct indices per team; `teamCode`/`agentId` or legacy `teamId`/`playerId`; finite `position.x/y`, optional velocity and stamina |
-| Geometry | Centered 110 x 70 sample pitch; home attacks +x, away -x. Halftime switching and shot-label orientation require real-contract verification |
-| Stamina | 0..1 by default; explicitly select scale 100 for percentage input. Never guess scale per player |
+| Geometry | Canonical centered 110 x 70 sample pitch; home attacks +x, away -x. The deployed competition adapter converts compact live-match coordinates separately; see below |
+| Stamina | 0..1 locally and in recognized live-match sessions; configured scale 100 for synthetic Fitness Check inputs. Never guess scale per player |
 | Ball | Finite position, optional velocity; boolean `isFree`; otherwise `possessionAgentId` or `possessionPlayerId`, with optional `possessionTeamId`/`possessionTeamCode` |
 | Clock | Nonnegative integer `tick`, finite nonnegative `gameTime` seconds; positive `matchDuration` seconds, default **120** from original requirements |
 | Score | `{"home": nonnegative_integer, "away": nonnegative_integer}` |
@@ -210,6 +210,7 @@ string, the same framing as the official sample (`yield json.dumps(commands)`).
 | `AFC_MATCH_ID` | Optional trusted single-match context for telemetry only; omit if autoplay match binding is not established |
 | `AFC_OPPONENT_ID` | Optional trusted opponent identity for startup profile selection and telemetry |
 | `AFC_STAMINA_SCALE` | `1` (local default) or `100` (set by `deploy/` for AWS percentage inputs); invalid values fail startup |
+| `AFC_COMPETITION_ADAPTER` | `0` (local default) or `1` (set by `deploy/`): recognize live-match SDK session IDs and convert compact geometry/fractional stamina; invalid values fail startup |
 | `AFC_PLAYER_ID` | Optional seat `0`-`4` used **only** when an invocation omits `myPlayers`; explicit routing always wins. Set per runtime by `deploy/` |
 
 There is intentionally no `LLM_ENABLED`, S3 bucket, Bedrock model ID or
@@ -230,13 +231,34 @@ Memory or Gateway permissions.
 (default `profiles/recommended.json`) there. Each runtime differs only in its
 `AFC_PLAYER_ID` seat.
 
-All five deployments explicitly set `AFC_STAMINA_SCALE=100`: the live Fitness
-Check sends percentage stamina, unlike the public sample's fractional values.
+All five deployments explicitly set `AFC_STAMINA_SCALE=100`: the synthetic Fitness
+Check sends percentage stamina, unlike live-match fractional values.
 This normalizes 100 to 1.0 and 1 to 0.01 without guessing per player. Keep scale
 1 for local simulator inputs. Omitting the AWS setting causes
 `ValueError: stamina outside configured scale` and safe `SET_STANCE` responses,
 which fail fitness realism checks. The documented stamina range is in the
 [workshop game mechanics](https://github.com/aws-samples/sample-ai-possibilities/blob/main/agentic-football-coach/kiro-football-coach/content-reference/en/game-mechanics.md).
+Those rules describe a stamina stat range, not a reliable guarantee of the
+live observation's units; the first real match disproved a single global scale.
+
+`AFC_COMPETITION_ADAPTER=1` separates those contracts using the SDK session ID.
+Observed live IDs are `<match UUID>-team[01]-pos[0-4]`; they select fractional
+stamina and compact geometry. Player x/y position and velocity are multiplied
+by 8 for canonical tactics. Three-dimensional ball vectors use x/z (not
+vertical y); two-dimensional vectors retain x/y. Outgoing MOVE_TO coordinates
+are divided by 8 and clipped to x +/-6.4, y +/-3.5. Fitness sessions retain
+sample geometry and scale 100, including the 1% edge case. No individual stamina
+value or crowded formation is used to guess a format. Unrecognized non-fitness
+session IDs add `unrecognized_competition_session` rather than silently selecting
+the live contract.
+
+The factor 8 is **provisional calibration** from the first match: players
+repeatedly reached +/-6.4 and the ball crossed goal ends around +/-6.8, while our
+tactics expected +/-55. Exact server field dimensions and 3D projection still
+need confirmation against future live captures. Each decision logs
+`input_format` and `input_contract` (scales and chosen ball axis), canonical
+snapshots, and actual wire commands. Recognized session UUIDs now populate
+`match_id`; opponent IDs are not fabricated.
 
 Prerequisites: Node >= 20, `npm install -g @aws/agentcore aws-cdk`, `uv`, the AWS
 CLI, and credentials for the competition account in **us-east-1 or us-west-2**
@@ -304,6 +326,38 @@ has stopped using a stale session.
 The model-allowlist check expects a Bedrock model, and how it treats an
 LLM-free agent is unverified. The portal locks matches only on a `DENIED`
 verdict, and "Not verified yet" does not lock.
+
+### First real match: evidence and corrections
+
+`report1.pdf` records a 1-2 loss to The Benchmark FC with 51% possession.
+Its AI narrative/command attribution is inconsistent: it lists 34 SHOOT
+commands under our team but zero shots in its statistics, while our CloudWatch
+telemetry contains no SHOOT or PASS decisions. Do not tune pressing or marking
+from that narrative alone.
+
+397 application records were available: 392 decisions and five initial
+invalid-roster fallbacks, not a complete replay of all 405 expected calls.
+There were 315 MOVE_TO, 40 MARK, 20 PRESS_BALL, 17 INTERCEPT and five SET_STANCE
+returns. Unknown possession warnings occurred on 114 decisions. The old
+decoder discarded ball z and unresolved holder IDs, preventing exact replay.
+Players repeatedly hit the compact pitch boundaries, leaving every carrier
+outside the hardcoded sample-pitch shooting range. Live full stamina was
+incorrectly normalized to 0.01 by the earlier Fitness Check configuration.
+
+The correction is at the protocol boundary, not a new formation or speculative
+strategy change. A partial reconstruction of the 392 recorded observations with
+corrected units generated two SHOOT and 15 PASS attempts instead of zero;
+these are counterfactual decisions, not evidence of accepted actions or wins.
+Tactical weights, formation 1-1-2 and the pinned direct-carry profile are unchanged.
+Evaluate improvement in the next real match, especially shot attempts,
+possession ambiguity, boundary saturation and stale-session behavior.
+
+Deployment verification exercised 42 direct AWS calls across both teams and
+both input formats, including both forwards shooting and full/depleted stamina.
+All five `DEFAULT` endpoints run version 3 with the adapter enabled; existing
+runtime ARNs were retained. The five known portal Fitness Check session IDs
+were also refreshed and invoked successfully. These synthetic checks do not
+establish the next portal verdict or a competitive improvement.
 
 ## Telemetry and deadline limits
 

@@ -19,10 +19,20 @@ anchors and option scores inside `decide`.
 The actual pinned AgentCore adapter wraps the array string in one SSE data event.
 On AgentCore each of the five runtimes runs the same staged code and profile;
 its `AFC_PLAYER_ID` seat only fills a missing `myPlayers` (explicit routing wins).
-The deployment sets `AFC_STAMINA_SCALE=100` for platform percentage stamina;
-decoding divides by 100 into `Snapshot`'s 0..1 range, including depleted values
-of 1 (1%, not full stamina). Local simulator inputs retain scale 1. The public
-sample's fractional stamina is not representative of the live fitness check.
+The deployment sets `AFC_STAMINA_SCALE=100` for synthetic Fitness Check stamina
+and enables `AFC_COMPETITION_ADAPTER=1`. The SDK request context supplies the
+session ID: `<UUID>-team[01]-pos[0-4]` selects the compact live-match contract,
+while fitness sessions retain sample geometry and percentage stamina. Unknown
+non-fitness session formats retain the sample contract with an explicit warning.
+Live fractional stamina remains unchanged; live player position/velocity x/y
+is multiplied by 8 into canonical coordinates. A 3D live ball uses x/z (y is
+height); 2D balls retain x/y. MOVE_TO output is divided by 8 and bounded to the
+observed player pitch limits, x +/-6.4 and y +/-3.5. Scale 8 is a provisional
+first-match calibration, not a verified exact field dimension.
+Telemetry includes `input_format`/`input_contract`, canonical snapshots and
+wire-format commands/alternatives. A recognized match session supplies its UUID
+as `match_id` when no operator binding is configured; opponent identity remains
+unknown. Local CLI/simulator inputs retain the original contract.
 **Source:** `agent/protocol.py`, `agent/coach.py`, `agent/tactics.py`,
 `agent/runtime.py`, `agent/telemetry.py`, `agent/main.py`.
 

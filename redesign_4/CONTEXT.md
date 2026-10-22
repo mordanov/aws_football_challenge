@@ -5,12 +5,19 @@ Five coordinated players and their durable offline coaching loop.
 ## Language
 
 **Snapshot**:
-One normalized observation interpreted from our team's perspective.
+One normalized observation interpreted from our team's perspective in canonical
+sample-pitch coordinates, not necessarily the server's physical units.
 Includes a recognized coach preset. A team-less `agentId_N` holder (official
 server format) is resolved to the same-index player clearly on the ball
 (within 3 m and at least 1 m nearer than the other); otherwise ownership stays
 explicitly unknown.
 _Avoid_: confirmed match event, complete replay.
+
+**Competition adapter**:
+Session-selected conversion between compact live-match observations/commands
+and canonical tactical coordinates, separate from the synthetic Fitness Check.
+Its geometry calibration is provisional, not a guaranteed platform contract.
+_Avoid_: automatic per-player unit guessing, proof of improved match results.
 
 **Decision**:
 A selected attempted command, not evidence the server executed it.

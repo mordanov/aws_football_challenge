@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bedrock_agentcore.runtime import BedrockAgentCoreApp
+    from bedrock_agentcore.runtime.context import RequestContext
 
 from .model import Profile
 from .profile import load_profile
@@ -34,8 +35,10 @@ def create_app(runtime: Runtime, default_player: int | None = None) -> BedrockAg
     app = BedrockAgentCoreApp()
 
     @app.entrypoint
-    def invoke(payload: dict):
-        yield runtime.handle(with_default_player(payload, default_player))
+    def invoke(payload: dict, context: RequestContext):
+        yield runtime.handle(
+            with_default_player(payload, default_player), session_id=context.session_id
+        )
 
     return app
 
@@ -43,6 +46,9 @@ def create_app(runtime: Runtime, default_player: int | None = None) -> BedrockAg
 def main() -> None:
     path = os.getenv("AFC_PROFILE")
     seat = os.getenv("AFC_PLAYER_ID")
+    competition = os.getenv("AFC_COMPETITION_ADAPTER", "0")
+    if competition not in ("0", "1"):
+        raise ValueError("AFC_COMPETITION_ADAPTER must be 0 or 1")
     if seat is not None and seat not in ("0", "1", "2", "3", "4"):
         raise ValueError("AFC_PLAYER_ID must be 0..4")
     runtime = Runtime(
@@ -50,6 +56,7 @@ def main() -> None:
         match_id=os.getenv("AFC_MATCH_ID"),
         opponent_id=os.getenv("AFC_OPPONENT_ID"),
         stamina_scale=float(os.getenv("AFC_STAMINA_SCALE", "1")),
+        competition_adapter=competition == "1",
     )
     try:
         create_app(runtime, None if seat is None else int(seat)).run()
