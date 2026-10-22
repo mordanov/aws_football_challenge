@@ -53,3 +53,17 @@ python -m football_lab evolve report --dir local/exp1
 ```
 
 See `docs/m5-evolution.md` for full protocol details.
+
+Run a rules v2 cross campaign (profile variants + scripted coach):
+
+```sh
+python -m football_lab campaign init --rules v2 --blocks 20 --seed-pool-start 5000 \
+  --challengers r4v2_balanced_none,r4v2_balanced_rules --pool initial_idea_v1,redesign_4_v1 \
+  --output local/r4v2/a/manifest.json
+python -m football_lab campaign run --manifest local/r4v2/a/manifest.json \
+  --replays local/r4v2/a/replays --discard-replays
+python -m football_lab campaign report --manifest local/r4v2/a/manifest.json \
+  --json local/r4v2/a/report.json --baseline r4v2_balanced_none
+```
+
+See `docs/rules-v2.md` for the foul model and its assumptions.
