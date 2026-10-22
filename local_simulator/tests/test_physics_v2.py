@@ -90,13 +90,13 @@ def _shot_window(shooter_team: int, aim: str, **kw: Any) -> tuple[EngineState, l
 
 
 @pytest.mark.parametrize("aim", ["BL", "TR"])
-def test_honour_aim_beats_centred_keeper(aim: str) -> None:
-    state, kinds = _shot_window(0, aim, honour_aim=True)
+def test_v2_ball_beats_centred_keeper(aim: str) -> None:
+    state, kinds = _shot_window(0, aim, v2_ball=True)
     assert "GOAL" in kinds and state["score"] == [1, 0]
 
 
-def test_honour_aim_center_is_caught_by_centred_keeper() -> None:
-    state, kinds = _shot_window(0, "CENTER", honour_aim=True)
+def test_v2_ball_center_is_caught_by_centred_keeper() -> None:
+    state, kinds = _shot_window(0, "CENTER", v2_ball=True)
     assert "GOAL" not in kinds
     assert (state["ball"]["owner_team"], state["ball"]["owner_player"]) == (1, 0)
 
@@ -107,6 +107,39 @@ def test_default_ignores_aim_so_centred_keeper_catches() -> None:
     assert (state["ball"]["owner_team"], state["ball"]["owner_player"]) == (1, 0)
 
 
-def test_honour_aim_team1_shoots_toward_negative_x() -> None:
-    state, kinds = _shot_window(1, "BR", honour_aim=True)
+def test_v2_ball_team1_shoots_toward_negative_x() -> None:
+    state, kinds = _shot_window(1, "BR", v2_ball=True)
     assert "GOAL" in kinds and state["score"] == [0, 1]
+
+
+def _pass_window(extra: list[dict[str, Any]], **kw: Any) -> EngineState:
+    """Team 0 pid 1 at the origin passes along the ground to pid 2 at (15, 0)."""
+    players = [_p(0, 1, 0.0), _p(0, 2, 15.0), *extra]
+    state = _state(players, ball={"owner_team": 0, "owner_player": 1})
+    intents: list[Intent] = [{"team_id": 0, "player_id": 1, "command_type": "PASS",
+                              "parameters": {"target_player_id": 2, "type": "GROUND"},
+                              "is_one_shot": True, "executed": False}]
+    for _ in range(40):
+        state, _events = step(state, intents, **kw)
+    return state
+
+
+def _owner(state: EngineState) -> tuple[int | None, int | None]:
+    return state["ball"]["owner_team"], state["ball"]["owner_player"]
+
+
+def test_default_passer_recollects_own_pass() -> None:
+    # v1: the 1.5 m/step ball is still inside PICKUP_RADIUS of the passer one step later
+    assert _owner(_pass_window([])) == (0, 1)
+
+
+def test_v2_ball_pass_reaches_receiver() -> None:
+    assert _owner(_pass_window([], v2_ball=True)) == (0, 2)
+
+
+def test_v2_ball_opponent_in_lane_still_intercepts() -> None:
+    assert _owner(_pass_window([_p(1, 3, 7.0)], v2_ball=True)) == (1, 3)
+
+
+def test_v2_ball_opponent_behind_passer_cannot_collect() -> None:
+    assert _owner(_pass_window([_p(1, 3, -1.0)], v2_ball=True)) == (0, 2)

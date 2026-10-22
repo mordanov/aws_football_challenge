@@ -95,7 +95,7 @@ def step(
     intents: list[Intent],
     contest: ContestHook | None = None,
     *,
-    honour_aim: bool = False,
+    v2_ball: bool = False,
 ) -> tuple[EngineState, list[MatchEvent]]:
     """Advance state by one physics step. Returns (new_state, events)."""
     events: list[MatchEvent] = []
@@ -238,7 +238,7 @@ def step(
             s = 1 if team_id == 0 else -1
             gx = s * PITCH_HALF_L
             gy = 0.0
-            if honour_aim:
+            if v2_ball:
                 aim = str(params.get("aim_location", "CENTER")).upper()
                 if aim in ("TL", "BL"):
                     gy = -AIM_Y
@@ -290,6 +290,10 @@ def step(
             if just_released and (p["team_id"], p["player_id"]) == just_released:
                 continue
             d = _dist(p["x"], p["y"], ball["x"], ball["y"])
+            if v2_ball and ball["in_flight"] and (
+                (ball["x"] - p["x"]) * ball["vx"] + (ball["y"] - p["y"]) * ball["vy"] > 0
+            ):
+                continue
             if d <= closest_dist:
                 closest_dist = d
                 closest = p

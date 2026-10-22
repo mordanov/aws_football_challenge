@@ -65,9 +65,11 @@ are considered; each player's first intent this step counts.
 Events: `FOUL`, `PENALTY`, `SEND_OFF`, `TACKLE_SUCCESS` (also for standing-challenge
 wins). Campaign fixture results record per-team counts in `discipline`.
 
-## 5. Shot aim
+## 5. Ball physics (`v2_ball`)
 
-v2 honours `SHOOT`'s `aim_location` (`physics.step(..., honour_aim=True)`); the shot
+### Shot aim
+
+v2 honours `SHOOT`'s `aim_location` (`physics.step(..., v2_ball=True)`); the shot
 travels from the ball toward `(±PITCH_HALF_L, target_y)`:
 
 | `aim_location` | `target_y` |
@@ -82,6 +84,17 @@ teams** (no mirroring for team 1), matching redesign_4's convention.
 Why: v1 ignores `aim_location` and aims every shot at the goal centre, and any player
 within `PICKUP_RADIUS` (2.1) of the in-flight ball picks it up, so a keeper standing at
 its goal centre catches every shot (1 goal in 96 local v1 matches). **v1 is unchanged**.
+
+### In-flight pickup
+
+Also under `v2_ball=True`: a player cannot collect an in-flight ball that is moving
+away from them (`(ball − player) · velocity > 0`). Players the ball is travelling
+toward, such as the receiver or an opponent in the lane, still collect it within
+`PICKUP_RADIUS`.
+
+Why: v1 excludes the releasing player only on the release step. A 1.5 m/step pass is
+still inside the passer's 2.1 m radius one step later, so in v1 every ground or
+aerial pass is recollected by the passer. **v1 is unchanged**.
 
 ## 6. Known simplifications
 

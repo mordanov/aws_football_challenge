@@ -75,6 +75,7 @@ v2 results are never mixed. Every constant is a **local assumption** documented 
   (also for standing-challenge wins). Fixture results record per-team counts.
 - **Replays**: campaigns may run with `--discard-replays` (replays are ~3 MB each).
 - **Shot aim**: v2 honours `aim_location` (TL/BL → y = −3.5, TR/BR → y = +3.5, CENTER → 0, world coordinates); v1 aims every shot at the goal centre, which a centred keeper always catches.
+- **In-flight pickup**: in v2 a player cannot collect an in-flight ball moving away from them; v1 lets the passer recollect every 1.5 m/step pass on the step after release.
 
 ## 4. Opponent pool
 
