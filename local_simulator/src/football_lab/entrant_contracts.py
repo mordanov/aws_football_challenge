@@ -1,7 +1,7 @@
 """M3 type contracts for entrants, fixtures, and campaign manifests."""
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 
 class BudgetSpec(TypedDict):
@@ -18,6 +18,8 @@ class EntrantSpec(TypedDict):
     entrant_hash: str          # sha256 hex of sorted(shim + agent/ files)
     rules_version: Literal["v1"]
     track: Literal["patched", "original"]
+    profile: NotRequired[str]  # absolute profile path for a variant (AFC_PROFILE)
+    coach: NotRequired[str | None]  # key into football_lab.coaches.COACHES
 
 
 class FixtureSpec(TypedDict):
@@ -38,6 +40,7 @@ class FixtureResult(TypedDict):
     duration_ms: float
     team0_rejections: int
     team1_rejections: int
+    discipline: NotRequired[dict[str, list[int]]]  # kind -> [team0, team1]
 
 
 class EntrantStanding(TypedDict):
@@ -58,7 +61,9 @@ class CampaignManifest(TypedDict):
     entrants: list[EntrantSpec]
     seed_pool_start: int
     budget: BudgetSpec
-    rules_version: Literal["v1"]
+    rules_version: Literal["v1", "v2"]
     fixtures: list[FixtureSpec]
     results: list[FixtureResult]
     locked: bool
+    rules_params: NotRequired[dict[str, Any]]
+    challengers: NotRequired[list[str]]  # cross campaigns only
