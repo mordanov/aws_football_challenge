@@ -50,3 +50,36 @@ _Avoid_: acknowledged execution, complete recording.
 A distinct tick supporting a particular lesson. Multiple players observing one
 tick, or unrelated observations, do not multiply its evidence.
 _Avoid_: arbitrary sample count, causal proof.
+
+**Coach preset**:
+One recognized mid-match instruction (`go_all_out_attack`, `slow_the_tempo`,
+`press_high`, `shoot_on_sight`). A platform-sent preset overrides the coach policy.
+_Avoid_: free-text coaching, formation change.
+
+**Coach policy**:
+The deterministic per-tick choice of a coach preset from score and quantized
+match time, identical for all five players. Never changes formation.
+_Avoid_: live LLM coach, shared coordinator.
+
+**Formation**:
+Pinned role anchors (e.g. `1-1-2`) in the tactical profile; immutable during a
+match, changeable only between matches via profile approval.
+_Avoid_: dynamic shape, in-match formation switch.
+
+**Style**:
+Bounded profile section (block depth, attackers committed, tackle aggression,
+tempo, formation) expressing how the team plays.
+_Avoid_: mode, strategy flag.
+
+**Archetype**:
+A named, pinned style plus settings (e.g. `park_the_bus`) evaluated as a whole.
+_Avoid_: personality, dirty mode.
+
+**Stand-in bot**:
+A local opponent imitating a reported AWS practice bot; never the real bot.
+_Avoid_: AWS bot.
+
+**Advisor**:
+Optional off-tick LLM component producing profile or parameter proposals that
+still require profile approval.
+_Avoid_: live agent brain, auto-deploy.
