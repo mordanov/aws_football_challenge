@@ -1,0 +1,37 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main", "m*"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    defaults:
+      run:
+        working-directory: local_simulator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run unit tests
+        run: |
+          PYTHONPATH=src pytest tests/ \
+            --ignore=tests/test_viewer.py \
+            -v --tb=short
