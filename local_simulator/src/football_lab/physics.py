@@ -10,6 +10,7 @@ import math
 from typing import Any
 
 from football_lab.match_contracts import (
+    ContestHook,
     EngineBallState,
     EnginePlayerState,
     EngineState,
@@ -80,12 +81,18 @@ def _intent_for(team_id: int, player_id: int, intents: list[Intent]) -> Intent |
     return None
 
 
+def is_inactive(p: EnginePlayerState, tick: int) -> bool:
+    """Rules v2: sent off, or stunned through `tick`. Always False under v1."""
+    return bool(p.get("sent_off")) or p.get("stunned_until", -1) >= tick
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
 def step(
     state: EngineState,
     intents: list[Intent],
+    contest: ContestHook | None = None,
 ) -> tuple[EngineState, list[MatchEvent]]:
     """Advance state by one physics step. Returns (new_state, events)."""
     events: list[MatchEvent] = []
@@ -98,6 +105,8 @@ def step(
 
     # ── 1. Move players ───────────────────────────────────────────────────────
     for p in players:
+        if is_inactive(p, tick):
+            continue
         intent = _intent_for(p["team_id"], p["player_id"], intents)
         cmd = intent["command_type"] if intent else "SET_STANCE"
         params: dict[str, Any] = intent["parameters"] if intent else {}
@@ -156,6 +165,10 @@ def step(
         else:
             # SET_STANCE, MARK, PASS (after fire), SHOOT (after fire) — recovery
             p["stamina"] = _clamp(p["stamina"] + _STAMINA_RECOVERY, 0.0, 1.0)
+
+    # ── 1b. Rules v2 contests (may change ball owner; ball then follows below) ─
+    if contest is not None:
+        events.extend(contest(players, ball, score, intents, tick))
 
     # ── 2. Move ball ──────────────────────────────────────────────────────────
     if ball["owner_team"] is None:
@@ -262,6 +275,8 @@ def step(
         closest: EnginePlayerState | None = None
         closest_dist = PICKUP_RADIUS
         for p in players:
+            if is_inactive(p, tick):
+                continue
             # Carrier that just released cannot immediately re-pick up the ball
             if just_released and (p["team_id"], p["player_id"]) == just_released:
                 continue
