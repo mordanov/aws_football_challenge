@@ -160,6 +160,7 @@ def validate_command(command: object) -> None:
         "INTERCEPT": {"aggressive"},
         "GK_DISTRIBUTE": {"target_player_id", "method"},
         "SET_STANCE": {"stance"},
+        "SLIDE_TACKLE": {"target_player_id"},
     }
     kind = command.get("commandType")
     if kind not in schemas or set(params) != schemas[kind]:

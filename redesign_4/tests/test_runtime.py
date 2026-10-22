@@ -255,3 +255,15 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("error", records[-1])
         with self.assertRaises(ValueError):
             runtime.handle({"prompt": "invalid json"})
+
+
+class SlideTackleSchemaTest(unittest.TestCase):
+    def command(self, **params):
+        return {"commandType": "SLIDE_TACKLE", "teamId": 0, "playerId": 2,
+                "parameters": params, "duration": 0}
+
+    def test_slide_tackle_requires_only_a_valid_target(self):
+        validate_command(self.command(target_player_id=3))
+        for params in ({}, {"target_player_id": 5}, {"target_player_id": 3, "force": 1}):
+            with self.subTest(params=params), self.assertRaises(ValueError):
+                validate_command(self.command(**params))
