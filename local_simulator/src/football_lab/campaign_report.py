@@ -3,9 +3,23 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
 
-from .entrant_contracts import EntrantStanding, FixtureResult
+from .entrant_contracts import CampaignManifest, EntrantStanding, FixtureResult
+
+
+class HeadToHeadRecord(TypedDict):
+    wins: int
+    draws: int
+    losses: int
+    goals_for: int
+    goals_against: int
+
+
+class OperationalSummary(TypedDict):
+    total: int
+    complete: int
+    failed: int
 
 
 def _parse_fixture_id(fixture_id: str) -> tuple[str, str, int, int]:
@@ -132,3 +146,69 @@ def bootstrap_ci(
         ci[b][f"vs_{a}"] = (lo_b, hi_b)
 
     return dict(ci)
+
+
+def head_to_head_matrix(
+    results: list[FixtureResult],
+) -> dict[str, dict[str, HeadToHeadRecord]]:
+    """Return {entrant_a: {entrant_b: record}} from a's perspective (complete fixtures only)."""
+    acc: dict[str, dict[str, HeadToHeadRecord]] = defaultdict(dict)
+
+    def _entry(a: str, b: str) -> HeadToHeadRecord:
+        if b not in acc[a]:
+            acc[a][b] = {"wins": 0, "draws": 0, "losses": 0, "goals_for": 0, "goals_against": 0}
+        return acc[a][b]
+
+    for r in results:
+        if r["status"] != "complete":
+            continue
+        t0, t1, _, _ = _parse_fixture_id(r["fixture_id"])
+        g0, g1 = r["score"]
+        e01, e10 = _entry(t0, t1), _entry(t1, t0)
+        e01["goals_for"] += g0
+        e01["goals_against"] += g1
+        e10["goals_for"] += g1
+        e10["goals_against"] += g0
+        if g0 > g1:
+            e01["wins"] += 1
+            e10["losses"] += 1
+        elif g1 > g0:
+            e01["losses"] += 1
+            e10["wins"] += 1
+        else:
+            e01["draws"] += 1
+            e10["draws"] += 1
+
+    return dict(acc)
+
+
+def operational_summary(
+    manifest: CampaignManifest,
+) -> tuple[OperationalSummary, dict[str, int]]:
+    """Return (summary, rejections_by_entrant_id).
+
+    Rejections are attributed to the entrant that played as team0/team1 in each fixture.
+    """
+    results_by_id = {r["fixture_id"]: r for r in manifest["results"]}
+    rejections: dict[str, int] = defaultdict(int)
+    complete = 0
+    failed = 0
+
+    for fixture in manifest["fixtures"]:
+        fid = fixture["fixture_id"]
+        r = results_by_id.get(fid)
+        if r is None:
+            continue
+        if r["status"] == "complete":
+            complete += 1
+        else:
+            failed += 1
+        rejections[fixture["team0_entrant"]] += r["team0_rejections"]
+        rejections[fixture["team1_entrant"]] += r["team1_rejections"]
+
+    summary: OperationalSummary = {
+        "total": len(manifest["fixtures"]),
+        "complete": complete,
+        "failed": failed,
+    }
+    return summary, dict(rejections)

@@ -1,7 +1,10 @@
 """Tests for campaign_report: standings and block-bootstrap CI."""
-import pytest
-
-from football_lab.campaign_report import bootstrap_ci, compute_standings
+from football_lab.campaign_report import (
+    bootstrap_ci,
+    compute_standings,
+    head_to_head_matrix,
+    operational_summary,
+)
 from football_lab.entrant_contracts import FixtureResult
 
 
@@ -82,3 +85,81 @@ def test_bootstrap_block_integrity():
     ci = bootstrap_ci(results, rng_seed=42, n_resamples=1000)
     lo, hi = ci["a"]["vs_b"]
     assert lo <= 0 <= hi   # high variance → CI spans 0
+
+
+# ── Task 1: head-to-head matrix and operational summary ──────────────────────
+
+_H2H_RESULTS = [
+    _r("a__vs__b__b0000__l0", "a", "b", [2, 0]),  # a wins
+    _r("b__vs__a__b0000__l1", "b", "a", [1, 0]),  # b wins
+    _r("a__vs__b__b0001__l0", "a", "b", [1, 1]),  # draw
+    _r("b__vs__a__b0001__l1", "b", "a", [1, 1]),  # draw
+]
+
+
+def test_head_to_head_wins():
+    h = head_to_head_matrix(_H2H_RESULTS)
+    assert h["a"]["b"]["wins"] == 1
+    assert h["a"]["b"]["losses"] == 1
+    assert h["a"]["b"]["draws"] == 2
+
+
+def test_head_to_head_goals():
+    h = head_to_head_matrix(_H2H_RESULTS)
+    # a as team0 (2 fixtures): gf=2+1=3, ga=0+1=1
+    # a as team1 (2 fixtures): gf=0+1=1, ga=1+1=2
+    assert h["a"]["b"]["goals_for"] == 4
+    assert h["a"]["b"]["goals_against"] == 3
+
+
+def test_head_to_head_symmetry():
+    h = head_to_head_matrix(_H2H_RESULTS)
+    assert h["a"]["b"]["wins"] == h["b"]["a"]["losses"]
+    assert h["a"]["b"]["goals_for"] == h["b"]["a"]["goals_against"]
+
+
+def _make_test_manifest(fixtures, results):
+    from football_lab.entrant_contracts import CampaignManifest
+    return CampaignManifest({
+        "campaign_id": "t", "track": "t", "entrants": [],
+        "seed_pool_start": 0,
+        "budget": {"startup_timeout_s": 5.0, "request_timeout_s": 5.0, "output_size_limit": 65536},
+        "rules_version": "v1", "locked": False,
+        "fixtures": fixtures,
+        "results": results,
+    })
+
+
+def test_operational_summary_complete():
+    from football_lab.campaign import round_robin_fixtures
+    fixtures = round_robin_fixtures(["a", "b"], seed_pool_start=0, n_blocks=1)
+    extra = dict(fixtures[0])
+    extra["fixture_id"] = "a__vs__b__b0001__l0"
+    fixtures_3 = fixtures + [extra]
+    manifest = _make_test_manifest(fixtures_3, [
+        {"fixture_id": fixtures_3[0]["fixture_id"], "status": "complete",
+         "score": [1, 0], "failure_reason": None, "replay_path": None,
+         "duration_ms": 10.0, "team0_rejections": 2, "team1_rejections": 1},
+        {"fixture_id": fixtures_3[1]["fixture_id"], "status": "failed",
+         "score": [0, 0], "failure_reason": "timeout", "replay_path": None,
+         "duration_ms": 10.0, "team0_rejections": 0, "team1_rejections": 0},
+    ])
+    summary, _rejections = operational_summary(manifest)
+    assert summary["total"] == 3
+    assert summary["complete"] == 1
+    assert summary["failed"] == 1
+
+
+def test_operational_summary_rejections():
+    from football_lab.campaign import round_robin_fixtures
+    fixtures = round_robin_fixtures(["a", "b"], seed_pool_start=0, n_blocks=1)
+    manifest = _make_test_manifest(fixtures, [
+        {"fixture_id": f["fixture_id"], "status": "complete",
+         "score": [0, 0], "failure_reason": None, "replay_path": None,
+         "duration_ms": 10.0, "team0_rejections": 5, "team1_rejections": 3}
+        for f in fixtures
+    ])
+    _summary, rejections = operational_summary(manifest)
+    # leg0: a=team0 (5 rej), b=team1 (3 rej); leg1: b=team0 (5 rej), a=team1 (3 rej)
+    assert rejections["a"] == 5 + 3  # 8
+    assert rejections["b"] == 3 + 5  # 8
