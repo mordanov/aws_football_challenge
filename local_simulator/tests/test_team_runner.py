@@ -184,3 +184,89 @@ def test_process_crash(tmp_path):
     with TeamRunner(_stub_spec(shim), team_id=0, budget=_stub_budget(), work_dir=tmp_path) as r:
         with pytest.raises(RunnerError, match="crash|exit|EOF"):
             r.decide(_make_state())
+
+
+# ── Integration tests (real entrants) ─────────────────────────────────────────
+
+_ENTRANTS_DIR = Path(__file__).parent.parent / "entrants"
+
+_VALID_COMMAND_TYPES = frozenset({
+    "MOVE_TO", "PASS", "SHOOT", "PRESS_BALL", "MARK",
+    "INTERCEPT", "GK_DISTRIBUTE", "SET_STANCE", "SLIDE_TACKLE",
+})
+
+
+def _dev_budget() -> BudgetSpec:
+    return {"startup_timeout_s": 15.0, "request_timeout_s": 10.0, "output_size_limit": 65536}
+
+
+def _load_entrant_spec(name: str) -> EntrantSpec:
+    manifest = json.loads((_ENTRANTS_DIR / name / "entrant.json").read_text())
+    shim_path = str(_ENTRANTS_DIR / name / "shim.py")
+    return {
+        "id": manifest["id"],
+        "source_name": manifest["source_name"],
+        "topology": manifest["topology"],
+        "shim": shim_path,
+        "entrant_hash": manifest["entrant_hash"],
+        "rules_version": manifest["rules_version"],
+        "track": manifest["track"],
+    }
+
+
+def test_initial_idea_one_tick(tmp_path):
+    spec = _load_entrant_spec("initial_idea")
+    with TeamRunner(spec, team_id=0, budget=_dev_budget(), work_dir=tmp_path) as runner:
+        cmds = runner.decide(_make_state(tick=0))
+    assert len(cmds) == 5
+    assert all(c["team_id"] == 0 for c in cmds)
+    assert all(c["command_type"] in _VALID_COMMAND_TYPES for c in cmds)
+
+
+def test_redesign_1_one_tick(tmp_path):
+    spec = _load_entrant_spec("redesign_1")
+    with TeamRunner(spec, team_id=1, budget=_dev_budget(), work_dir=tmp_path) as runner:
+        cmds = runner.decide(_make_state(tick=0))
+    assert len(cmds) == 5
+    assert all(c["team_id"] == 1 for c in cmds)
+
+
+def test_redesign_2_one_tick(tmp_path):
+    spec = _load_entrant_spec("redesign_2")
+    with TeamRunner(spec, team_id=0, budget=_dev_budget(), work_dir=tmp_path) as runner:
+        cmds = runner.decide(_make_state(tick=0))
+    assert len(cmds) == 5
+
+
+def test_redesign_3_one_tick(tmp_path):
+    spec = _load_entrant_spec("redesign_3")
+    with TeamRunner(spec, team_id=0, budget=_dev_budget(), work_dir=tmp_path) as runner:
+        cmds = runner.decide(_make_state(tick=0))
+    assert len(cmds) == 5
+
+
+def test_redesign_4_one_tick(tmp_path):
+    spec = _load_entrant_spec("redesign_4")
+    with TeamRunner(spec, team_id=1, budget=_dev_budget(), work_dir=tmp_path) as runner:
+        cmds = runner.decide(_make_state(tick=0))
+    assert len(cmds) == 5
+
+
+def test_initial_idea_deterministic(tmp_path):
+    spec = _load_entrant_spec("initial_idea")
+    state = _make_state(tick=0)
+    with TeamRunner(spec, team_id=0, budget=_dev_budget(), work_dir=tmp_path) as r1:
+        cmds1 = r1.decide(state)
+    with TeamRunner(spec, team_id=0, budget=_dev_budget(), work_dir=tmp_path) as r2:
+        cmds2 = r2.decide(state)
+    assert cmds1 == cmds2
+
+
+def test_redesign_1_no_background_threads(tmp_path):
+    spec = _load_entrant_spec("redesign_1")
+    before = threading.active_count()
+    with TeamRunner(spec, team_id=0, budget=_dev_budget(), work_dir=tmp_path) as runner:
+        for tick in range(0, 400, 40):
+            runner.decide(_make_state(tick=tick))
+    after = threading.active_count()
+    assert after <= before + 2
