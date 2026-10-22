@@ -4,6 +4,7 @@ from football_lab.campaign_report import (
     compute_standings,
     head_to_head_matrix,
     operational_summary,
+    winner_claim,
 )
 from football_lab.entrant_contracts import FixtureResult
 
@@ -163,3 +164,60 @@ def test_operational_summary_rejections():
     # leg0: a=team0 (5 rej), b=team1 (3 rej); leg1: b=team0 (5 rej), a=team1 (3 rej)
     assert rejections["a"] == 5 + 3  # 8
     assert rejections["b"] == 3 + 5  # 8
+
+
+def test_bootstrap_ci_confidence_99_5():
+    results = (
+        [_r(f"a__vs__b__b{i:04d}__l0", "a", "b", [3, 0]) for i in range(10)]
+        + [_r(f"b__vs__a__b{i:04d}__l1", "b", "a", [0, 3]) for i in range(10)]
+    )
+    ci_95  = bootstrap_ci(results, rng_seed=0, confidence=0.95)
+    ci_995 = bootstrap_ci(results, rng_seed=0, confidence=0.995)
+    lo_95,  hi_95  = ci_95["a"]["vs_b"]
+    lo_995, hi_995 = ci_995["a"]["vs_b"]
+    assert lo_995 <= lo_95
+    assert hi_995 >= hi_95
+    assert lo_995 > 0
+
+
+def test_winner_claim_clear_winner():
+    results = (
+        [_r(f"a__vs__b__b{i:04d}__l0", "a", "b", [2, 0]) for i in range(20)]
+        + [_r(f"b__vs__a__b{i:04d}__l1", "b", "a", [0, 2]) for i in range(20)]
+        + [_r(f"a__vs__c__b{i:04d}__l0", "a", "c", [2, 0]) for i in range(20)]
+        + [_r(f"c__vs__a__b{i:04d}__l1", "c", "a", [0, 2]) for i in range(20)]
+        + [_r(f"b__vs__c__b{i:04d}__l0", "b", "c", [1, 1]) for i in range(20)]
+        + [_r(f"c__vs__b__b{i:04d}__l1", "c", "b", [1, 1]) for i in range(20)]
+    )
+    claim = winner_claim(results, ["a", "b", "c"], bootstrap_seed=0, n_resamples=500)
+    assert claim["winner_id"] == "a"
+    assert claim["is_conclusive"] is True
+    assert claim["reason"] == "clear_winner"
+
+
+def test_winner_claim_inconclusive():
+    results = (
+        [_r(f"a__vs__b__b{i:04d}__l0", "a", "b", [2, 0]) for i in range(2)]
+        + [_r(f"b__vs__a__b{i:04d}__l1", "b", "a", [1, 0]) for i in range(2)]
+    )
+    claim = winner_claim(results, ["a", "b"], bootstrap_seed=0, n_resamples=500)
+    assert claim["winner_id"] is None
+    assert claim["is_conclusive"] is False
+
+
+def test_winner_claim_incomplete_data():
+    results = [_r("a__vs__b__b0000__l0", "a", "b", [2, 0])]
+    claim = winner_claim(results, ["a", "b", "c"], bootstrap_seed=0)
+    assert claim["reason"] == "incomplete_data"
+    assert claim["winner_id"] is None
+
+
+def test_winner_claim_operational_failure_provisional():
+    results = [
+        _r("a__vs__b__b0000__l0", "a", "b", [2, 0]),
+        {"fixture_id": "a__vs__b__b0000__l1", "status": "failed",
+         "score": [0, 0], "failure_reason": "timeout", "replay_path": None,
+         "duration_ms": 0.0, "team0_rejections": 0, "team1_rejections": 0},
+    ]
+    claim = winner_claim(results, ["a", "b"], bootstrap_seed=0)
+    assert claim["reason"] == "incomplete_data"
