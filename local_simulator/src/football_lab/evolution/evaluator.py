@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from ..cli_campaign import _DEV_BUDGET, _TeamRunnerEngineAgent, _load_entrant_spec
+from ..cli_campaign import _DEV_BUDGET, _load_entrant_spec, _TeamRunnerEngineAgent
 from ..engine import MatchEngine
 from ..match_replay import JsonMatchReplayStore
 from ..team_runner import RunnerError, TeamRunner
@@ -43,8 +43,8 @@ class MatchEvaluator:
         specs = (own, opp_spec) if profile_team == 0 else (opp_spec, own)
         envs: tuple = (env, None) if profile_team == 0 else (None, env)
         with (
-            TeamRunner(specs[0], 0, _DEV_BUDGET, self._work, env=envs[0]) as r0,
-            TeamRunner(specs[1], 1, _DEV_BUDGET, self._work, env=envs[1]) as r1,
+            TeamRunner(specs[0], 0, _DEV_BUDGET, self._work, env=envs[0]) as r0,  # type: ignore[arg-type]
+            TeamRunner(specs[1], 1, _DEV_BUDGET, self._work, env=envs[1]) as r1,  # type: ignore[arg-type]
         ):
             engine = MatchEngine(seed, _TeamRunnerEngineAgent(r0), _TeamRunnerEngineAgent(r1),
                                  self._store)
