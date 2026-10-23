@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 from .model import DEFAULT_SETTINGS, DEFAULT_STYLE, Decision, Player, Settings, Snapshot, Style
 from .protocol import MATCH_COORDINATE_SCALE, MATCH_Y_LIMIT
@@ -359,6 +360,40 @@ def support(
         progress = min(progress, bp + 5)
     y = (-1 if link else 1) * settings.support_width
     return d * max(-20, min(46, progress)), y
+
+
+_HALF_LENGTH = 55.0
+_HALF_WIDTH = 34.0
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (ValueError, TypeError):
+        return default
+
+
+def _tactical_context(s: Snapshot) -> tuple[int, int]:
+    """(rush: 0/1, stage: 0/1/2). Pure function of snapshot + env vars; no side effects."""
+    rush_s = _int_env("RUSH_S", 15)
+    desperate_s = _int_env("DESPERATE_S", 30)
+    gk_up_s = _int_env("GK_UP_S", 10)
+    remaining = s.duration - s.clock
+    our_score = s.score[s.team]
+    opp_score = s.score[1 - s.team]
+    losing = opp_score > our_score
+    ball_not_at_opp = s.owner is None or s.owner[0] == s.team
+    rush = int(
+        bool(_int_env("RUSH_ENABLED", 1))
+        and s.clock < rush_s
+        and our_score == 0 and opp_score == 0
+        and ball_not_at_opp
+    )
+    if losing and remaining <= desperate_s:
+        stage = 2 if (remaining <= gk_up_s and bool(_int_env("DRAW_AT_ANY_COST", 0))) else 1
+    else:
+        stage = 0
+    return rush, stage
 
 
 def decide(
