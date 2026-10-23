@@ -86,6 +86,22 @@ profile. Insufficient history remains explicitly insufficient evidence.
 Immutable versioned settings pinned consistently across all five players.
 _Avoid_: live mutable shared memory.
 
+**Match profile pin**:
+One immutable selection of profile content and compatible code generation for
+a team, match UUID and side, shared by all five players. It is not a match-end
+signal or an atomic update of five runtime deployments.
+
+**Provisional team observation**:
+Source-linked canonical snapshot/attempt or redacted runtime failure recorded
+without an asserted opponent or final result. Multiple players and repeated
+game clocks do not create independent tactical support.
+_Avoid_: completed scouting, proven lesson, official outcome.
+
+**Observation outbox**:
+Durable pending/sent publication state retaining the exact first stored envelope
+for retry-safe Memory delivery. Sent is a delivery state, not match completion
+or lesson approval.
+
 **Parameter proposal**:
 A stored suggested correction with evidence references and an eligibility status;
 weak evidence remains a proposal without changing general settings.

@@ -15,7 +15,7 @@ library. AWS serving is an optional, pinned extra.
 ```sh
 cd final_agent
 python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[deployment,offline,dev]'
+.venv/bin/python -m pip install -e '.[deployment,offline,learning,dev]'
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
@@ -117,6 +117,11 @@ there is no safe way to manufacture the intended team/player. A valid command
 shape is **not** evidence that a server accepted or executed it.
 
 ## Offline coaching
+
+For opt-in automatic provisional Memory collection and match-wide profile
+pinning, see [automatic learning foundations](docs/automatic_learning.md).
+The infrastructure has an explicit collection switch; default player startup
+is unchanged. Candidate generation/evaluation/promotion is not automated yet.
 
 For opponent-specific AgentCore Memory scouting, see
 [CloudWatch scouting and pre-match briefs](docs/offline_coaching.md#cloudwatch-scouting-and-pre-match-briefs).

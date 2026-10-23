@@ -107,10 +107,46 @@ The optional advisor reads a campaign or match report and writes a validated
 `AFC_PROFILE`; nothing deploys automatically.
 **Source:** `agent/archetypes.py`, `agent/advisor/`, `profiles/recommended.json`.
 
-There is no live database, LLM or network dependency in decision logic; the
-advisor runs only off-tick.
+With default startup there is no live database, LLM or network dependency in
+decision logic; the advisor runs only off-tick. The optional match-profile
+selector adds registry access on first selection/cache recovery, not tactical
+per-tick Memory or model access.
 Actual platform result/report delivery and trusted match-boundary collection
 remain unverified integration responsibilities.
+
+## Automatic learning foundations (opt-in)
+
+Five existing CloudWatch runtime log groups -> matching standalone JSON
+subscription events -> bounded Lambda decompression and canonical observation
+validation -> DynamoDB PENDING outbox -> exact AgentCore Memory event
+(`provisional_team_observation_v1`, semantic extraction skipped) -> SENT.
+Hash identity covers normalized allowlisted content; persisted first source
+envelope/timestamp makes replay stable even with a different delivery ID.
+Unknown match identity and framework logs are reported ignored; invalid recognized
+evidence fails. Side/seat, snapshot and command contracts are checked.
+Free-form reasons, requests/exceptions and unknown opponent mappings do not
+enter Memory. Repeated clocks share a support key; conflicting variants retain
+different IDs. None is a confirmed result or a complete scouting note.
+
+Failed/uncertain writes retain PENDING; Lambda async retries and a retained SQS
+failure destination support recovery. The generated CloudFormation stack
+includes alarms, an explicit subscription switch and an unattached least-privilege
+player policy. Packaging vendors the installed AWS SDK into an independent
+Lambda archive. Plan/package are local; apply/bootstrap are explicit account-checked
+operations. No role attachment or player deployment is performed by this tooling.
+
+Optional `AFC_PROFILE_TABLE`/`AFC_TEAM_ID` -> registry match pin, or consistent
+ACTIVE/document reads plus transactional first-pin creation -> digest-validated
+compatible profile -> bounded per-process cache -> request-local tactical settings.
+All five players use one pin. Cached matches ignore later ACTIVE changes;
+cache recovery re-reads the same durable binding. Failed selection logs and
+raises, never independently chooses the packaged baseline. Default and synthetic
+fitness serving retain the startup profile.
+There is no candidate generator, comparative acceptance gate or automatic
+ACTIVE writer in this implementation.
+**Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
+`agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
+`docs/automatic_learning.md`.
 
 ## Offline coaching pipeline
 

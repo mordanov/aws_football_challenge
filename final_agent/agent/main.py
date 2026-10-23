@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from .model import Profile
 from .profile import load_profile
+from .profile_registry import DynamoProfileRegistry
 from .runtime import Runtime
 
 
@@ -51,12 +52,31 @@ def main() -> None:
         raise ValueError("AFC_COMPETITION_ADAPTER must be 0 or 1")
     if seat is not None and seat not in ("0", "1", "2", "3", "4"):
         raise ValueError("AFC_PLAYER_ID must be 0..4")
+    table, team_id = os.getenv("AFC_PROFILE_TABLE"), os.getenv("AFC_TEAM_ID")
+    if bool(table) != bool(team_id):
+        raise ValueError("AFC_PROFILE_TABLE and AFC_TEAM_ID must be configured together")
+    selector = None
+    if table and team_id:
+        import boto3
+        from botocore.config import Config
+
+        selector = DynamoProfileRegistry(
+            boto3.client(
+                "dynamodb",
+                config=Config(
+                    connect_timeout=0.5, read_timeout=0.5, retries={"total_max_attempts": 1}
+                ),
+            ),
+            table,
+            team_id,
+        )
     runtime = Runtime(
         load_profile(path) if path else Profile(),
         match_id=os.getenv("AFC_MATCH_ID"),
         opponent_id=os.getenv("AFC_OPPONENT_ID"),
         stamina_scale=float(os.getenv("AFC_STAMINA_SCALE", "1")),
         competition_adapter=competition == "1",
+        profile_selector=selector,
     )
     try:
         create_app(runtime, None if seat is None else int(seat)).run()

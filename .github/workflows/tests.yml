@@ -58,13 +58,22 @@ jobs:
           cache: pip
 
       - name: Install package and test tools
-        run: pip install -e ".[offline,dev]"
+        run: |
+          extras="offline,dev"
+          if [ "${{ matrix.project }}" = "final_agent" ]; then
+            extras="$extras,learning"
+          fi
+          pip install -e ".[$extras]"
 
       - name: Run agent tests
         run: pytest tests/ -v --tb=short
 
       - name: Lint
-        run: ruff check agent tests
+        run: |
+          ruff check agent tests
+          if [ "${{ matrix.project }}" = "final_agent" ]; then
+            ruff check deploy/learning.py
+          fi
 
       - name: Type check
         run: mypy

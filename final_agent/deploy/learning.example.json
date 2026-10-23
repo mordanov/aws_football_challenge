@@ -1,0 +1,17 @@
+{
+  "account": "123456789012",
+  "region": "us-east-1",
+  "team_id": "our_team",
+  "stack_name": "final-agent-learning",
+  "memory_id": "Our_team_memory-abcdefghij",
+  "artifact_bucket": "replace-with-private-artifact-bucket",
+  "alarm_topic_arn": "arn:aws:sns:us-east-1:123456789012:monitored-alerts",
+  "collection_enabled": false,
+  "log_groups": [
+    "/aws/bedrock-agentcore/runtimes/our_gk-abcdefghij-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our_def-abcdefghij-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our_mid-abcdefghij-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our_fwd1-abcdefghij-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our_fwd2-abcdefghij-DEFAULT"
+  ]
+}

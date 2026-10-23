@@ -9,6 +9,7 @@ from dataclasses import replace
 from .coach import choose_preset
 from .model import Profile
 from .profile import effective_settings, parse_profile
+from .profile_registry import ProfileSelector, RegistryError
 from .protocol import (
     MATCH_COORDINATE_SCALE,
     MATCH_X_LIMIT,
@@ -36,6 +37,7 @@ class Runtime:
         stamina_scale: float = 1.0,
         competition_adapter: bool = False,
         emit: Callable[[dict], None] | None = None,
+        profile_selector: ProfileSelector | None = None,
     ):
         self.profile = parse_profile((profile if profile is not None else Profile()).to_dict())
         self.settings = effective_settings(self.profile, opponent_id)
@@ -45,6 +47,7 @@ class Runtime:
             raise ValueError("stamina_scale must be 1 or 100")
         self.stamina_scale = stamina_scale
         self.competition_adapter = competition_adapter
+        self.profile_selector = profile_selector
         self._log = DecisionLog(emit if emit is not None else emit_json)
 
     @property
@@ -62,7 +65,7 @@ class Runtime:
         data, team, pid = envelope(payload)
         match = re.fullmatch(
             r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
-            r"-team[01]-pos[0-4]",
+            r"-team([01])-pos([0-4])",
             session_id or "",
         )
         compact = self.competition_adapter and match is not None
@@ -75,19 +78,50 @@ class Runtime:
             "player_id": pid,
             "input_format": "compact_match" if compact else "sample",
         }
+        profile, settings = self.profile, self.settings
+        if self.profile_selector is not None and not (session_id or "").startswith(
+            "scrimmage-drill-"
+        ):
+            try:
+                if match is None or (int(match.group(2)), int(match.group(3))) != (team, pid):
+                    raise RegistryError("unbound or misrouted match profile request")
+                if self.match_id is not None and self.match_id != match.group(1):
+                    raise RegistryError("configured match identity conflicts with session")
+                selection = self.profile_selector.resolve(match.group(1), team)
+                profile = parse_profile(selection.profile.to_dict())
+                settings = effective_settings(profile, self.opponent_id)
+                context.update(
+                    profile_version=profile.version,
+                    profile_digest=selection.digest,
+                    code_generation=selection.code_generation,
+                )
+            except RegistryError as exc:
+                self._log.submit(
+                    {
+                        **context,
+                        "type": "profile_selection_error",
+                        "match_id": match.group(1)
+                        if match is not None
+                        and (int(match.group(2)), int(match.group(3))) == (team, pid)
+                        else None,
+                        "profile_version": None,
+                        "error": str(exc),
+                    }
+                )
+                raise
         try:
             snapshot, _ = decode(
                 payload,
                 stamina_scale=1.0 if compact else self.stamina_scale,
                 compact_pitch=compact,
             )
-            if self.profile.coach_policy == "rules":
+            if profile.coach_policy == "rules":
                 snapshot = replace(snapshot, coach=choose_preset(snapshot))
             decision = decide(
                 snapshot,
                 pid,
-                self.settings,
-                self.profile.style,
+                settings,
+                profile.style,
                 max_move_x=MATCH_X_LIMIT * MATCH_COORDINATE_SCALE if compact else 54.0,
             )
             selected = decision.command

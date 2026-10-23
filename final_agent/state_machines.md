@@ -88,6 +88,35 @@ diagnostic. No retry. Closing stops admission and attempts a bounded drain/join.
 Process freeze/termination can lose pending records without an acknowledgement.
 **Source:** `agent/telemetry.py`, `DecisionLog`.
 
+## Match profile selection (opt-in)
+
+**States:** unbound, active_read, content_validated, pinned, cached; failed.
+**Transitions:** recognized UUID and matching session team/seat -> consistent
+pin read -> existing immutable pin, or active pointer/content validation ->
+transactional unchanged-generation check plus conditional pin creation.
+Concurrent loser/uncertain acknowledgement -> read winning pin, never a local
+fallback. Bounded contention, missing/corrupt/incompatible content or unavailable
+registry -> `profile_selection_error` and failed invocation. Cache recovery
+reuses the persistent pin; interleaved matches keep request-local settings.
+Synthetic fitness retains the static profile. Default startup has no selector.
+There is no automatic ACTIVE promotion transition in this stage.
+**Source:** `agent/profile_registry.py`, `agent/runtime.py`, `agent/main.py`.
+
+## Provisional Memory delivery (opt-in)
+
+**States:** ignored, validated, PENDING, SENT; failed/retry/dead-letter.
+**Transitions:** subscription from one trusted seat/log group -> validate the
+whole batch -> content-addressed outbox create/read -> exact Memory event ->
+conditional SENT acknowledgement. Duplicate SENT -> no publication. PENDING
+retry reuses persisted content, timestamp and token; failed required writes
+raise rather than mark SENT. Exhausted Lambda async delivery -> failure queue
+and alarm; operator replay preserves outbox identity.
+Collection-disabled configuration removes subscriptions, not existing evidence.
+No clock, score, idle period, Memory write or new UUID transitions a match to
+complete/aborted. All observations remain provisional, including overtime.
+**Source:** `agent/learning_observations.py`, `agent/learning_collector.py`,
+`deploy/learning.py`.
+
 ## Pass inference
 
 **States:** attempted, in flight on explicit free snapshots, possible completion,
