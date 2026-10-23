@@ -10,6 +10,7 @@
   "manifest": {
     "match_id": "match-2026-10-23-r4-vs-redesign3",
     "opponent_id": "redesign_3_v1",
+    "played_at": "2026-10-23T14:00:00+00:00",
     "complete": true,
     "result": [0, 1],
     "observations": 312,
@@ -28,6 +29,8 @@
     ]
   },
   "report": {
+    "match_id": "match-2026-10-23-r4-vs-redesign3",
+    "opponent_id": "redesign_3_v1",
     "source_id": "report-2026-10-23-r4-vs-redesign3",
     "outcomes": {
       "SHOOT": 0,
