@@ -45,11 +45,30 @@ the contested fallback retains score ordering and never outranks a safe option.
 Free ball -> nearest active outfield interceptor, never keeper sweep.
 Opponent possession -> nearest active outfield presser within the configured
 radius, including the defender; defender pressing transfers cover to midfielder.
+For routine pressure with attack-direction ball progress above -30 and beyond
+a three-unit duel, a teammate with at least 0.2 more stamina may take over when
+arrival is within 0.35 seconds and the teammate is inside the press radius.
+Choose the freshest qualifying teammate, then arrival/id. Immediate duels,
+deep threats and all free-ball interception retain the previous fastest selection.
 Own possession -> midfielder support may advance to canonical attack x=40,
 still subject to the profile's committed-attacker cap. Defensive anchors remain.
 Carry scoring rewards a clear next twelve-unit segment only when the target is
 forward, farther than five units, lane clearance is at least six units, tempo
 is at least 0.5 and posture is not protect. Sprint stamina guards remain.
+Direct carry lane below three -> evaluate four short targets (eight units forward
+or lateral, with lateral offsets +/-8); retain only displacements of 5..12 units
+after clamping, so a touchline cannot turn an escape into standing still.
+Targets remain within x +/-50 and the
+shared compact-pitch lateral bound so wire clamping cannot change the planned
+route. Replace only with clearance at least three and at least one unit better,
+using current and 0.8-second opponent projections. If none qualifies, retain the
+existing target; pass and shot candidates keep their guards and score competition.
+Carry sprint additionally requires stamina at least 0.55, an opponent within
+eight units currently or after 0.8 seconds, or distance to goal at most 29 units. The existing minimum
+0.35 stamina and over-five-unit movement guards still apply.
+Tied clock >= regulation duration -> posture stays balanced. Regulation remains
+120 seconds; sudden death ends on the first goal or at 240 seconds. No automatic
+tempo/formation change is introduced for extra time.
 Stranded-keeper shots -> CENTER when its lane passes the normal shot guard;
 otherwise corner candidates retain their usual checks and score ordering.
 **Source:** `agent/runtime.py`, `Runtime.handle`; `agent/tactics.py`, `decide`,

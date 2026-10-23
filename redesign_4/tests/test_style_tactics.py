@@ -2,7 +2,17 @@ import unittest
 from dataclasses import replace
 
 from agent.model import DEFAULT_SETTINGS, DEFAULT_STYLE, Player, Snapshot, Style
-from agent.tactics import assignments, attack_cap, decide, role, support, tackle_ok
+from agent.tactics import (
+    assignments,
+    attack_cap,
+    clearance,
+    decide,
+    point,
+    posture,
+    role,
+    support,
+    tackle_ok,
+)
 
 OURS = [(-51, 0), (-28, 0), (-5, 0), (20, -15), (23, 15)]
 THEIRS = [(51, 0), (30, 0), (8, 20), (-10, -20), (-12, 20)]
@@ -64,6 +74,56 @@ class RoleAnchorTest(unittest.TestCase):
 
 
 class BlockAndCommitTest(unittest.TestCase):
+    def test_routine_press_prefers_fresh_near_tie_but_keeps_immediate_threat_response(self):
+        for team in (0, 1):
+            for ball_x, close, expected in ((0, False, 3), (-35, False, 4), (0, True, 4)):
+                s = snap(
+                    team=team,
+                    owner=(1, 1),
+                    ball=(ball_x, 0),
+                    ours=[
+                        (-51, 0),
+                        (-45, -20),
+                        (-40, 20),
+                        (ball_x - 8.2, 0),
+                        (ball_x - (1 if close else 6), 0),
+                    ],
+                    theirs=[(51, 0), (ball_x, 0), (30, 20), (30, -20), (40, 20)],
+                )
+                s = replace(
+                    s,
+                    players=tuple(
+                        replace(p, stamina=0.2) if p.team == team and p.id == 4 else p
+                        for p in s.players
+                    ),
+                )
+                with self.subTest(team=team, ball_x=ball_x, close=close):
+                    plan = assignments(s)
+                    self.assertEqual(plan["presser"], expected)
+                    self.assertNotEqual(plan["cover"], expected)
+                    self.assertEqual(decide(s, expected).command["commandType"], "PRESS_BALL")
+
+    def test_far_fresh_player_does_not_replace_clearly_faster_presser_or_interceptor(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(1, 1),
+                ball=(0, 0),
+                ours=[(-51, 0), (-40, -20), (-40, 20), (-15, 0), (-6, 0)],
+                theirs=[(51, 0), (0, 0), (30, 20), (30, -20), (40, 20)],
+            )
+            s = replace(
+                s,
+                players=tuple(
+                    replace(p, stamina=0.2) if p.team == team and p.id == 4 else p
+                    for p in s.players
+                ),
+            )
+            with self.subTest(team=team):
+                self.assertEqual(assignments(s)["presser"], 4)
+                free = replace(s, owner=None, free=True)
+                self.assertEqual(assignments(free)["interceptor"], 4)
+
     def test_committed_midfielder_supports_box_attack_without_changing_formation(self):
         for team in (0, 1):
             s = snap(team=team, owner=(0, 4), ball=(44, 0), ours=[*OURS[:4], (44, 0)])
@@ -269,6 +329,73 @@ class CarryTest(unittest.TestCase):
             )
             self.assertFalse(carry["parameters"]["sprint"])
 
+    def test_calm_midfield_carry_reserves_stamina_but_keeps_escape_and_goal_urgency(self):
+        style = replace(DEFAULT_STYLE, carry=1)
+        for team in (0, 1):
+            for x, pressure, stamina, sprint in (
+                (-10, False, 0.4, False),
+                (-10, False, 0.6, True),
+                (-10, True, 0.4, True),
+                (35, False, 0.4, True),
+            ):
+                s = snap(
+                    team=team,
+                    owner=(0, 4),
+                    ball=(x, 0),
+                    ours=[(-51, 0), (-40, 0), (-30, 0), (-25, 0), (x, 0)],
+                    theirs=[
+                        (-45, 25),
+                        (-40, 25),
+                        (-35, 25),
+                        (-30, 25),
+                        (x - 2, 2) if pressure else (-25, 25),
+                    ],
+                )
+                s = replace(
+                    s,
+                    players=tuple(
+                        replace(p, stamina=stamina) if p.team == team and p.id == 4 else p
+                        for p in s.players
+                    ),
+                )
+                with self.subTest(team=team, x=x, pressure=pressure, stamina=stamina):
+                    decision = decide(s, 4, DEFAULT_SETTINGS, style)
+                    carry = next(
+                        a["command"]
+                        for a in decision.alternatives
+                        if a["command"]["commandType"] == "MOVE_TO"
+                    )
+                    self.assertEqual(carry["parameters"]["sprint"], sprint)
+
+    def test_closing_opponent_keeps_carry_sprint_available(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(-10, 0),
+                ours=[(-51, 0), (-40, 0), (-30, 0), (-25, 0), (-10, 0)],
+                theirs=[(51, 0), (-35, 25), (-30, 25), (-25, 25), (2, 0)],
+            )
+            s = replace(
+                s,
+                players=tuple(
+                    replace(p, stamina=0.4)
+                    if p.team == team and p.id == 4
+                    else replace(p, vx=-s.direction * 10)
+                    if p.team != team and p.id == 4
+                    else p
+                    for p in s.players
+                ),
+            )
+            with self.subTest(team=team):
+                decision = decide(s, 4, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=1))
+                carry = next(
+                    a["command"]
+                    for a in decision.alternatives
+                    if a["command"]["commandType"] == "MOVE_TO"
+                )
+                self.assertTrue(carry["parameters"]["sprint"])
+
     def test_clear_run_beats_sideways_recycling_but_not_an_open_shot(self):
         style = replace(DEFAULT_STYLE, carry=1.0)
         for team in (0, 1):
@@ -301,6 +428,88 @@ class CarryTest(unittest.TestCase):
                 self.assertEqual(action["commandType"], "PASS")
                 self.assertEqual(action["parameters"]["target_player_id"], 3)
 
+    def test_blocked_carrier_escapes_on_a_clear_short_route_without_forcing_a_shot(self):
+        style = replace(DEFAULT_STYLE, carry=1)
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(40, 0),
+                ours=[(-51, 0), (-40, 0), (-30, 0), (-25, 0), (40, 0)],
+                theirs=[(47, 0), (0, -20), (0, 20), (-20, -20), (-20, 20)],
+            )
+            with self.subTest(team=team):
+                action = decide(s, 4, DEFAULT_SETTINGS, style).command
+                self.assertEqual(action["commandType"], "MOVE_TO")
+                x, y = action["parameters"]["target_x"], action["parameters"]["target_y"]
+                self.assertGreater(abs(y), 4)
+                self.assertLessEqual(abs(x - s.player(4).x), 8)
+                self.assertGreaterEqual(clearance(point(s.player(4)), (x, y), s.opponents), 3)
+
+    def test_escape_cannot_run_through_a_predicted_blocker(self):
+        style = replace(DEFAULT_STYLE, carry=1)
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(40, 0),
+                ours=[(-51, 0), (-40, 0), (-30, 0), (-25, 0), (40, 0)],
+                theirs=[(47, 0), (42, -14), (42, 14), (-20, -20), (-20, 20)],
+            )
+            s = replace(
+                s,
+                players=tuple(
+                    replace(p, vy=10 if p.id == 1 else -10)
+                    if p.team != team and p.id in (1, 2)
+                    else p
+                    for p in s.players
+                ),
+            )
+            with self.subTest(team=team):
+                action = decide(s, 4, DEFAULT_SETTINGS, style).command
+                self.assertEqual(action["commandType"], "MOVE_TO")
+                self.assertEqual(action["parameters"]["target_y"], 0)
+
+    def test_escape_target_remains_reachable_near_compact_touchline(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(40, 24),
+                ours=[(-51, 0), (-40, 0), (-30, 0), (-25, 0), (40, 24)],
+                theirs=[(45, 17), (0, -20), (0, 20), (-20, -20), (-20, 20)],
+            )
+            with self.subTest(team=team):
+                decision = decide(s, 4, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=1))
+                carry = next(
+                    a["command"]
+                    for a in decision.alternatives
+                    if a["command"]["commandType"] == "MOVE_TO"
+                )
+                self.assertLessEqual(abs(carry["parameters"]["target_y"]), 28)
+
+    def test_touchline_clamp_cannot_turn_an_escape_into_standing_still(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(40, 28),
+                ours=[(-51, 0), (-40, 0), (-30, 0), (-25, 0), (40, 28)],
+                theirs=[(45, 21), (0, -20), (0, 20), (-20, -20), (-20, 20)],
+            )
+            with self.subTest(team=team):
+                decision = decide(s, 4, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=1))
+                carry = next(
+                    a["command"]
+                    for a in decision.alternatives
+                    if a["command"]["commandType"] == "MOVE_TO"
+                )
+                self.assertGreaterEqual(
+                    abs(carry["parameters"]["target_x"] - s.player(4).x)
+                    + abs(carry["parameters"]["target_y"] - s.player(4).y),
+                    5,
+                )
+
     def test_clear_run_does_not_override_progressive_pass_or_protecting_a_lead(self):
         for team in (0, 1):
             s = snap(
@@ -329,6 +538,24 @@ class CarryTest(unittest.TestCase):
                     self.assertNotEqual(
                         decide(frame, 4, DEFAULT_SETTINGS, style).command["commandType"], "MOVE_TO"
                     )
+
+    def test_tied_extra_time_keeps_safe_shots_and_balanced_regulation_contract(self):
+        for team in (0, 1):
+            base = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(40, 0),
+                ours=[*OURS[:4], (40, 0)],
+                theirs=[(0, 0), (-20, -25), (-15, -25), (-10, -25), (-5, -25)],
+            )
+            for clock in (119, 120, 180, 239.9):
+                s = replace(base, clock=clock, score=(1, 1))
+                with self.subTest(team=team, clock=clock):
+                    self.assertEqual(s.duration, 120)
+                    self.assertEqual(posture(s), "balanced")
+                    action = decide(s, 4, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=1)).command
+                    self.assertEqual(action["commandType"], "SHOOT")
+                    self.assertEqual(action["parameters"]["aim_location"], "CENTER")
 
 
 class StrandedKeeperTest(unittest.TestCase):
