@@ -1,0 +1,205 @@
+{
+ "base_id": "redesign_4_v2",
+ "variants": [
+  {
+   "id": "r4v2_balanced_none",
+   "profile": "profiles/r4v2_balanced_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_balanced_none_f211",
+   "profile": "profiles/r4v2_balanced_none_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_balanced_none_f121",
+   "profile": "profiles/r4v2_balanced_none_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_balanced_rules",
+   "profile": "profiles/r4v2_balanced_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_balanced_rules_f211",
+   "profile": "profiles/r4v2_balanced_rules_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_balanced_rules_f121",
+   "profile": "profiles/r4v2_balanced_rules_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_none",
+   "profile": "profiles/r4v2_direct_carry_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_none_f211",
+   "profile": "profiles/r4v2_direct_carry_none_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_none_f121",
+   "profile": "profiles/r4v2_direct_carry_none_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_rules",
+   "profile": "profiles/r4v2_direct_carry_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_rules_f211",
+   "profile": "profiles/r4v2_direct_carry_rules_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_direct_carry_rules_f121",
+   "profile": "profiles/r4v2_direct_carry_rules_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_press_aggressive_none",
+   "profile": "profiles/r4v2_press_aggressive_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_press_aggressive_none_f211",
+   "profile": "profiles/r4v2_press_aggressive_none_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_press_aggressive_none_f121",
+   "profile": "profiles/r4v2_press_aggressive_none_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_press_aggressive_rules",
+   "profile": "profiles/r4v2_press_aggressive_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_press_aggressive_rules_f211",
+   "profile": "profiles/r4v2_press_aggressive_rules_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_press_aggressive_rules_f121",
+   "profile": "profiles/r4v2_press_aggressive_rules_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_park_the_bus_none_f112",
+   "profile": "profiles/r4v2_park_the_bus_none_f112.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_park_the_bus_none",
+   "profile": "profiles/r4v2_park_the_bus_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_park_the_bus_none_f121",
+   "profile": "profiles/r4v2_park_the_bus_none_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_park_the_bus_rules_f112",
+   "profile": "profiles/r4v2_park_the_bus_rules_f112.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_park_the_bus_rules",
+   "profile": "profiles/r4v2_park_the_bus_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_park_the_bus_rules_f121",
+   "profile": "profiles/r4v2_park_the_bus_rules_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_time_waster_none_f112",
+   "profile": "profiles/r4v2_time_waster_none_f112.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_time_waster_none_f211",
+   "profile": "profiles/r4v2_time_waster_none_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_time_waster_none",
+   "profile": "profiles/r4v2_time_waster_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_time_waster_rules_f112",
+   "profile": "profiles/r4v2_time_waster_rules_f112.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_time_waster_rules_f211",
+   "profile": "profiles/r4v2_time_waster_rules_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_time_waster_rules",
+   "profile": "profiles/r4v2_time_waster_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_hard_tackle_none",
+   "profile": "profiles/r4v2_hard_tackle_none.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_hard_tackle_none_f211",
+   "profile": "profiles/r4v2_hard_tackle_none_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_hard_tackle_none_f121",
+   "profile": "profiles/r4v2_hard_tackle_none_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_hard_tackle_rules",
+   "profile": "profiles/r4v2_hard_tackle_rules.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_hard_tackle_rules_f211",
+   "profile": "profiles/r4v2_hard_tackle_rules_f211.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_hard_tackle_rules_f121",
+   "profile": "profiles/r4v2_hard_tackle_rules_f121.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_balanced_extcoach",
+   "profile": "profiles/r4v2_balanced_extcoach.json",
+   "coach": "scripted"
+  },
+  {
+   "id": "r4v2_aws_like_balanced",
+   "profile": "profiles/r4v2_aws_like_balanced.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_aws_like_attacking",
+   "profile": "profiles/r4v2_aws_like_attacking.json",
+   "coach": null
+  },
+  {
+   "id": "r4v2_aws_like_defensive",
+   "profile": "profiles/r4v2_aws_like_defensive.json",
+   "coach": null
+  }
+ ]
+}

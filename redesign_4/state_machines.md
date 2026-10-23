@@ -12,12 +12,36 @@ over a stale holder, ambiguous reused IDs remain unknown.
 
 **States:** received, normalized, planned, validated, serialized, returned; error.
 **Initial:** received.
-**Transitions:** normalize -> plan -> validate -> serialize -> enqueue telemetry
-without waiting -> return. Recoverable errors with known team/player identity
+**Transitions:** SDK session contract selection -> normalize -> coach preset (platform preset kept; otherwise
+`choose_preset` when `coach_policy` is `rules`) -> plan -> convert compact-match
+MOVE_TO commands back to bounded wire coordinates when selected -> validate -> serialize
+-> enqueue telemetry without waiting -> return. Recoverable errors with known team/player identity
 enqueue a sanitized diagnostic and return validated balanced stance.
-Unrecoverable identity errors fail rather than invent IDs. Unknown ownership
+Unrecoverable identity errors fail rather than invent IDs. A team-less holder
+is resolved by ball proximity when unambiguous; remaining unknown ownership
 keeps defensive shape and adds an explicit warning.
-**Source:** `agent/runtime.py`, `Runtime.handle`.
+With the competition adapter enabled, a recognized match-session ID selects
+compact geometry/fractional stamina. Fitness sessions retain the sample contract;
+unrecognized non-fitness IDs retain it with an explicit diagnostic warning.
+The keeper projects only explicit free-ball flight onto its reachable movement
+plane, not the deeper goal line or a dribbler's velocity. Threatening reachable
+intersections can request sprint with the normal stamina guard, even for a
+short nonzero move. A trajectory outside the lateral movement clamp but crossing
+the existing modeled goal mouth is also urgent; the target remains clamped.
+The keeper-plane crossing requires a positive time within three seconds;
+the additional goal-mouth test independently applies the same time bound.
+Carried/unknown or already-past trajectories do not enter this exception.
+Carrying retains the ordinary stamina and over-five-unit distance guards,
+including non-sprint movement when depleted.
+The shot candidate's range can extend by 18 canonical units (capped at 50)
+when the opposing keeper remains over 8 units behind the carrier after a
+0.8-second projection. Existing angle and lane guards still apply.
+Known keeper possession -> best normally safe distribution, or, if none passes
+the filters, the highest-scoring contested emergency KICK to a non-self
+teammate. Keeper holding is excluded, including at slow tempo. Uncertain
+possession never enters this branch; outfield holding is unchanged.
+**Source:** `agent/runtime.py`, `Runtime.handle`; `agent/tactics.py`, `decide`,
+`carry_option`, `shot_option`, `carrier_options`.
 
 ## Decision telemetry
 
@@ -61,3 +85,69 @@ operator deployment -> pinned runtime.
 Rollback exports an older stored candidate. Deployment is an operational step,
 not implemented infrastructure. No transition proves a tactical improvement.
 **Source:** `agent/trainer.py`, `Trainer.train`/`export`; `agent/profile.py`.
+
+## Strategy profile
+
+**States:** archetype, campaign evidence, recommended, deployed; advisor proposal,
+operator-reviewed.
+**Initial:** archetype (named in `agent/archetypes.py`).
+**Transitions:** local v2 campaigns -> evidence (pooled GD CIs, sensitivity,
+formation follow-up) -> S2 decision rule -> `profiles/recommended.json` ->
+operator deployment via `AFC_PROFILE` to all five runtimes. Advisor `pick`/`review`
+-> bounded proposal file -> operator review -> deployment or discard. Formation and
+style are fixed for the duration of a match; they change only between matches.
+No transition proves the result transfers to the AWS platform.
+**Source:** `agent/archetypes.py`, `agent/advisor/`, `docs/strategy_report.md`.
+
+## Offline run
+
+**States:** evidence_prepared, advice_retrieved, advice_evaluated, proposal, rejected, failed; published.
+**Initial:** evidence_prepared (local `prepare` command; no AWS calls).
+**Transitions:**
+- evidence_prepared → advice_retrieved: `run_offline()` calls Memory.retrieve; `OfflineServiceError` → failed.
+- advice_retrieved → advice_evaluated: advisor calls Bedrock model; partial evaluation → failed; `OfflineServiceError` → failed.
+- advice_evaluated → proposal: faithfulness ≥ `judge_min_score`.
+- advice_evaluated → rejected: faithfulness < `judge_min_score` (successful evaluation, not a service error).
+- proposal → published: operator calls `publish` explicitly (separate step; `run_offline()` never publishes).
+- Any required-stage `OfflineServiceError` → failed.
+Advisor format guard accepts complete outer JSON fences, not extra prose.
+Post-response validation failure retains usage without exposing a candidate.
+**Constraints:** proposal is never approved, deployed or promoted automatically. A separate operator
+decision and `AFC_PROFILE` change are required. Evaluation score 0..4 is advisory; no score
+gates deployment. `candidate_profile` in the artifact is a proposal, not the live profile.
+**Source:** `agent/advisor/offline/workflow.py`, `agent/advisor/offline/__main__.py`, `docs/offline_coaching.md`.
+
+Reevaluation requires persisted grounded spans. Successful numeric scoring at or
+above the configured threshold creates a proposal only when its validated
+unapproved profile is preserved; lower scores clear the candidate and reject.
+The separate unapproved profile remains available for recovery without repeating
+inference. Partial/failed service
+results, missing spans, or a missing candidate cannot become a proposal.
+Generated code moves from generated artifact to reviewed script to sandbox
+execution only through the explicit execution flag and matching evidence digest.
+Generation validation accepts raw JSON or a complete outer JSON fence, then
+requires exactly one nonempty string `code` field. Truncation, output overflow,
+malformed JSON or additional fields -> failed diagnostics, with no new script.
+Neither generating nor unwrapping a script executes it.
+An invalid AST function contract -> failed diagnostics. Valid generated
+`analyze(evidence)` -> fixed file-loader/invocation/JSON-output wrapper appended.
+Passing this guard is not approval: reviewed code must derive its result from
+the loaded packet, not substitute literal counts.
+Sandbox output -> analysis result only if complete stdout is a single finite
+JSON object; multiline whitespace is accepted. Extra text or multiple results
+-> failed execution with explicit cleanup outcome.
+Trusted count preparation: canonical claims -> found(count, provenance) or
+missing(null); malformed counts or multiple canonical claims of one kind ->
+explicit failure, never a successful result carrying an errors list. Local
+preparation failure writes no new script and blocks model advice. Successful
+`count-analysis` creates a trusted artifact without model generation or execution.
+
+## Offline resource provisioning
+
+**States:** planned, create-returned, receipt-recorded, ready, stopped.
+**Transitions:** approved apply -> SDK-validated control-plane create ->
+immediate identity-bound receipt -> bounded readiness polling -> ready.
+The first AWS/create/readiness failure stops the sequence before later
+resources. A recorded ID remains recoverable when readiness times out; timeout
+does not imply deletion. Foreign/corrupt receipts fail closed.
+**Source:** `deploy/offline_coach.py`.

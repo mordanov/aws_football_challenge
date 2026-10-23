@@ -5,7 +5,7 @@ import time
 import unittest
 
 from test_learning import manifest, records
-from test_runtime import edit, payload, position
+from test_runtime import ambiguous_owner, edit, payload, position
 
 from agent.protocol import decode, restore_snapshot, snapshot_dict, validate_command
 from agent.runtime import Runtime
@@ -123,7 +123,7 @@ class BoundaryRegressions(unittest.TestCase):
         logs = []
         runtime = Runtime(emit=logs.append)
         try:
-            raw = edit(payload(), lambda s: s["ball"].pop("possessionTeamId"))
+            raw = edit(payload(), ambiguous_owner)
             command = json.loads(runtime.handle(raw))[0]
         finally:
             if hasattr(runtime, "close"):

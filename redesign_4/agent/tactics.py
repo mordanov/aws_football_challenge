@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from .model import DEFAULT_SETTINGS, Decision, Player, Settings, Snapshot
+from .model import DEFAULT_SETTINGS, DEFAULT_STYLE, Decision, Player, Settings, Snapshot, Style
 
 
 def distance(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -45,10 +45,56 @@ def command(s: Snapshot, pid: int, kind: str, **params) -> dict:
     }
 
 
-def movement(s: Snapshot, p: Player, x: float, y: float, urgent: bool = False) -> dict:
+def movement(
+    s: Snapshot,
+    p: Player,
+    x: float,
+    y: float,
+    urgent: bool = False,
+    *,
+    sprint_distance: float = 5.0,
+) -> dict:
     x, y = max(-54.0, min(54.0, x)), max(-34.0, min(34.0, y))
-    sprint = urgent and p.stamina >= 0.35 and distance(point(p), (x, y)) > 5
+    sprint = urgent and p.stamina >= 0.35 and distance(point(p), (x, y)) > sprint_distance
     return command(s, p.id, "MOVE_TO", target_x=round(x, 2), target_y=round(y, 2), sprint=sprint)
+
+
+# Outfield roles per formation: (role, mirrored). LINK is the withdrawn forward.
+ROLES = {
+    "1-1-2": {1: ("DEF", False), 2: ("MID", False), 3: ("LINK", False), 4: ("FWD", False)},
+    "2-1-1": {1: ("DEF", False), 2: ("DEF", True), 3: ("MID", False), 4: ("FWD", False)},
+    "1-2-1": {1: ("DEF", False), 2: ("MID", False), 3: ("MID", True), 4: ("FWD", False)},
+}
+
+
+def role(pid: int, formation: str = "1-1-2") -> tuple[str, bool]:
+    return ROLES[formation][pid]
+
+
+def attack_cap(s: Snapshot, pid: int, style: Style = DEFAULT_STYLE) -> float | None:
+    """Furthest attack-direction x the style allows this outfield player to move to."""
+    if pid == 0:
+        return None
+    if s.owner is not None and s.owner[0] == s.team:
+        return None if pid in (4, 3, 2)[: style.attackers_committed] else 0.0
+    return -50 + 96 * style.block_depth if style.block_depth < 1 else None
+
+
+def capped(s: Snapshot, x: float, cap: float | None) -> float:
+    return x if cap is None else s.direction * min(s.direction * x, cap)
+
+
+def tackle_ok(s: Snapshot, p: Player, style: Style = DEFAULT_STYLE) -> bool:
+    if style.tackle_aggression <= 0 or s.owner is None or s.owner[0] == s.team:
+        return False
+    carrier = next(o for o in s.opponents if o.id == s.owner[1])
+    dx, dy = p.x - carrier.x, p.y - carrier.y
+    gap = math.hypot(dx, dy)
+    if gap > 1 + 2.5 * style.tackle_aggression:
+        return False
+    # Same test as the simulator: within 60 degrees of the carrier's backward direction.
+    behind = gap > 0 and s.direction * dx / gap > 0.5
+    return not behind or style.tackle_aggression >= 0.7
 
 
 def posture(s: Snapshot) -> str:
@@ -107,12 +153,15 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     limit = settings.shot_range + (3 if posture(s) == "chase" else 0)
     if s.coach == "shoot_on_sight":
         limit = min(34, limit + 3)
+    keeper = next(o for o in s.opponents if o.id == 0)
+    stranded = s.direction * (p.x - point(keeper, 0.8)[0]) > 8
+    if stranded:
+        limit = min(50, limit + 18)
     if gap <= 0 or distance(point(p), goal) > limit:
         return None
     angle = abs(math.atan2(3 - p.y, gap) - math.atan2(-3 - p.y, gap))
     if angle < 0.12:
         return None
-    keeper = next(o for o in s.opponents if o.id == 0)
     choices = []
     for y, aim in ((-2.6, "BL"), (2.6, "BR")):
         target = (goal[0], y)
@@ -124,7 +173,8 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
                 (
                     quality,
                     command(s, p.id, "SHOOT", aim_location=aim, power=0.9),
-                    f"open shot; angle={angle:.2f}, lane={lane:.1f}",
+                    f"open shot; angle={angle:.2f}, lane={lane:.1f}"
+                    + ("; stranded keeper" if stranded else ""),
                 )
             )
     return (
@@ -134,8 +184,24 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     )
 
 
-def carrier_options(s: Snapshot, p: Player, settings: Settings) -> list[tuple[float, dict, str]]:
+def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str]:
+    """Dribble toward goal; scored by style.carry and free space ahead (capped at 12 m)."""
+    ahead = [distance(point(p), point(o)) for o in s.opponents if s.direction * (o.x - p.x) > 0]
+    space = min([12.0, *ahead])
+    return (
+        style.carry * (30 + space),
+        movement(s, p, s.direction * 50.0, max(-10.0, min(10.0, p.y * 0.6)), urgent=True),
+        f"carry: {space:.1f} m free ahead",
+    )
+
+
+def carrier_options(
+    s: Snapshot, p: Player, settings: Settings, style: Style = DEFAULT_STYLE
+) -> list[tuple[float, dict, str]]:
     options = []
+    keeper_outlets = []
+    if style.carry > 0 and p.id != 0:
+        options.append(carry_option(s, p, style))
     shot = shot_option(s, p, settings)
     if shot is not None and p.id != 0:
         options.append(shot)
@@ -143,14 +209,17 @@ def carrier_options(s: Snapshot, p: Player, settings: Settings) -> list[tuple[fl
         if mate.id == p.id:
             continue
         length = distance(point(p), point(mate))
-        if length < 3 or length > 60:
+        if p.id != 0 and (length < 3 or length > 60):
             continue
         lane = clearance(point(p), point(mate), s.opponents)
         pressure = min(distance(point(mate, 0.5), point(o, 0.5)) for o in s.opponents)
-        if lane < settings.pass_margin or pressure < settings.pass_margin:
+        safe = 3 <= length <= 60 and min(lane, pressure) >= settings.pass_margin
+        if not safe and p.id != 0:
             continue
         gain = s.direction * (mate.x - p.x)
         score = 22 + min(pressure, 12) * 2 + 0.6 * gain + min(lane, 8)
+        if style.tempo != 0.5:
+            score += (style.tempo - 0.5) * 1.2 * gain
         if mate.id == 0:
             score -= 18
         if p.id == 1 and abs(mate.y) > 8:
@@ -166,25 +235,36 @@ def carrier_options(s: Snapshot, p: Player, settings: Settings) -> list[tuple[fl
         kind = "GK_DISTRIBUTE" if p.id == 0 else "PASS"
         params: dict[str, int | str] = {"target_player_id": mate.id}
         if p.id == 0:
-            params["method"] = "THROW" if length < 25 else "KICK"
+            params["method"] = "THROW" if safe and length < 25 else "KICK"
         else:
             params["type"] = (
                 "THROUGH" if through else ("AERIAL" if length > 35 and lane > 5 else "GROUND")
             )
+        candidate = (
+            score,
+            command(s, p.id, kind, **params),
+            f"{'safe counter' if through else 'safe'} outlet to {mate.id}; lane={lane:.1f}"
+            if safe
+            else f"contested keeper outlet to {mate.id}; lane={lane:.1f}, pressure={pressure:.1f}",
+        )
+        if safe:
+            options.append(candidate)
+        elif p.id == 0:
+            keeper_outlets.append(candidate)
+    calm = min(distance(point(p), point(o)) for o in s.opponents) > 8
+    hold = max(0.0, 0.5 - style.tempo) * 120 if calm else 0.0
+    if p.id == 0:
+        options = options or keeper_outlets
+    else:
         options.append(
             (
-                score,
-                command(s, p.id, kind, **params),
-                f"safe {'counter ' if through else ''}outlet to {mate.id}; lane={lane:.1f}",
+                hold,
+                command(s, p.id, "SET_STANCE", stance=0),
+                "hold: slow tempo, no opponent within 8 m"
+                if hold
+                else "hold balanced: no safe supported possession action",
             )
         )
-    options.append(
-        (
-            0.0,
-            command(s, p.id, "SET_STANCE", stance=0),
-            "hold balanced: no safe supported possession action",
-        )
-    )
     return sorted(
         options,
         key=lambda item: (
@@ -195,20 +275,24 @@ def carrier_options(s: Snapshot, p: Player, settings: Settings) -> list[tuple[fl
     )
 
 
-def support(s: Snapshot, p: Player, settings: Settings, plan: dict) -> tuple[float, float]:
+def support(
+    s: Snapshot, p: Player, settings: Settings, plan: dict, formation: str = "1-1-2"
+) -> tuple[float, float]:
     d = s.direction
     bp = d * s.ball[0]
     shift = -6 if posture(s) == "protect" else 5 if posture(s) == "chase" else 0
     defending = s.owner is None or s.owner[0] != s.team
     if p.id == plan["cover"]:
         return d * max(-54, min(-8, bp - 9)), max(-10, min(10, s.ball[1] * 0.25))
-    if p.id == 1:
-        return d * max(-42, min(-10, bp - 18)), -8 if s.ball[1] > 0 else 8
-    if p.id == 2:
-        return d * max(-30, min(23, bp - 9 + shift)), (
+    kind, mirrored = role(p.id, formation)
+    flip = -1 if mirrored else 1
+    if kind == "DEF":
+        return d * max(-42, min(-10, bp - 18)), flip * (-8 if s.ball[1] > 0 else 8)
+    if kind == "MID":
+        return d * max(-30, min(23, bp - 9 + shift)), flip * (
             -1 if s.ball[1] >= 0 else 1
         ) * settings.support_width * 0.65
-    link = p.id == 3
+    link = kind == "LINK"
     progress = bp + (5 if link else 17) + shift
     if defending:
         progress = min(progress, bp + 5)
@@ -216,11 +300,18 @@ def support(s: Snapshot, p: Player, settings: Settings, plan: dict) -> tuple[flo
     return d * max(-20, min(46, progress)), y
 
 
-def decide(snapshot: Snapshot, player_id: int, settings: Settings = DEFAULT_SETTINGS) -> Decision:
+def decide(
+    snapshot: Snapshot,
+    player_id: int,
+    settings: Settings = DEFAULT_SETTINGS,
+    style: Style = DEFAULT_STYLE,
+    *,
+    max_move_x: float = 54.0,
+) -> Decision:
     s, p = snapshot, snapshot.player(player_id)
     plan = assignments(s, settings)
     if s.owner == (s.team, player_id):
-        choices = carrier_options(s, p, settings)
+        choices = carrier_options(s, p, settings, style)
         _, selected, reason = choices[0]
         alternatives = tuple(
             {"score": round(score, 3), "command": cmd, "reason": why} for score, cmd, why in choices
@@ -234,15 +325,22 @@ def decide(snapshot: Snapshot, player_id: int, settings: Settings = DEFAULT_SETT
                 assignments=plan,
             )
         d = s.direction
-        x = d * -52.0
-        y = s.ball[1] * 3 / max(3, s.direction * s.ball[0] + 55)
-        if d * s.velocity[0] < -0.5:
-            t = (d * -54 - s.ball[0]) / s.velocity[0]
+        x = -d * min(52.0, max_move_x)
+        depth = 55 + d * x
+        y = s.ball[1] * depth / max(depth, d * s.ball[0] + 55)
+        incoming = False
+        if s.free and d * s.velocity[0] < -0.5:
+            t = (x - s.ball[0]) / s.velocity[0]
             if 0 < t < 3:
                 y = s.ball[1] + s.velocity[1] * t
+                goal_t = (-d * 55 - s.ball[0]) / s.velocity[0]
+                goal_y = s.ball[1] + s.velocity[1] * goal_t
+                incoming = abs(y) <= 2.8 or (0 < goal_t < 3 and abs(goal_y) <= 3)
         y = max(-2.8, min(2.8, y))
         return Decision(
-            movement(s, p, x, y), "keeper covers goal angle / projected shot", assignments=plan
+            movement(s, p, x, y, urgent=incoming, sprint_distance=0.0),
+            "keeper covers goal angle / projected shot",
+            assignments=plan,
         )
     if s.free and plan["interceptor"] == player_id:
         return Decision(
@@ -251,12 +349,26 @@ def decide(snapshot: Snapshot, player_id: int, settings: Settings = DEFAULT_SETT
             assignments=plan,
         )
     if plan["presser"] == player_id:
+        if s.owner is not None and tackle_ok(s, p, style):
+            return Decision(
+                command(s, player_id, "SLIDE_TACKLE", target_player_id=s.owner[1]),
+                f"slide tackle; aggression={style.tackle_aggression:.1f}",
+                assignments=plan,
+            )
         return Decision(
             command(s, player_id, "PRESS_BALL", intensity=0.8 if p.stamina >= 0.35 else 0.5),
             "designated press; teammate retains cover",
             assignments=plan,
         )
+    cap = attack_cap(s, player_id, style)
     if player_id in plan["marks"]:
+        threat = next(o for o in s.opponents if o.id == plan["marks"][player_id])
+        if cap is not None and s.direction * threat.x > cap:
+            return Decision(
+                movement(s, p, capped(s, threat.x, cap), threat.y, urgent=True),
+                "hold block line; runner beyond cap",
+                assignments=plan,
+            )
         return Decision(
             command(
                 s,
@@ -268,7 +380,8 @@ def decide(snapshot: Snapshot, player_id: int, settings: Settings = DEFAULT_SETT
             "distinct reachable runner assignment",
             assignments=plan,
         )
-    x, y = support(s, p, settings, plan)
+    x, y = support(s, p, settings, plan, style.formation)
+    x = capped(s, x, cap)
     return Decision(
         movement(s, p, x, y, urgent=s.owner is not None and s.owner[0] != s.team),
         "central cover" if player_id == plan["cover"] else "diagonal / depth support",

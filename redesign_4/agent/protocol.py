@@ -57,14 +57,67 @@ def envelope(payload: dict) -> tuple[dict, int, int]:
     return data, team, player_index(controlled[0])
 
 
-def _xy(value: object, name: str) -> tuple[float, float]:
+def _xy(value: object, name: str, *, scale: float = 1.0, lateral: str = "y") -> tuple[float, float]:
     if not isinstance(value, dict):
         raise TypeError(f"{name} must contain x/y")
-    return number(value.get("x"), name + ".x"), number(value.get("y"), name + ".y")
+    return (
+        number(value.get("x"), name + ".x") * scale,
+        number(value.get(lateral), name + "." + lateral) * scale,
+    )
+
+
+HOLD_RADIUS = 3.0
+HOLD_MARGIN = 1.0
+MATCH_COORDINATE_SCALE = 8.0
+MATCH_X_LIMIT = 6.4
+MATCH_Y_LIMIT = 3.5
+
+
+def match_command(command: dict) -> dict:
+    """Convert canonical movement to the compact pitch observed in AWS matches."""
+    if command["commandType"] != "MOVE_TO":
+        return command
+    params = command["parameters"]
+    return {
+        **command,
+        "parameters": {
+            **params,
+            "target_x": round(
+                max(
+                    -MATCH_X_LIMIT, min(MATCH_X_LIMIT, params["target_x"] / MATCH_COORDINATE_SCALE)
+                ),
+                3,
+            ),
+            "target_y": round(
+                max(
+                    -MATCH_Y_LIMIT, min(MATCH_Y_LIMIT, params["target_y"] / MATCH_COORDINATE_SCALE)
+                ),
+                3,
+            ),
+        },
+    }
+
+
+def _nearest_holder(
+    players: list[Player], holder_id: int, ball: tuple[float, float]
+) -> tuple[int, int] | None:
+    """Resolve a team-less agentId_N (present on both teams) by ball proximity.
+
+    The carrier sits on the ball; the same-index opponent rarely does. Close or
+    distant ties stay unknown rather than guessed.
+    """
+    near, far = sorted((math.dist((p.x, p.y), ball), p.team) for p in players if p.id == holder_id)
+    if near[0] <= HOLD_RADIUS and far[0] - near[0] >= HOLD_MARGIN:
+        return near[1], holder_id
+    return None
 
 
 def decode(
-    payload: dict, *, stamina_scale: float = 1.0, duration: float = 120.0
+    payload: dict,
+    *,
+    stamina_scale: float = 1.0,
+    duration: float = 120.0,
+    compact_pitch: bool = False,
 ) -> tuple[Snapshot, int]:
     data, team, pid = envelope(payload)
     if stamina_scale not in (1.0, 100.0):
@@ -76,15 +129,16 @@ def decode(
     if not isinstance(raw_players, list):
         raise TypeError("players must be a list")
     players = []
+    scale = MATCH_COORDINATE_SCALE if compact_pitch else 1.0
     for raw in raw_players:
         if not isinstance(raw, dict):
             raise TypeError("player must be an object")
         side = team_index(raw.get("teamCode", raw.get("teamId")))
         idx = player_index(raw.get("agentId", raw.get("playerId")))
-        x, y = _xy(raw.get("position"), "position")
+        x, y = _xy(raw.get("position"), "position", scale=scale)
         if abs(x) > 55 or abs(y) > 35:
             raise ValueError("player outside the sample pitch")
-        vx, vy = _xy(raw.get("velocity", {"x": 0, "y": 0}), "velocity")
+        vx, vy = _xy(raw.get("velocity", {"x": 0, "y": 0}), "velocity", scale=scale)
         stamina = number(raw.get("stamina", stamina_scale), "stamina") / stamina_scale
         if not 0 <= stamina <= 1:
             raise ValueError("stamina outside configured scale")
@@ -97,8 +151,22 @@ def decode(
     ball = state.get("ball")
     if not isinstance(ball, dict):
         raise TypeError("ball must be an object")
-    xy = _xy(ball.get("position"), "ball")
-    velocity = _xy(ball.get("velocity", {"x": 0, "y": 0}), "ball velocity")
+    position = ball.get("position")
+    raw_velocity = ball.get("velocity", {"x": 0, "y": 0})
+    xy = _xy(
+        position,
+        "ball",
+        scale=scale,
+        lateral="z" if compact_pitch and isinstance(position, dict) and "z" in position else "y",
+    )
+    velocity = _xy(
+        raw_velocity,
+        "ball velocity",
+        scale=scale,
+        lateral="z"
+        if compact_pitch and isinstance(raw_velocity, dict) and "z" in raw_velocity
+        else "y",
+    )
     free = ball.get("isFree") is True
     if "isFree" in ball and not isinstance(ball["isFree"], bool):
         raise ValueError("isFree must be boolean")
@@ -106,10 +174,11 @@ def decode(
     holder = ball.get("possessionAgentId", ball.get("possessionPlayerId"))
     if not free and holder is not None:
         holder_id = player_index(holder)
-        holder_team = ball.get("possessionTeamId")
+        holder_team = ball.get("possessionTeamId", ball.get("possessionTeamCode"))
         if holder_team is not None:
             owner = (team_index(holder_team), holder_id)
-        # Reused agentId_N without a team is inherently ambiguous.
+        else:
+            owner = _nearest_holder(players, holder_id, xy)
     score = state.get("score")
     if not isinstance(score, dict):
         raise TypeError("score must have home and away entries")
@@ -160,6 +229,7 @@ def validate_command(command: object) -> None:
         "INTERCEPT": {"aggressive"},
         "GK_DISTRIBUTE": {"target_player_id", "method"},
         "SET_STANCE": {"stance"},
+        "SLIDE_TACKLE": {"target_player_id"},
     }
     kind = command.get("commandType")
     if kind not in schemas or set(params) != schemas[kind]:

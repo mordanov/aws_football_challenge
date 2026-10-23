@@ -90,10 +90,10 @@ class TeamRunner:
 
     # ── Decision ──────────────────────────────────────────────────────────────
 
-    def decide(self, state: EngineState) -> list[dict[str, Any]]:
+    def decide(self, state: EngineState, coach: str = "") -> list[dict[str, Any]]:
         if not self.is_alive():
             raise RunnerError("shim process is not running")
-        payload = encode_observation(state, self._team_id, list(range(5)), self._seed)
+        payload = encode_observation(state, self._team_id, list(range(5)), self._seed, coach)
         seq = state["tick"]
         self._send({"obs": payload, "_seq": seq})
         line = self._read_line(self._budget["request_timeout_s"])

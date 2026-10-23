@@ -1,6 +1,7 @@
 # Coach policy, strategy archetypes and off-tick LLM advisor — design
 
-Date: 2026-10-22. Status: approved design, revision 2 (amended while planning).
+Date: 2026-10-22. Status: approved design, revision 4 (rev 3 amended while planning; rev 4 adds v2 ball
+physics and `carry` after the local simulator produced no goals).
 Scope: `redesign_4/` and `local_simulator/`.
 
 ## 1. Goal
@@ -71,6 +72,11 @@ v2 results are never mixed. Every constant is a **local assumption** documented 
 - **RNG**: `random.Random(seed)` per match; deterministic.
 - **Coach hook**: per-team `coach(state, team_id) -> str` written to
   `coachInstruction`; default none ⇒ `""`.
+- **Events**: `FOUL`, `PENALTY` (team_id = awarded team), `SEND_OFF`, `TACKLE_SUCCESS`
+  (also for standing-challenge wins). Fixture results record per-team counts.
+- **Replays**: campaigns may run with `--discard-replays` (replays are ~3 MB each).
+- **Shot aim**: v2 honours `aim_location` (TL/BL → y = −3.5, TR/BR → y = +3.5, CENTER → 0, world coordinates); v1 aims every shot at the goal centre, which a centred keeper always catches.
+- **In-flight pickup**: in v2 a player cannot collect an in-flight ball moving away from them; v1 lets the passer recollect every 1.5 m/step pass on the step after release.
 
 ## 4. Opponent pool
 
@@ -87,23 +93,43 @@ pre-change agent (golden test).
 
 | Field | Range | Default (identity) | Effect |
 |---|---|---|---|
-| `block_depth` | 0–1 | 1.0 | out of possession, outfield move targets capped at attack-x `-50 + 96·depth` |
+| `block_depth` | 0–1 | 1.0 | out of possession, outfield move targets capped at attack-x `-50 + 96·depth`; a marker whose threat is beyond the cap moves to (cap, threat.y) instead of marking |
 | `attackers_committed` | int 1–3 | 3 | in possession, only players `(4,3,2)[:n]` may move past halfway |
-| `tackle_aggression` | 0–1 | 0.0 | presser slides within `1 + 2.5·aggr` m; from behind only if ≥ 0.7 |
-| `tempo` | 0–1 | 0.5 | pass score `+ (tempo-0.5)·1.2·gain`; hold score `max(0,0.5-tempo)·80` when no opponent within 8 m |
+| `tackle_aggression` | 0–1 | 0.0 | presser slides within `1 + 2.5·aggr` m; from behind only if ≥ 0.7; no slides at all when 0 |
+| `tempo` | 0–1 | 0.5 | pass score `+ (tempo-0.5)·1.2·gain`; hold score `max(0,0.5-tempo)·120` when no opponent within 8 m |
 | `formation` | `1-1-2`, `2-1-1`, `1-2-1` | `1-1-2` | pinned anchors (outfield DEF-MID-FWD); **immutable in a match** |
+| `carry` | 0–1 | 0.0 | outfield carrier gets a dribble option, `MOVE_TO` (±50, clamp(0.6·y, ±10)) sprinting, scored `carry·(30 + min(12, nearest opponent ahead))`; optional in profiles (older ones load as 0.0) |
+
+Roles by formation (pid 0 is always GK):
+
+| pid | 1-1-2 | 2-1-1 | 1-2-1 |
+|---|---|---|---|
+| 1 | DEF | DEF | DEF |
+| 2 | MID | DEF (mirrored) | MID |
+| 3 | FWD (link) | MID | MID (mirrored) |
+| 4 | FWD | FWD | FWD |
+
+`1-1-2` reproduces the pre-change anchors exactly. Archetype definitions live in
+`agent/archetypes.py`.
 
 `coach_policy`: `none` (default) or `rules`.
 
 ### Archetypes
 
-| Archetype | depth | attackers | tackle | tempo | formation | settings deltas |
-|---|---|---|---|---|---|---|
-| `balanced` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | — |
-| `press_aggressive` | 1.0 | 3 | 0.6 | 0.8 | 1-1-2 | press_radius 30 |
-| `park_the_bus` | 0.1 | 1 | 0.4 | 0.3 | 2-1-1 | press_radius 12 |
-| `time_waster` | 0.5 | 1 | 0.2 | 0.0 | 1-2-1 | pass_margin 4.5, shot_range 20 |
-| `hard_tackle` | 0.7 | 2 | 1.0 | 0.5 | 1-1-2 | press_radius 26 |
+| Archetype | depth | attackers | tackle | tempo | formation | carry | settings deltas |
+|---|---|---|---|---|---|---|---|
+| `balanced` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | 0.0 | — |
+| `direct_carry` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | 1.0 | — |
+| `press_aggressive` | 1.0 | 3 | 0.6 | 0.8 | 1-1-2 | 1.0 | press_radius 30 |
+| `park_the_bus` | 0.1 | 1 | 0.4 | 0.3 | 2-1-1 | 0.3 | press_radius 12 |
+| `time_waster` | 0.5 | 1 | 0.2 | 0.0 | 1-2-1 | 0.0 | pass_margin 4.5, shot_range 20 |
+| `hard_tackle` | 0.7 | 2 | 1.0 | 0.5 | 1-1-2 | 0.7 | press_radius 26 |
+
+`direct_carry` isolates the carry effect against `balanced`. Stand-in carry values:
+`aws_like_balanced` 0.5, `aws_like_attacking` 1.0, `aws_like_defensive` 0.3. Why: the
+redesign_4 carrier could only shoot, make a "safe" pass or hold, so under pressure it held
+until tackled and the family scored about once in 20 local v2 matches. A naive carry
+option alone turned that into W5 D15 L0, GD +6 against the five references.
 
 Each archetype runs with `coach_policy` `none` and `rules`. Time-wasting uses legal
 holding/recycling only (no restart stalling).
@@ -149,6 +175,8 @@ snapshot, so it cannot touch formation.
 5. Formation follow-up: the leader re-run in all three formations vs the pool.
 6. `redesign_4/docs/strategy_report.md`; ship per S2 as
    `redesign_4/profiles/recommended.json` (deployed via `AFC_PROFILE`).
+
+Reports also give the pooled goal-difference delta CI against a baseline entrant (`--baseline`) and discipline counts.
 
 ## 9. Out of scope
 

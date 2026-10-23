@@ -7,7 +7,7 @@ from football_lab.match_contracts import EngineState
 
 
 def encode_observation(
-    state: EngineState, team_id: int, player_ids: list[int], seed: int
+    state: EngineState, team_id: int, player_ids: list[int], seed: int, coach: str = ""
 ) -> dict[str, Any]:
     """Return an AWS-format observation payload for the given team."""
     tick = state["tick"]
@@ -39,7 +39,7 @@ def encode_observation(
             "score": {"home": score[0], "away": score[1]},
             "players": players,
             "ball": ball,
-            "coachInstruction": "",
+            "coachInstruction": coach,
         },
         "teamId": team_id,
         "myPlayers": player_ids,

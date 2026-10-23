@@ -5,14 +5,39 @@ Five coordinated players and their durable offline coaching loop.
 ## Language
 
 **Snapshot**:
-One normalized observation interpreted from our team's perspective.
-Includes a recognized coach preset; missing/ambiguous ownership is explicitly
-unknown, not inferred from player proximity.
+One normalized observation interpreted from our team's perspective in canonical
+sample-pitch coordinates, not necessarily the server's physical units.
+Includes a recognized coach preset. A team-less `agentId_N` holder (official
+server format) is resolved to the same-index player clearly on the ball
+(within 3 m and at least 1 m nearer than the other); otherwise ownership stays
+explicitly unknown.
 _Avoid_: confirmed match event, complete replay.
+
+**Competition adapter**:
+Session-selected conversion between compact live-match observations/commands
+and canonical tactical coordinates, separate from the synthetic Fitness Check.
+Its geometry calibration is provisional, not a guaranteed platform contract.
+The adapter supplies the canonical movement x-limit to planning so goalkeeper
+trajectory projection uses the same reachable plane as the wire command.
+_Avoid_: automatic per-player unit guessing, proof of improved match results.
 
 **Decision**:
 A selected attempted command, not evidence the server executed it.
+Carrying shares movement's stamina/distance sprint guard. A clearly stranded
+opposing keeper permits bounded longer shots, subject to normal angle and
+lane checks; it does not establish an empty net or a guaranteed goal.
+Keeper reactions to explicitly free incoming goal threats retain the stamina
+guard but permit short nonzero-distance sprints. Threat classification may use
+the modeled goal crossing while movement still targets its reachable plane.
 _Avoid_: outcome, accepted action.
+
+**Keeper outlet**:
+With known keeper possession, a normally safe distribution is preferred.
+If all fail the normal filters, rank non-self teammates with the existing outlet
+score and attempt an explicitly contested emergency kick. Neither ordinary nor
+slow-tempo holding competes with keeper distribution. This is a legal-action
+fallback, not proof the receiver is safe or the pass will complete.
+_Avoid_: guaranteed clearance, inferred keeper possession.
 
 **Lesson**:
 An observation or inference with evidence references, confidence and a remedy.
@@ -68,7 +93,7 @@ _Avoid_: dynamic shape, in-match formation switch.
 
 **Style**:
 Bounded profile section (block depth, attackers committed, tackle aggression,
-tempo, formation) expressing how the team plays.
+tempo, formation, carry) expressing how the team plays.
 _Avoid_: mode, strategy flag.
 
 **Archetype**:
@@ -83,3 +108,42 @@ _Avoid_: AWS bot.
 Optional off-tick LLM component producing profile or parameter proposals that
 still require profile approval.
 _Avoid_: live agent brain, auto-deploy.
+
+**Evidence packet**:
+Expiry-stamped offline claims with unique IDs and resolvable source digests.
+Preparation preserves telemetry/report contradictions; a digest is not a
+cryptographic signature or proof the source is true.
+_Avoid_: verified match outcome, signed evidence.
+
+**Run artifact**:
+Offline proposal, rejection or failure with usage receipts and preserved
+evaluation spans. Reevaluation uses that original grounding, not invented
+empty evidence. The unapproved `proposed_profile` is retained across outages
+and rejections so reevaluation need not repeat paid inference; `candidate_profile`
+is populated only for a passing proposal. A passing score never authorizes deployment.
+_Avoid_: approved profile, deployed team.
+
+Advisor replies accept plain JSON or a complete outer JSON Markdown fence;
+extra prose remains invalid. Response usage survives validation failures.
+
+**Generation diagnostics**:
+Bounded sidecar metadata for an analysis-script generation attempt: fixed
+validation reason, response size/digest, format, stop reason and provider usage
+when available. It contains no prompt, generated code or raw provider exception.
+Service failures include allowlisted provider/transport codes and validated
+HTTP status/request ID; unrecognized codes remain `UNKNOWN`.
+_Avoid_: executable script, raw model transcript.
+
+The model generates one `analyze(evidence)` function, checked structurally with
+AST parsing without execution. A deterministic wrapper loads UTF-8
+`evidence.json`, calls it and validates/prints its dict result. The model receives
+the packet schema, not values; review still checks data dependence and safety.
+An analysis result is exactly one finite JSON object covering the whole stdout;
+pretty-printing is allowed, but surrounding logs or multiple objects are not.
+
+**Shooting counts**:
+Deterministically parsed canonical observed/report count claims, with count,
+found/missing status, claim ID, kind and source IDs. Narrative advice is not a
+count claim. Missing differs from zero; malformed or duplicate canonical claims
+fail closed. Counts describe issued commands/report claims, not executed actions
+or goals. The advisor interprets these values; it does not compute them.

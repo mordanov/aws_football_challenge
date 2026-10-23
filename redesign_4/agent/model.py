@@ -57,10 +57,27 @@ DEFAULT_SETTINGS = Settings()
 
 
 @dataclass(frozen=True)
+class Style:
+    """Strategy archetype knobs. Defaults are identity values (pre-change behaviour)."""
+
+    block_depth: float = 1.0
+    attackers_committed: int = 3
+    tackle_aggression: float = 0.0
+    tempo: float = 0.5
+    formation: str = "1-1-2"
+    carry: float = 0.0
+
+
+DEFAULT_STYLE = Style()
+
+
+@dataclass(frozen=True)
 class Profile:
     version: str = "baseline"
     settings: Settings = DEFAULT_SETTINGS
     opponents: dict[str, dict[str, Any]] | None = None
+    style: Style = DEFAULT_STYLE
+    coach_policy: str = "none"
 
     def to_dict(self) -> dict:
         return asdict(self)

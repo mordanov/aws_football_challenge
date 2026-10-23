@@ -1,0 +1,19 @@
+{
+  "coach_policy": "rules",
+  "opponents": null,
+  "settings": {
+    "pass_margin": 3.0,
+    "press_radius": 26.0,
+    "shot_range": 29.0,
+    "support_width": 15.0
+  },
+  "style": {
+    "attackers_committed": 2,
+    "block_depth": 0.7,
+    "carry": 0.7,
+    "formation": "1-1-2",
+    "tackle_aggression": 1.0,
+    "tempo": 0.5
+  },
+  "version": "r4v2_hard_tackle_rules"
+}

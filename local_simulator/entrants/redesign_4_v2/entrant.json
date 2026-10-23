@@ -1,0 +1,17 @@
+{
+  "id": "redesign_4_v2",
+  "source_name": "redesign_4",
+  "topology": "per_player",
+  "shim": "entrants/redesign_4_v2/shim.py",
+  "entrant_hash": "ac797304c03074e9293f721ad2c08ee8e6df6529d5de1dcba2a97afaf8d88b77",
+  "rules_version": "v1",
+  "track": "patched",
+  "patches": [
+    {
+      "id": "profile_env",
+      "classification": "compatibility",
+      "file": "shim.py",
+      "description": "profile loaded from $AFC_PROFILE (set per variant by the campaign CLI)"
+    }
+  ]
+}

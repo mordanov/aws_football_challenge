@@ -10,6 +10,7 @@ import math
 from typing import Any
 
 from football_lab.match_contracts import (
+    ContestHook,
     EngineBallState,
     EnginePlayerState,
     EngineState,
@@ -24,6 +25,7 @@ STEPS_PER_DECISION: int = 40
 PITCH_HALF_L: float = 55.0
 PITCH_HALF_W: float = 35.0
 GOAL_HALF_W: float = 4.5
+AIM_Y: float = GOAL_HALF_W - 1.0  # rules v2 shot target |y| for corner aims
 
 # ── Ball ──────────────────────────────────────────────────────────────────────
 PICKUP_RADIUS: float = 2.1
@@ -80,12 +82,20 @@ def _intent_for(team_id: int, player_id: int, intents: list[Intent]) -> Intent |
     return None
 
 
+def is_inactive(p: EnginePlayerState, tick: int) -> bool:
+    """Rules v2: sent off, or stunned through `tick`. Always False under v1."""
+    return bool(p.get("sent_off")) or p.get("stunned_until", -1) >= tick
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 
 def step(
     state: EngineState,
     intents: list[Intent],
+    contest: ContestHook | None = None,
+    *,
+    v2_ball: bool = False,
 ) -> tuple[EngineState, list[MatchEvent]]:
     """Advance state by one physics step. Returns (new_state, events)."""
     events: list[MatchEvent] = []
@@ -98,6 +108,8 @@ def step(
 
     # ── 1. Move players ───────────────────────────────────────────────────────
     for p in players:
+        if is_inactive(p, tick):
+            continue
         intent = _intent_for(p["team_id"], p["player_id"], intents)
         cmd = intent["command_type"] if intent else "SET_STANCE"
         params: dict[str, Any] = intent["parameters"] if intent else {}
@@ -156,6 +168,10 @@ def step(
         else:
             # SET_STANCE, MARK, PASS (after fire), SHOOT (after fire) — recovery
             p["stamina"] = _clamp(p["stamina"] + _STAMINA_RECOVERY, 0.0, 1.0)
+
+    # ── 1b. Rules v2 contests (may change ball owner; ball then follows below) ─
+    if contest is not None:
+        events.extend(contest(players, ball, score, intents, tick))
 
     # ── 2. Move ball ──────────────────────────────────────────────────────────
     if ball["owner_team"] is None:
@@ -222,6 +238,12 @@ def step(
             s = 1 if team_id == 0 else -1
             gx = s * PITCH_HALF_L
             gy = 0.0
+            if v2_ball:
+                aim = str(params.get("aim_location", "CENTER")).upper()
+                if aim in ("TL", "BL"):
+                    gy = -AIM_Y
+                elif aim in ("TR", "BR"):
+                    gy = AIM_Y
             dx, dy = gx - ball["x"], gy - ball["y"]
             dist = math.hypot(dx, dy) or 1.0
             speed = _BALL_SPEED["SHOOT"]
@@ -262,10 +284,16 @@ def step(
         closest: EnginePlayerState | None = None
         closest_dist = PICKUP_RADIUS
         for p in players:
+            if is_inactive(p, tick):
+                continue
             # Carrier that just released cannot immediately re-pick up the ball
             if just_released and (p["team_id"], p["player_id"]) == just_released:
                 continue
             d = _dist(p["x"], p["y"], ball["x"], ball["y"])
+            if v2_ball and ball["in_flight"] and (
+                (ball["x"] - p["x"]) * ball["vx"] + (ball["y"] - p["y"]) * ball["vy"] > 0
+            ):
+                continue
             if d <= closest_dist:
                 closest_dist = d
                 closest = p

@@ -1,0 +1,19 @@
+{
+  "coach_policy": "none",
+  "opponents": null,
+  "settings": {
+    "pass_margin": 3.0,
+    "press_radius": 30.0,
+    "shot_range": 29.0,
+    "support_width": 15.0
+  },
+  "style": {
+    "attackers_committed": 3,
+    "block_depth": 1.0,
+    "carry": 1.0,
+    "formation": "1-1-2",
+    "tackle_aggression": 0.6,
+    "tempo": 0.8
+  },
+  "version": "r4v2_press_aggressive_none"
+}

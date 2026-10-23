@@ -51,6 +51,12 @@ def position(state, team, pid, x, y):
     state["players"][team * 5 + pid]["position"] = {"x": x, "y": y}
 
 
+def ambiguous_owner(state):
+    """Drop the team discriminator and put both agentId_2 players on the ball."""
+    state["ball"].pop("possessionTeamId")
+    position(state, 1, 2, -5.4, 0.3)
+
+
 class ProtocolTests(unittest.TestCase):
     def test_envelope_team_identity_and_legacy_state(self):
         for team in (0, 1):
@@ -69,8 +75,24 @@ class ProtocolTests(unittest.TestCase):
             legacy, _ = decode({"prompt": data})
             self.assertEqual(legacy.owner, snapshot.owner)
 
+    def test_official_possession_without_team_resolves_to_nearest_holder(self):
+        # Official server format: possessionAgentId only; agentId_N exists on both teams.
+        for team, owner, ball in ((0, (0, 0), (-50.5, 0)), (1, (1, 3), (-10, -19.5))):
+            raw = edit(
+                payload(owner=owner, ball=ball, team=team, pid=owner[1]),
+                lambda s: s["ball"].pop("possessionTeamId"),
+            )
+            snapshot, _ = decode(raw)
+            self.assertEqual(snapshot.owner, owner)
+        raw = edit(
+            payload(owner=(0, 0), ball=(-50.5, 0), pid=0),
+            lambda s: s["ball"].pop("possessionTeamId"),
+        )
+        command = json.loads(Runtime(emit=lambda _: None).handle(raw))[0]
+        self.assertEqual(command["commandType"], "GK_DISTRIBUTE")
+
     def test_ambiguous_possession_is_not_a_free_ball(self):
-        raw = edit(payload(), lambda s: s["ball"].pop("possessionTeamId"))
+        raw = edit(payload(), ambiguous_owner)
         snapshot, _ = decode(raw)
         self.assertIsNone(snapshot.owner)
         self.assertFalse(snapshot.free)
@@ -159,6 +181,41 @@ class TacticalTests(unittest.TestCase):
         snapshot, _ = decode(raw)
         self.assertNotEqual(assignments(snapshot)["interceptor"], 0)
         self.assertNotEqual(decide(snapshot, 0).command["commandType"], "INTERCEPT")
+
+    def test_keeper_projects_free_shot_at_its_movement_plane(self):
+        for team, d in ((0, 1), (1, -1)):
+            raw = edit(
+                payload(owner=None, ball=(-30 * d, 4), team=team, pid=0),
+                lambda s: s["ball"].update(velocity={"x": -10 * d, "y": -1}),
+            )
+            snapshot, _ = decode(raw)
+            action = decide(snapshot, 0).command
+            self.assertEqual(action["commandType"], "MOVE_TO")
+            params = action["parameters"]
+            t = (params["target_x"] - snapshot.ball[0]) / snapshot.velocity[0]
+            self.assertAlmostEqual(params["target_y"], 4 - t)
+
+    def test_keeper_sprints_to_cover_a_threat_but_not_a_dribblers_velocity(self):
+        raw = edit(
+            payload(owner=None, ball=(-30, -10), pid=0),
+            lambda s: (
+                position(s, 0, 0, -52, -8),
+                s["ball"].update(velocity={"x": -10, "y": 5}),
+            ),
+        )
+        snapshot, _ = decode(raw)
+        self.assertTrue(decide(snapshot, 0).command["parameters"]["sprint"])
+        carried, _ = decode(
+            edit(
+                raw,
+                lambda s: s["ball"].update(
+                    isFree=False, possessionTeamId=1, possessionAgentId="agentId_4"
+                ),
+            )
+        )
+        params = decide(carried, 0).command["parameters"]
+        self.assertFalse(params["sprint"])
+        self.assertLess(params["target_y"], 0)
 
     def test_prediction_selects_interceptor_running_toward_ball(self):
         raw = payload(owner=None, ball=(0, 0))
@@ -255,3 +312,20 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("error", records[-1])
         with self.assertRaises(ValueError):
             runtime.handle({"prompt": "invalid json"})
+
+
+class SlideTackleSchemaTest(unittest.TestCase):
+    def command(self, **params):
+        return {
+            "commandType": "SLIDE_TACKLE",
+            "teamId": 0,
+            "playerId": 2,
+            "parameters": params,
+            "duration": 0,
+        }
+
+    def test_slide_tackle_requires_only_a_valid_target(self):
+        validate_command(self.command(target_player_id=3))
+        for params in ({}, {"target_player_id": 5}, {"target_player_id": 3, "force": 1}):
+            with self.subTest(params=params), self.assertRaises(ValueError):
+                validate_command(self.command(**params))

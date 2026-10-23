@@ -1,0 +1,19 @@
+{
+  "coach_policy": "rules",
+  "opponents": null,
+  "settings": {
+    "pass_margin": 4.5,
+    "press_radius": 22.0,
+    "shot_range": 20.0,
+    "support_width": 15.0
+  },
+  "style": {
+    "attackers_committed": 1,
+    "block_depth": 0.5,
+    "carry": 0.0,
+    "formation": "2-1-1",
+    "tackle_aggression": 0.2,
+    "tempo": 0.0
+  },
+  "version": "r4v2_time_waster_rules_f211"
+}

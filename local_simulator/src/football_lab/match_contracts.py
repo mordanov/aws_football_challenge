@@ -5,7 +5,8 @@ Separate from the M0 contracts in contracts.py; the two schemas never overlap.
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from collections.abc import Callable
+from typing import Any, Literal, NotRequired, TypedDict
 
 __all__ = [
     "EngineCommand",
@@ -18,6 +19,8 @@ __all__ = [
     "FrameRecord",
     "MatchReplay",
 ]
+
+RulesVersion = Literal["v1", "v2"]
 
 
 class EngineCommand(TypedDict):
@@ -37,6 +40,9 @@ class EnginePlayerState(TypedDict):
     vx: float  # velocity units/step
     vy: float
     stamina: float  # [0.0, 1.0]
+    fouls: NotRequired[int]  # rules v2 only
+    sent_off: NotRequired[bool]  # rules v2 only
+    stunned_until: NotRequired[int]  # rules v2 only; inactive while tick <= this
 
 
 class EngineBallState(TypedDict):
@@ -76,7 +82,7 @@ class MatchEvent(TypedDict):
     kind: str  # GOAL | KICK_OFF | THROW_IN | CORNER | GOAL_KICK
     # | PASS_LAUNCHED | PASS_COMPLETE | PASS_INTERCEPTED | PASS_OUT
     # | SHOT_LAUNCHED | SHOT_GOAL | SHOT_SAVE | SHOT_OUT
-    # | TACKLE_SUCCESS | MATCH_END
+    # | TACKLE_SUCCESS | MATCH_END | FOUL | PENALTY | SEND_OFF
     team_id: int | None
     player_id: int | None
     x: float | None
@@ -104,9 +110,23 @@ class MatchReplay(TypedDict):
     schema_version: Literal[2]
     kind: Literal["match-replay"]
     status: Literal["complete", "partial", "failed"]
-    rules_version: Literal["v1"]
+    rules_version: RulesVersion
+    rules_params: NotRequired[dict[str, Any]]  # rules v2 only
     seed: int
     duration_ticks: int  # 2400 for a complete 120 s match
     action_results: list[ActionResult]
     events: list[MatchEvent]
     frames: list[FrameRecord]  # one per tick; 2401 entries for complete match
+
+
+ContestHook = Callable[
+    [list[EnginePlayerState], EngineBallState, list[int], list[Intent], int],
+    list[MatchEvent],
+]
+"""Called once per physics step after players move: (players, ball, score, intents, tick).
+
+Mutates its arguments in place and returns the events it produced.
+"""
+
+CoachFn = Callable[[EngineState, int], str]
+"""Scripted coach: (state, team_id) -> preset text written to coachInstruction."""
