@@ -169,6 +169,13 @@ winning pin. Async failures flow to the owned S3 bucket; visible CloudWatch alar
 need no SNS/SQS/EventBridge. Serving roles can only read registry data and
 conditionally create match pins. Diagnostic deployment evidence is excluded from
 candidate input.
+The rush rollout uses `match_profiles_rush_v2` and team namespace
+`aleksalotl_rush_v2` for both serving registry and learner/Memory actor.
+Old registry objects and pins remain untouched. Collection may archive old
+runtime observations, but proposal guards require the exact current generation
+and profile digest. The simulator and players import the same merged tactics;
+legacy golden tests disable rush/desperate modes, while explicit scenario tests
+exercise enabled modes. No regenerated golden fixture hides a behavior change.
 **Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
 `agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
 `agent/learning_source.py`, `agent/learning_policy.py`, `agent/learning_worker.py`,

@@ -44,14 +44,13 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
         if any(
             r["kind"] != "decision"
             or r["profile_version"] != profile.version
-            or r["profile_digest"] not in (None, digest)
-            or r["code_generation"] not in (None, CODE_GENERATION)
+            or r["profile_digest"] != digest
+            or r["code_generation"] != CODE_GENERATION
             or r["final_result"] is not None
             or r["evidence_status"] != "provisional"
             for r in records
         ):
             continue
-        # Legacy static logs may have no digest, but cannot mix that contract in one match.
         contracts = {
             canonical(
                 [r["profile_digest"], r["code_generation"], r["input_format"], r["input_contract"]]

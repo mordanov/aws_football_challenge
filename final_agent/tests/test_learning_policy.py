@@ -10,7 +10,7 @@ from test_learning_automation import observation
 from agent.learning_observations import prepare_observation
 from agent.learning_policy import propose
 from agent.model import Profile
-from agent.profile_registry import canonical
+from agent.profile_registry import CODE_GENERATION, canonical, profile_document
 
 
 def evidence():
@@ -18,6 +18,8 @@ def evidence():
     for game in range(3):
         for tick in range(5):
             row = observation(clock=20 + tick * 2, tick=100 + tick)
+            row["profile_digest"] = profile_document(Profile())[0]
+            row["code_generation"] = CODE_GENERATION
             row["match_id"] = f"2d4dd176-ca81-4dd6-88de-e3e99b9a3e9{game}"
             state = row["snapshot"]
             state.update(ball=[-30, 0], owner=[1, 2], free=False)
@@ -103,5 +105,14 @@ def test_homogeneous_but_incompatible_code_generation_does_not_propose():
     docs = evidence()
     for doc in docs:
         doc["content"]["code_generation"] = "different_tactical_semantics"
+        doc["observation_id"] = hashlib.sha256(canonical(doc["content"]).encode()).hexdigest()
+    assert propose(Profile(), docs) is None
+
+
+@pytest.mark.parametrize("field", ["profile_digest", "code_generation"])
+def test_unbound_legacy_evidence_cannot_support_automatic_promotion(field):
+    docs = evidence()
+    for doc in docs:
+        doc["content"][field] = None
         doc["observation_id"] = hashlib.sha256(canonical(doc["content"]).encode()).hexdigest()
     assert propose(Profile(), docs) is None

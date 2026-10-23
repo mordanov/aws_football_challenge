@@ -390,7 +390,7 @@ The S3 alternative was activated on 2026-10-23 (UTC):
   and persisted `status=insufficient_evidence`, generation 1. No profile was
   forced through acceptance; diagnostic records cannot support a candidate.
 
-### Current safety pause after parallel tactical deployment
+### Safety pause and coordinated tactical integration
 
 Automatic application was subsequently disabled in both Lambdas on
 2026-10-23; CloudWatch collection and S3/Memory publication remain enabled.
@@ -405,15 +405,53 @@ artifacts already contain the `1485ea2` tactical code. Their tactical SHA-256 is
 `eaead9a76ca0c9d2c722f929daea691760204e0105f940b22408e92be7699f2c`.
 That branch currently fails two legacy golden-decision checks.
 
-The S3 changes were preserved in a separate worktree based on `831b4fa`,
-without reverting, modifying, or importing those parallel tactics. This
-learning branch's simulator therefore must not evaluate promotions for the
-currently deployed rush tactics. Before re-enabling, integrate the intended
-tactics and evaluator, resolve their golden expectations, and update the
-compatibility generation so old and new tactical evidence cannot be combined
-under the unchanged `match_profiles_v1` label. Then verify compatible registry
-documents, match pins, and all five serving artifacts before enabling learning.
-Do not reactivate merely because this isolated S3 branch passes its own tests.
+The S3 changes were preserved in a separate worktree and then merged with the
+intended rush/desperate tactics. Both serving and evaluation now use the same
+tactical implementation. Compatibility is `match_profiles_rush_v2`; the fresh
+registry/observation namespace and Memory actor use team `aleksalotl_rush_v2`.
+The previous `aleksalotl` registry, evidence and immutable match pins are retained
+unchanged. Automatic proposals now require an exact digest and generation;
+missing legacy labels are not accepted. Old sessions can finish without their
+evidence being eligible for the new learner.
+
+The existing golden fixture is unchanged: its regression checks explicitly
+disable rush/desperate modes to test legacy behavior. The merged dedicated
+scenario tests cover enabled rush/desperate behavior. The complete integrated
+suite passes without overwriting golden expectations.
+
+Rollout order remains learning disabled -> fresh baseline bootstrap -> all five
+players and shared diagnostic pin verified -> learner enabled. Enabling requires
+serving artifacts and evaluator package to match, not merely a successful test run.
+
+### Integrated rush-compatible deployment
+
+The follow-up rollout completed with the intended rush tactics unchanged:
+
+- Stack `final-agent-s3-rush-v2` owns the new team namespace
+  `aleksalotl_rush_v2`. The previous stack's subscriptions and learner were
+  disabled; its registry, evidence and match pins were retained.
+- All five existing runtimes/DEFAULT endpoints are **version 10, READY**,
+  with unchanged ARNs and the same tactical SHA-256 as commit `1485ea2`.
+  Serving tactical environment overrides are absent, so players and evaluator
+  use the same default rush/desperate policy. Changing these overrides requires
+  another compatibility rollout, not a same-generation configuration tweak.
+- New ACTIVE generation 1 is the unchanged `r4v7_route_stamina` profile with
+  compatibility `match_profiles_rush_v2`, digest
+  `ead892a960fb0ed4c17386f600d75edb2580139244df1a28824c1b33a9e2db69`.
+  Fifteen live-shaped/fitness invocations routed correctly. All five seats used
+  the same new pin; ten exact diagnostic documents were verified in Memory.
+- S3 inspection verified the deployed learner archive's tactical, protocol,
+  registry and evaluation code against the local source and serving artifacts.
+  The packaged worker includes the simulator.
+- Both new Lambdas have learning enabled after those checks. Diagnostic match
+  evidence remains excluded from automatic proposals.
+
+A separate integration exercise ran the full 144-match paired schedule with
+the merged tactics. The proposed press-radius reduction 22 -> 20 was rejected
+for opponent regression (mean paired goal-difference delta +0.02778, sign-test
+p=0.9270); no crashes or illegal actions occurred. This was an offline plumbing
+check, not eligible live evidence, a production promotion, or a consumed
+generation attempt. The registry baseline was not changed to force acceptance.
 
 The failure archive is a separate private AES256-encrypted owned bucket,
 retained outside the stack. The first S3 rollout exposed Lambda's destination

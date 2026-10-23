@@ -86,6 +86,11 @@ profile. Insufficient history remains explicitly insufficient evidence.
 Immutable versioned settings pinned consistently across all five players.
 _Avoid_: live mutable shared memory.
 
+**Tactical compatibility generation**:
+An identity shared by serving code, profile documents and evaluator semantics.
+Evidence lacking that exact identity and profile digest cannot support automatic
+promotion; a tactical rollout uses a new registry namespace.
+
 **Match profile pin**:
 One immutable selection of profile content and compatible code generation for
 a team, match UUID and side, shared by all five players. It is not a match-end

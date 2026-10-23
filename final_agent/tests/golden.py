@@ -4,14 +4,18 @@ Regenerate after inspecting each intended difference: `.venv/bin/python tests/go
 Three-match feedback additionally changes 36/750 commands: center shots against
 stranded keepers, progressive safe keeper outlets, midfield support and pressing.
 Carrying is separately covered with carry-enabled profiles in test_style_tactics.
+These legacy fixtures are checked with rush/desperate modes disabled; enabled
+modes have explicit scenario coverage in test_rush_tactics.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import random
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -91,5 +95,8 @@ def responses(profile: Profile | None = None) -> list[list[str]]:
 
 if __name__ == "__main__":
     FIXTURE.parent.mkdir(exist_ok=True)
-    FIXTURE.write_text(json.dumps({"seed": SEED, "responses": responses()}, indent=1) + "\n")
+    with patch.dict(
+        os.environ, {"RUSH_ENABLED": "0", "DESPERATE_S": "-1", "DRAW_AT_ANY_COST": "0"}
+    ):
+        FIXTURE.write_text(json.dumps({"seed": SEED, "responses": responses()}, indent=1) + "\n")
     print(f"wrote {FIXTURE}")

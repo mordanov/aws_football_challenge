@@ -1,10 +1,19 @@
 import json
+import os
 import unittest
+from unittest.mock import patch
 
 from golden import FIXTURE, responses
 
 
 class GoldenDecisionsTest(unittest.TestCase):
+    def setUp(self):
+        modes = patch.dict(
+            os.environ, {"RUSH_ENABLED": "0", "DESPERATE_S": "-1", "DRAW_AT_ANY_COST": "0"}
+        )
+        modes.start()
+        self.addCleanup(modes.stop)
+
     def test_default_profile_reproduces_golden_decisions(self):
         expected = json.loads(FIXTURE.read_text())["responses"]
         self.assertEqual(responses(), expected)

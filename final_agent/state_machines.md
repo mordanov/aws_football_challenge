@@ -125,6 +125,8 @@ promoted, stale_baseline; failed.
 **Transitions:** recent acknowledged outbox sessions after analysis delay ->
 exact Memory integrity check -> homogeneous current-profile observations ->
 three independently supporting matches -> bounded numeric proposal.
+Missing profile digest or incompatible/missing tactical generation ->
+ineligible evidence, never a legacy compatibility fallback.
 Conditional generation reservation succeeds once -> fixed paired simulator
 evaluation -> rejected/failed receipt or conditional ACTIVE generation/digest
 update plus promotion receipt. Uncertain promotion response -> read receipt.
@@ -153,6 +155,19 @@ keeps work pending. Expired lease -> new owner on subsequent collection activity
 Async errors exhausted -> retained S3 invocation record and CloudWatch metrics.
 No transition claims official match completion or unlimited automatic retry.
 **Source:** `agent/s3_trigger.py`, `agent/s3_worker.py`, `deploy/s3_learning.py`.
+
+## Tactical generation rollout
+
+**States:** learning_disabled, fresh_registry_bootstrapped, players_verified,
+learning_enabled.
+**Transitions:** integrate identical serving/evaluator tactics -> new compatibility
+generation and separate team namespace -> bootstrap baseline without modifying
+old ACTIVE or pins -> deploy five players with learning disabled -> verify
+their artifacts, endpoints and common diagnostic pin -> enable learner.
+Older runtime sessions may continue unchanged, but their generation/digest
+cannot support a new-generation proposal. No formation changes occur.
+**Source:** `agent/profile_registry.py`, `agent/learning_policy.py`,
+`deploy/agentcore/cdk/cdk.json`, `deploy/s3_learning.py`.
 
 ## Pass inference
 
