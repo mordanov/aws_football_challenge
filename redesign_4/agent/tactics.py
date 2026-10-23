@@ -45,9 +45,17 @@ def command(s: Snapshot, pid: int, kind: str, **params) -> dict:
     }
 
 
-def movement(s: Snapshot, p: Player, x: float, y: float, urgent: bool = False) -> dict:
+def movement(
+    s: Snapshot,
+    p: Player,
+    x: float,
+    y: float,
+    urgent: bool = False,
+    *,
+    sprint_distance: float = 5.0,
+) -> dict:
     x, y = max(-54.0, min(54.0, x)), max(-34.0, min(34.0, y))
-    sprint = urgent and p.stamina >= 0.35 and distance(point(p), (x, y)) > 5
+    sprint = urgent and p.stamina >= 0.35 and distance(point(p), (x, y)) > sprint_distance
     return command(s, p.id, "MOVE_TO", target_x=round(x, 2), target_y=round(y, 2), sprint=sprint)
 
 
@@ -325,10 +333,12 @@ def decide(
             t = (x - s.ball[0]) / s.velocity[0]
             if 0 < t < 3:
                 y = s.ball[1] + s.velocity[1] * t
-                incoming = abs(y) <= 2.8
+                goal_t = (-d * 55 - s.ball[0]) / s.velocity[0]
+                goal_y = s.ball[1] + s.velocity[1] * goal_t
+                incoming = abs(y) <= 2.8 or (0 < goal_t < 3 and abs(goal_y) <= 3)
         y = max(-2.8, min(2.8, y))
         return Decision(
-            movement(s, p, x, y, urgent=incoming),
+            movement(s, p, x, y, urgent=incoming, sprint_distance=0.0),
             "keeper covers goal angle / projected shot",
             assignments=plan,
         )

@@ -481,6 +481,47 @@ All responses matched local commands; CloudWatch confirmed all 57 decisions
 under the new profile with no telemetry drop/delivery failures. These are
 synthetic integration checks, not a new portal verdict or competitive result.
 
+### Fourth real match: 1-3 loss and short-distance keeper reaction
+
+`report4.pdf` records Aleksalotl losing 1-3 to Total Attack United. Match
+`b5a0c118-b7d8-4de4-ac76-5e528604be19` ran `r4v4_match3_keeper_outlet`.
+The capture has 420 decisions across 88 observed ticks and five initial roster
+errors. Actual commands: 320 MOVE_TO, 29 MARK, 28 PASS, 26 INTERCEPT,
+11 PRESS_BALL, 5 SHOOT and 1 GK_DISTRIBUTE; 20 decisions warn of unresolved
+possession. The report's 88 SHOOT/two PASS/no MARK attribution conflicts with
+our logs; its opposing column resembles our decisions instead.
+
+Our coach advice suggests passing instead of indiscriminate shooting, but
+23 of our 28 pass decisions occur at frozen post-goal clocks. They establish
+neither an active passing loop nor completed build-up. Keep the passing/shooting
+weights rather than reacting to mislabeled counts. The opponent's advice about
+finishing precision and support motivates accurate, fast-shot adversarial tests.
+
+Two captured incoming-shot frames reveal the ordinary movement sprint guard
+suppresses keeper urgency for short distances. Tick 4959 projects to the
+reachable keeper plane in 0.392 seconds, with the full-stamina keeper 3.79
+canonical units from the target, below the ordinary five-unit sprint threshold.
+Tick 7560 projects to y=3.02 at that plane in 0.331 seconds, outside the existing
+2.8 movement clamp but inside the existing modeled goal mouth at the goal line.
+Both frames immediately precede observed score increases for the opponent.
+
+The correction permits nonzero-distance keeper sprint for explicitly free,
+incoming threatening trajectories, retaining stamina >=0.35. Threats crossing
+the modeled goal mouth can be urgent even when the movement target is clamped.
+The target plane, goal model, movement bounds and outfield sprint guard are
+unchanged. These commands do not guarantee movement, a save or a better result;
+exact platform geometry/save mechanics remain unverified. The first concession
+has no captured incoming-shot frame, and no specific fix is inferred for it.
+
+Replay changes exactly two of 420 decisions: keeper sprint false -> true at
+ticks 4959 and 7560, with identical targets. All five shots, passes, marks and
+distribution commands are preserved. Replaying report 3 retains its three shots
+and the previous keeper-distribution correction. The code-only profile version
+is `r4v5_match4_keeper_reaction`, with unchanged weights, coach policy and 1-1-2
+formation. Instructions and acceptance are in
+`../prompts/redesign_4_report4_fixes.md`. No offline AgentCore service integration
+is included in this match correction.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued

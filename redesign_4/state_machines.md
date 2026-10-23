@@ -25,8 +25,14 @@ compact geometry/fractional stamina. Fitness sessions retain the sample contract
 unrecognized non-fitness IDs retain it with an explicit diagnostic warning.
 The keeper projects only explicit free-ball flight onto its reachable movement
 plane, not the deeper goal line or a dribbler's velocity. Threatening reachable
-intersections can request sprint through the normal stamina/distance guard.
-Carrying uses that same guard, retaining non-sprint movement when depleted.
+intersections can request sprint with the normal stamina guard, even for a
+short nonzero move. A trajectory outside the lateral movement clamp but crossing
+the existing modeled goal mouth is also urgent; the target remains clamped.
+The keeper-plane crossing requires a positive time within three seconds;
+the additional goal-mouth test independently applies the same time bound.
+Carried/unknown or already-past trajectories do not enter this exception.
+Carrying retains the ordinary stamina and over-five-unit distance guards,
+including non-sprint movement when depleted.
 The shot candidate's range can extend by 18 canonical units (capped at 50)
 when the opposing keeper remains over 8 units behind the carrier after a
 0.8-second projection. Existing angle and lane guards still apply.

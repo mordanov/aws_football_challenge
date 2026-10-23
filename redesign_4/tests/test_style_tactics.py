@@ -327,6 +327,72 @@ class StrandedKeeperTest(unittest.TestCase):
                 self.assertNotEqual(decide(s, 4).command["commandType"], "SHOOT")
 
 
+class KeeperShotReactionTest(unittest.TestCase):
+    def shot(self, team, *, edge=False):
+        d = 1 if team == 0 else -1
+        s = snap(team=team, owner=None)
+        x, y = (-47.717096, 1.20353464) if edge else (-47.5479624, -1.77779696)
+        return replace(
+            s,
+            players=tuple(
+                replace(p, x=d * x, y=y, vx=0, vy=0, stamina=1)
+                if p.team == team and p.id == 0
+                else p
+                for p in s.players
+            ),
+            ball=(d * -10.6065608, 6.8950744) if edge else (d * -4.0808096, -10.1263304),
+            velocity=(d * -122.645096, -11.7009688) if edge else (d * -120.334744, 18.7536928),
+        )
+
+    def test_fast_shot_requests_short_distance_sprint_on_both_sides(self):
+        for team in (0, 1):
+            for edge in (False, True):
+                s = self.shot(team, edge=edge)
+                params = decide(s, 0, max_move_x=51.2).command["parameters"]
+                with self.subTest(team=team, edge=edge):
+                    self.assertTrue(params["sprint"])
+                    self.assertEqual(params["target_x"], -s.direction * 51.2)
+                    self.assertAlmostEqual(params["target_y"], 2.8 if edge else -2.78, places=2)
+                    tired = replace(
+                        s,
+                        players=tuple(
+                            replace(p, stamina=0.34) if p.team == team and p.id == 0 else p
+                            for p in s.players
+                        ),
+                    )
+                    self.assertFalse(
+                        decide(tired, 0, max_move_x=51.2).command["parameters"]["sprint"]
+                    )
+
+    def test_short_distance_exception_requires_an_incoming_goal_threat(self):
+        for team in (0, 1):
+            s = self.shot(team)
+            variants = (
+                replace(s, velocity=(-s.velocity[0], s.velocity[1])),
+                replace(s, velocity=(0, 0)),
+                replace(s, ball=(s.ball[0], 20), velocity=(s.velocity[0], 0)),
+                replace(s, free=False, owner=(1 - team, 4)),
+                replace(s, free=False, owner=None),
+                replace(s, ball=(-s.direction * 53, 0)),
+            )
+            for variant in variants:
+                with self.subTest(team=team, ball=variant.ball, owner=variant.owner):
+                    params = decide(variant, 0, max_move_x=51.2).command["parameters"]
+                    self.assertFalse(params["sprint"])
+
+    def test_keeper_already_on_clamped_shot_target_does_not_sprint(self):
+        for team in (0, 1):
+            s = self.shot(team, edge=True)
+            s = replace(
+                s,
+                players=tuple(
+                    replace(p, x=-s.direction * 51.2, y=2.8) if p.team == team and p.id == 0 else p
+                    for p in s.players
+                ),
+            )
+            self.assertFalse(decide(s, 0, max_move_x=51.2).command["parameters"]["sprint"])
+
+
 class KeeperDistributionTest(unittest.TestCase):
     def congested(self, team=0):
         # Full canonical player frame at report-3 tick 9786.

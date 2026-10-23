@@ -26,6 +26,9 @@ A selected attempted command, not evidence the server executed it.
 Carrying shares movement's stamina/distance sprint guard. A clearly stranded
 opposing keeper permits bounded longer shots, subject to normal angle and
 lane checks; it does not establish an empty net or a guaranteed goal.
+Keeper reactions to explicitly free incoming goal threats retain the stamina
+guard but permit short nonzero-distance sprints. Threat classification may use
+the modeled goal crossing while movement still targets its reachable plane.
 _Avoid_: outcome, accepted action.
 
 **Keeper outlet**:

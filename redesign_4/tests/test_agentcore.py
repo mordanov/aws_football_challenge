@@ -16,6 +16,45 @@ from agent.runtime import Runtime
     importlib.util.find_spec("bedrock_agentcore"), "optional deployment SDK absent"
 )
 class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
+    def test_fast_shot_keeper_reaction_survives_compact_conversion(self):
+        runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=lambda _: None)
+        self.addCleanup(runtime.close)
+        for team, d in ((0, 1), (1, -1)):
+            for edge in (False, True):
+                data = json.loads(payload(owner=None, team=team, pid=0)["prompt"])
+                for player in data["gameState"]["players"]:
+                    player["position"] = {k: v / 8 for k, v in player["position"].items()}
+                    player["stamina"] = 1
+                keeper = data["gameState"]["players"][team * 5]
+                keeper["position"] = {
+                    "x": d * (-47.717096 if edge else -47.5479624) / 8,
+                    "y": (1.20353464 if edge else -1.77779696) / 8,
+                }
+                data["gameState"]["ball"].update(
+                    position={
+                        "x": d * (-10.6065608 if edge else -4.0808096) / 8,
+                        "y": 0.14,
+                        "z": (6.8950744 if edge else -10.1263304) / 8,
+                    },
+                    velocity={
+                        "x": d * (-122.645096 if edge else -120.334744) / 8,
+                        "y": 0,
+                        "z": (-11.7009688 if edge else 18.7536928) / 8,
+                    },
+                )
+                action = json.loads(
+                    runtime.handle(
+                        data,
+                        session_id=f"b5a0c118-b7d8-4de4-ac76-5e528604be19-team{team}-pos0",
+                    )
+                )[0]
+                self.assertEqual(action["commandType"], "MOVE_TO")
+                self.assertTrue(action["parameters"]["sprint"])
+                self.assertEqual(action["parameters"]["target_x"], -6.4 * d)
+                self.assertAlmostEqual(
+                    action["parameters"]["target_y"], 0.35 if edge else -0.347, places=3
+                )
+
     def test_compact_keeper_projection_uses_the_clipped_wire_plane(self):
         runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=lambda _: None)
         self.addCleanup(runtime.close)
