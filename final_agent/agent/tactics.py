@@ -254,25 +254,31 @@ def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str
 
 
 def carrier_options(
-    s: Snapshot, p: Player, settings: Settings, style: Style = DEFAULT_STYLE
+    s: Snapshot,
+    p: Player,
+    settings: Settings,
+    style: Style = DEFAULT_STYLE,
+    *,
+    gk_as_field: bool = False,
 ) -> list[tuple[float, dict, str]]:
     options = []
     keeper_outlets = []
-    if style.carry > 0 and p.id != 0:
+    is_gk = p.id == 0 and not gk_as_field
+    if style.carry > 0 and not is_gk:
         options.append(carry_option(s, p, style))
     shot = shot_option(s, p, settings)
-    if shot is not None and p.id != 0:
+    if shot is not None and not is_gk:
         options.append(shot)
     for mate in s.ours:
         if mate.id == p.id:
             continue
         length = distance(point(p), point(mate))
-        if p.id != 0 and (length < 3 or length > 60):
+        if not is_gk and (length < 3 or length > 60):
             continue
         lane = clearance(point(p), point(mate), s.opponents)
         pressure = min(distance(point(mate, 0.5), point(o, 0.5)) for o in s.opponents)
         safe = 3 <= length <= 60 and min(lane, pressure) >= settings.pass_margin
-        if not safe and p.id != 0:
+        if not safe and not is_gk:
             continue
         gain = s.direction * (mate.x - p.x)
         score = 22 + min(pressure, 12) * 2 + 0.6 * gain + min(lane, 8)
@@ -290,9 +296,9 @@ def carrier_options(
         through = high_line and mate.id in (3, 4) and gain > 10 and pressure > 6
         if through:
             score += 12
-        kind = "GK_DISTRIBUTE" if p.id == 0 else "PASS"
+        kind = "GK_DISTRIBUTE" if is_gk else "PASS"
         params: dict[str, int | str] = {"target_player_id": mate.id}
-        if p.id == 0:
+        if is_gk:
             params["method"] = "THROW" if safe and length < 25 else "KICK"
         else:
             params["type"] = (
@@ -307,12 +313,12 @@ def carrier_options(
         )
         if safe:
             options.append(candidate)
-        elif p.id == 0:
+        elif is_gk:
             keeper_outlets.append(candidate)
     calm = min(distance(point(p), point(o)) for o in s.opponents) > 8
     hold = max(0.0, 0.5 - style.tempo) * 120 if calm else 0.0
-    safe_keeper_outlet = p.id == 0 and bool(options)
-    if p.id == 0:
+    safe_keeper_outlet = is_gk and bool(options)
+    if is_gk:
         options = options or keeper_outlets
     else:
         options.append(
@@ -405,15 +411,24 @@ def decide(
     max_move_x: float = 54.0,
 ) -> Decision:
     s, p = snapshot, snapshot.player(player_id)
-    plan = assignments(s, settings)
+    rush, stage = _tactical_context(s)
+    plan = {**assignments(s, settings), "rush": rush, "stage": stage}
     if s.owner == (s.team, player_id):
-        choices = carrier_options(s, p, settings, style)
+        choices = (
+            carrier_options(s, p, settings, style, gk_as_field=True)
+            if player_id == 0 and stage == 2
+            else carrier_options(s, p, settings, style)
+        )
         _, selected, reason = choices[0]
         alternatives = tuple(
             {"score": round(score, 3), "command": cmd, "reason": why} for score, cmd, why in choices
         )
         return Decision(selected, reason, alternatives, plan)
     if player_id == 0:
+        if stage == 2:
+            x = s.direction * 0.10 * _HALF_LENGTH
+            y = max(-6.0, min(6.0, s.ball[1] * 0.3))
+            return Decision(movement(s, p, x, y, urgent=True), "stage 2: GK advances", assignments=plan)
         d = s.direction
         x = -d * min(52.0, max_move_x)
         depth = 55 + d * x
@@ -471,6 +486,15 @@ def decide(
             assignments=plan,
         )
     x, y = support(s, p, settings, plan, style.formation)
+    if rush and player_id == 2:
+        x, y = s.direction * 0.30 * _HALF_LENGTH, 0.0
+    elif rush and player_id in (3, 4):
+        lat = -0.22 * _HALF_WIDTH if player_id == 3 else 0.22 * _HALF_WIDTH
+        x, y = s.direction * 0.62 * _HALF_LENGTH, lat
+    if stage >= 1 and player_id == 1:
+        x, y = s.direction * (-0.08) * _HALF_LENGTH, 0.0
+    elif stage >= 1 and player_id == 2:
+        x, y = s.direction * 0.45 * _HALF_LENGTH, 0.0
     x = capped(s, x, cap)
     return Decision(
         movement(s, p, x, y, urgent=s.owner is not None and s.owner[0] != s.team),

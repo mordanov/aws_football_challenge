@@ -179,6 +179,8 @@ class Runtime:
                 if compact
                 else decision.alternatives,
                 "assignments": decision.assignments,
+                "rush": (decision.assignments or {}).get("rush", 0),
+                "stage": (decision.assignments or {}).get("stage", 0),
                 "latency_ms": round((time.perf_counter() - start) * 1000, 3),
                 "learning_context": "identified"
                 if self.match_id and self.opponent_id

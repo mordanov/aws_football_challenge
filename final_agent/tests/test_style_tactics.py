@@ -31,7 +31,7 @@ def snap(team=0, ours=None, theirs=None, ball=(-5, 0), owner=(0, 2)):
     return Snapshot(
         team,
         10,
-        10.0,
+        30.0,  # outside rush window (RUSH_S=15) so new tactics don't fire
         120.0,
         players,
         (m * ball[0], ball[1]),

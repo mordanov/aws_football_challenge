@@ -84,31 +84,33 @@ class TacticalContextTest(unittest.TestCase):
 
 
 class RushTest(unittest.TestCase):
+    # owner=(0, 0): GK has ball → players 1-4 are in support branch (MOVE_TO), no presser/marks.
     def test_rush_pushes_mid_fwd_forward(self):
-        """AT-1: players 2,3,4 further forward at t=5 than t=40; 0,1 unchanged."""
+        """AT-1: players 2,3,4 further forward at t=5 than t=40; player 1 (DEF) unchanged."""
         for team in (0, 1):
             d = 1 if team == 0 else -1
-            rush_s = snap120(team=team, clock=5.0, score=(0, 0), owner=(0, 2))
-            late_s = snap120(team=team, clock=40.0, score=(0, 0), owner=(0, 2))
+            rush_s = snap120(team=team, clock=5.0, score=(0, 0), owner=(0, 0))
+            late_s = snap120(team=team, clock=40.0, score=(0, 0), owner=(0, 0))
             for pid in (2, 3, 4):
                 rx = target(decide(rush_s, pid))[0]
                 lx = target(decide(late_s, pid))[0]
                 with self.subTest(team=team, pid=pid):
                     self.assertGreater(d * rx, d * lx, f"pid={pid} not further forward in rush")
-            for pid in (0, 1):
-                rx = target(decide(rush_s, pid))
-                lx = target(decide(late_s, pid))
-                with self.subTest(team=team, pid=pid):
-                    self.assertAlmostEqual(rx[0], lx[0], delta=1.0)
+            # DEF position unchanged (GK is carrier so skip pid=0)
+            rx1 = target(decide(rush_s, 1))[0]
+            lx1 = target(decide(late_s, 1))[0]
+            with self.subTest(team=team, pid=1):
+                self.assertAlmostEqual(rx1, lx1, delta=1.0)
 
     def test_rush_off_when_conditions_fail(self):
-        """AT-2: no rush when ball at opponent, time >= 15, or score != 0:0."""
-        opp_has = snap120(clock=5.0, score=(0, 0), owner=(1, 1))
-        late = snap120(clock=16.0, score=(0, 0), owner=(0, 2))
-        scored = snap120(clock=5.0, score=(1, 0), owner=(0, 2))
-        normal_x = {pid: target(decide(scored, pid))[0] for pid in (2, 3, 4)}
+        """AT-2: rush off when time >= 15 or score != 0:0; positions equal normal play."""
+        # Use owner=(0, 0) so players 2,3,4 are in support branch (MOVE_TO) in all cases.
+        scored = snap120(clock=5.0, score=(1, 0), owner=(0, 0))   # score not 0:0 → no rush
+        late = snap120(clock=16.0, score=(0, 0), owner=(0, 0))    # clock >= 15 → no rush
+        normal = snap120(clock=40.0, score=(0, 0), owner=(0, 0))  # clearly off
+        normal_x = {pid: target(decide(normal, pid))[0] for pid in (2, 3, 4)}
         for pid in (2, 3, 4):
-            for s, label in ((opp_has, "opp_has"), (late, "late"), (scored, "scored")):
+            for s, label in ((late, "late"), (scored, "scored")):
                 with self.subTest(pid=pid, case=label):
                     self.assertAlmostEqual(
                         target(decide(s, pid))[0], normal_x[pid], delta=0.5
@@ -116,8 +118,8 @@ class RushTest(unittest.TestCase):
 
     def test_rush_disabled_by_env_var(self):
         """AT-8: RUSH_ENABLED=0 gives same positions as normal play."""
-        rush_s = snap120(clock=5.0, score=(0, 0), owner=(0, 2))
-        normal = snap120(clock=40.0, score=(0, 0), owner=(0, 2))
+        rush_s = snap120(clock=5.0, score=(0, 0), owner=(0, 0))
+        normal = snap120(clock=40.0, score=(0, 0), owner=(0, 0))
         with unittest.mock.patch.dict(os.environ, {"RUSH_ENABLED": "0"}):
             for pid in (2, 3, 4):
                 with self.subTest(pid=pid):
@@ -128,19 +130,25 @@ class RushTest(unittest.TestCase):
                     )
 
 
+def _losing(team: int) -> tuple[int, int]:
+    """Score tuple where `team` is losing 0:1."""
+    return (0, 1) if team == 0 else (1, 0)
+
+
 class DesperateAttackTest(unittest.TestCase):
     def test_role_swap_stage1(self):
         """AT-3: players 1,2 further forward when losing 25s left vs 60s left."""
+        # owner=(0, 0): GK has ball → players 1-4 in support branch (MOVE_TO).
         for team in (0, 1):
             d = 1 if team == 0 else -1
-            desperate = snap120(team=team, clock=95.0, score=(0, 1))  # 25s left, losing
-            normal = snap120(team=team, clock=60.0, score=(0, 1))  # 60s left, losing
+            desperate = snap120(team=team, clock=95.0, score=_losing(team), owner=(0, 0))
+            normal = snap120(team=team, clock=60.0, score=_losing(team), owner=(0, 0))
             for pid in (1, 2):
                 dx = target(decide(desperate, pid))[0]
                 nx = target(decide(normal, pid))[0]
                 with self.subTest(team=team, pid=pid):
                     self.assertGreater(d * dx, d * nx)
-            draw = snap120(team=team, clock=95.0, score=(1, 1))
+            draw = snap120(team=team, clock=95.0, score=(1, 1), owner=(0, 0))
             for pid in (1, 2):
                 with self.subTest(team=team, pid=pid, case="draw"):
                     self.assertAlmostEqual(
@@ -151,36 +159,39 @@ class DesperateAttackTest(unittest.TestCase):
 
     def test_gk_advances_in_stage2(self):
         """AT-4: GK past center with DRAW_AT_ANY_COST=1, losing, 8s left; stays home otherwise."""
+        # owner=(0, 1): our DEF has ball → GK is NOT carrier, goes to GK branch → MOVE_TO.
         for team in (0, 1):
             d = 1 if team == 0 else -1
-            s = snap120(team=team, clock=112.0, score=(0, 1))
+            s = snap120(team=team, clock=112.0, score=_losing(team), owner=(0, 1))
             with unittest.mock.patch.dict(os.environ, {"DRAW_AT_ANY_COST": "1"}):
                 gk_x = target(decide(s, 0))[0]
             self.assertGreater(d * gk_x, 0, f"GK should be past center (team {team})")
-            draw = snap120(team=team, clock=112.0, score=(1, 1))
+            draw = snap120(team=team, clock=112.0, score=(1, 1), owner=(0, 1))
             with unittest.mock.patch.dict(os.environ, {"DRAW_AT_ANY_COST": "1"}):
                 gk_x2 = target(decide(draw, 0))[0]
             self.assertLess(d * gk_x2, 0, "GK should stay home when drawing")
             gk_x3 = target(decide(s, 0))[0]
             self.assertLess(d * gk_x3, 0, "GK should stay home without flag")
-            s_early = snap120(team=team, clock=90.0, score=(0, 1))
+            s_early = snap120(team=team, clock=90.0, score=_losing(team), owner=(0, 1))
             with unittest.mock.patch.dict(os.environ, {"DRAW_AT_ANY_COST": "1"}):
                 gk_x4 = target(decide(s_early, 0))[0]
             self.assertLess(d * gk_x4, 0, "GK stays home at 30s remaining")
 
     def test_direction_correct_when_gk_advanced(self):
         """AT-5: outfield players still attack correct direction when GK is past center."""
+        # owner=(0, 1): our DEF has ball → no marks/presser, players in support branch.
         for team in (0, 1):
             d = 1 if team == 0 else -1
             gk_pos = (8.0 * d, 0.0)
             ours = [(gk_pos[0], gk_pos[1]), (-28, 0), (-5, 0), (20, -15), (23, 15)]
-            s = snap120(team=team, clock=112.0, score=(0, 1), owner=(1, 1), ours=ours)
+            s = snap120(team=team, clock=112.0, score=_losing(team), owner=(0, 1), ours=ours)
             with unittest.mock.patch.dict(os.environ, {"DRAW_AT_ANY_COST": "1"}):
                 fwd4_x = target(decide(s, 4))[0]
             self.assertGreater(d * fwd4_x, 0, f"FWD should still attack forward (team {team})")
 
     def test_gk_with_ball_acts_as_field_player_in_stage2(self):
         """AT-6: GK in stage 2 uses PASS/SHOOT not GK_DISTRIBUTE."""
+        # team=0, score=(0,1): team 0 losing, 8s left → stage 2 with flag.
         s = snap120(clock=112.0, score=(0, 1), owner=(0, 0))
         with unittest.mock.patch.dict(os.environ, {"DRAW_AT_ANY_COST": "1"}):
             decision = decide(s, 0)
