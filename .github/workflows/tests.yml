@@ -35,3 +35,35 @@ jobs:
           PYTHONPATH=src pytest tests/ \
             --ignore=tests/test_viewer.py \
             -v --tb=short
+
+  redesign4-tests:
+    name: Redesign 4 tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    defaults:
+      run:
+        working-directory: redesign_4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and test tools
+        run: pip install -e ".[offline,dev]"
+
+      - name: Run agent tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Lint
+        run: ruff check agent tests
+
+      - name: Type check
+        run: mypy

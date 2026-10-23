@@ -1,302 +1,167 @@
-"""Tests for AgentCoreMemory: isolation, idempotency, expiry, access denial."""
+"""SDK-shaped Memory events: trusted identity, integrity, expiry and pagination."""
 
 from __future__ import annotations
 
+import copy
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from agent.advisor.offline.contracts import OfflineServiceError
+from agent.advisor.offline.memory import AgentCoreMemory
 from tests.offline_support import make_config, make_note, make_packet
-
-_NOW = datetime.now(tz=timezone.utc)
-_FUTURE = _NOW + timedelta(days=365)
-_EXPIRED = _NOW - timedelta(days=1)
-
-
-# ── Fake boto3-style AgentCore Memory client ──────────────────────────────────
 
 
 class FakeMemoryClient:
-    """Records create_event/list_events/retrieve_memory_records calls.
+    """The actual event shape, including session-scoped, paginated payloads."""
 
-    No AWS credentials are discovered, cached or used.
-    Published events are stored in memory; list_events returns them filtered
-    by actorId. retrieve_memory_records returns configurable semantic records.
-    """
-
-    def __init__(
-        self,
-        *,
-        semantic_records: list[dict[str, Any]] | None = None,
-        create_side_effect: Exception | None = None,
-        list_side_effect: Exception | None = None,
-        retrieve_side_effect: Exception | None = None,
-    ) -> None:
+    def __init__(self) -> None:
         self.created: list[dict[str, Any]] = []
         self.listed: list[dict[str, Any]] = []
-        self.retrieved_queries: list[dict[str, Any]] = []
-        self._semantic_records = semantic_records or []
-        self._create_side_effect = create_side_effect
-        self._list_side_effect = list_side_effect
-        self._retrieve_side_effect = retrieve_side_effect
-        self._events: list[dict[str, Any]] = []
+        self.events: list[dict[str, Any]] = []
+        self.failure: Exception | None = None
 
     def create_event(self, **kwargs: Any) -> dict[str, Any]:
-        if self._create_side_effect:
-            raise self._create_side_effect
+        if self.failure:
+            raise self.failure
         self.created.append(kwargs)
-        self._events.append(kwargs)
-        return {"eventId": f"evt-{len(self._events):04d}"}
+        event = {k: v for k, v in kwargs.items() if k != "clientToken"}
+        self.events.append(copy.deepcopy(event))
+        return {"event": event}
 
     def list_events(self, **kwargs: Any) -> dict[str, Any]:
-        if self._list_side_effect:
-            raise self._list_side_effect
+        if self.failure:
+            raise self.failure
         self.listed.append(kwargs)
-        actor_id = kwargs.get("actorId", "")
-        matching = [e for e in self._events if e.get("actorId") == actor_id]
-        max_r = kwargs.get("maxResults", 100)
-        return {"events": matching[:max_r]}
-
-    def retrieve_memory_records(self, **kwargs: Any) -> dict[str, Any]:
-        if self._retrieve_side_effect:
-            raise self._retrieve_side_effect
-        self.retrieved_queries.append(kwargs)
-        return {"memoryRecords": self._semantic_records}
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _make_memory(client=None, *, max_records: int = 20):
-    from agent.advisor.offline.memory import AgentCoreMemory
-
-    cfg = make_config()
-    return AgentCoreMemory(client or FakeMemoryClient(), cfg, max_records=max_records)
-
-
-def _note_with_expiry(expires_at: datetime, *, opponent_id: str = "redesign_3_v1"):
-    packet = make_packet(opponent_id=opponent_id)
-    # Rebuild note with custom expiry
-    from agent.advisor.offline.contracts import ScoutingNote
-
-    base = make_note(packet=packet)
-    return ScoutingNote(
-        note_id=base.note_id,
-        team_id=base.team_id,
-        opponent_id=base.opponent_id,
-        match_id=base.match_id,
-        profile_version=base.profile_version,
-        played_at=base.played_at,
-        expires_at=expires_at,
-        packet_digest=base.packet_digest,
-        claims=base.claims,
-    )
-
-
-class PublishTest(unittest.TestCase):
-    def test_publish_returns_note_id(self):
-        mem = _make_memory()
-        note = make_note()
-        packet = make_packet()
-        result = mem.publish(note, packet)
-        self.assertEqual(result, note.note_id)
-
-    def test_publish_calls_create_event_once(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-        note = make_note()
-        packet = make_packet()
-        mem.publish(note, packet)
-        self.assertEqual(len(client.created), 1)
-
-    def test_publish_uses_memory_store_id_from_config(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-        note = make_note()
-        packet = make_packet()
-        mem.publish(note, packet)
-        self.assertEqual(client.created[0]["memoryStoreId"], "memory-store-001")
-
-    def test_publish_same_note_uses_same_session_id(self):
-        """Same note+match produces same sessionId — idempotency token."""
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-        note = make_note()
-        packet = make_packet()
-        mem.publish(note, packet)
-        mem.publish(note, packet)
-        session_ids = [c["sessionId"] for c in client.created]
-        self.assertEqual(session_ids[0], session_ids[1])
-
-    def test_publish_envelope_contains_note_fields(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-        note = make_note()
-        packet = make_packet()
-        mem.publish(note, packet)
-        messages = client.created[0]["messages"]
-        text = messages[0]["content"][0]["text"]
-        envelope = json.loads(text)
-        self.assertEqual(envelope["note_id"], note.note_id)
-        self.assertEqual(envelope["opponent_id"], note.opponent_id)
-        self.assertEqual(envelope["packet_digest"], note.packet_digest)
-
-    def test_publish_service_error_raises_offline_service_error(self):
-        from agent.advisor.offline.contracts import OfflineServiceError
-
-        client = FakeMemoryClient(create_side_effect=RuntimeError("network"))
-        mem = _make_memory(client)
-        note = make_note()
-        packet = make_packet()
-        with self.assertRaises(OfflineServiceError) as ctx:
-            mem.publish(note, packet)
-        self.assertEqual(ctx.exception.service, "memory")
-        self.assertEqual(ctx.exception.stage, "publish")
-
-
-class RetrieveIsolationTest(unittest.TestCase):
-    """Opponent notes must not cross into a different opponent's retrieval."""
-
-    def test_opponent_notes_not_returned_for_different_opponent(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-
-        note_a = _note_with_expiry(_FUTURE, opponent_id="opp-a")
-        note_b = _note_with_expiry(_FUTURE, opponent_id="opp-b")
-        packet_a = make_packet(opponent_id="opp-a")
-        packet_b = make_packet(opponent_id="opp-b")
-
-        mem.publish(note_a, packet_a)
-        mem.publish(note_b, packet_b)
-
-        # Retrieve for opp-a; must not include opp-b's note
-        ctx_a = mem.retrieve(packet_a)
-        opponent_ids = {n.opponent_id for n in ctx_a.notes}
-        self.assertNotIn("opp-b", opponent_ids)
-
-    def test_retrieve_returns_only_matching_opponent(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-
-        note = _note_with_expiry(_FUTURE, opponent_id="opp-target")
-        packet = make_packet(opponent_id="opp-target")
-        mem.publish(note, packet)
-
-        ctx = mem.retrieve(packet)
-        for n in ctx.notes:
-            self.assertEqual(n.opponent_id, "opp-target")
-
-
-class RetrieveExpiryTest(unittest.TestCase):
-    def test_expired_note_excluded_from_context(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-
-        note = _note_with_expiry(_EXPIRED)
-        packet = make_packet()
-        mem.publish(note, packet)
-
-        ctx = mem.retrieve(packet)
-        self.assertEqual(len(ctx.notes), 0)
-
-    def test_valid_note_included_in_context(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-
-        note = _note_with_expiry(_FUTURE)
-        packet = make_packet()
-        mem.publish(note, packet)
-
-        ctx = mem.retrieve(packet)
-        self.assertEqual(len(ctx.notes), 1)
-
-
-class RetrievePaginationTest(unittest.TestCase):
-    def test_max_records_passed_to_list_events(self):
-        client = FakeMemoryClient()
-        mem = _make_memory(client, max_records=5)
-        packet = make_packet()
-        mem.retrieve(packet)
-        self.assertEqual(client.listed[0]["maxResults"], 5)
-
-
-class RetrieveAccessDenialTest(unittest.TestCase):
-    """Service failure must raise, not return empty context."""
-
-    def test_list_events_failure_raises_offline_service_error(self):
-        from agent.advisor.offline.contracts import OfflineServiceError
-
-        client = FakeMemoryClient(list_side_effect=PermissionError("access denied"))
-        mem = _make_memory(client)
-        packet = make_packet()
-        with self.assertRaises(OfflineServiceError) as ctx:
-            mem.retrieve(packet)
-        self.assertEqual(ctx.exception.service, "memory")
-        self.assertIn("retrieve", ctx.exception.stage)
-
-
-class RetrieveSemanticTest(unittest.TestCase):
-    def test_semantic_failure_recorded_as_excluded_not_raised(self):
-        """Semantic retrieval failure degrades to excluded, does not abort retrieve."""
-        client = FakeMemoryClient(retrieve_side_effect=RuntimeError("timeout"))
-        mem = _make_memory(client)
-        note = _note_with_expiry(_FUTURE)
-        packet = make_packet()
-        mem.publish(note, packet)
-
-        ctx = mem.retrieve(packet)
-        # Should still return the exact note; semantic failure is excluded
-        self.assertEqual(len(ctx.notes), 1)
-        self.assertTrue(any("semantic" in e for e in ctx.excluded))
-
-    def test_unlinked_semantic_text_is_excluded_not_accepted(self):
-        """Semantic text without a matching packet_digest is excluded."""
-        sem = [{"content": {"text": "some extracted text"}, "metadata": {}}]
-        client = FakeMemoryClient(semantic_records=sem)
-        mem = _make_memory(client)
-        note = _note_with_expiry(_FUTURE)
-        packet = make_packet()
-        mem.publish(note, packet)
-
-        ctx = mem.retrieve(packet)
-        self.assertNotIn("some extracted text", ctx.extracted_text)
-        self.assertTrue(any("provenance_unlinked" in e for e in ctx.excluded))
-
-    def test_linked_semantic_text_is_included(self):
-        """Semantic text linked to a known packet_digest is included."""
-        # First publish to get packet_digest
-        client = FakeMemoryClient()
-        mem = _make_memory(client)
-        note = _note_with_expiry(_FUTURE)
-        packet = make_packet()
-        mem.publish(note, packet)
-
-        # Rebuild client with semantic record that has the right digest
-        sem = [
-            {
-                "content": {"text": "linked scouting insight"},
-                "metadata": {"packet_digest": note.packet_digest},
-            }
+        events = [
+            event for event in self.events
+            if event["actorId"] == kwargs["actorId"] and event["sessionId"] == kwargs["sessionId"]
         ]
-        client2 = FakeMemoryClient(semantic_records=sem)
-        # Inject the already-stored event
-        client2._events = client._events[:]
-        mem2_cfg = make_config()
-        from agent.advisor.offline.memory import AgentCoreMemory
-
-        mem2 = AgentCoreMemory(client2, mem2_cfg)
-        ctx = mem2.retrieve(packet)
-        self.assertIn("linked scouting insight", ctx.extracted_text)
+        start = int(kwargs.get("nextToken", "0"))
+        end = start + kwargs["maxResults"]
+        response: dict[str, Any] = {"events": events[start:end]}
+        if end < len(events):
+            response["nextToken"] = str(end)
+        return response
 
 
-# Structural check: AgentCoreMemory satisfies ScoutStore at import time.
-def _check_protocol() -> None:
-    from agent.advisor.offline.contracts import ScoutStore
-    from agent.advisor.offline.memory import AgentCoreMemory
+class MemoryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.client = FakeMemoryClient()
+        self.memory = AgentCoreMemory(self.client, make_config())
+        self.packet = make_packet()
+        self.note = make_note(packet=self.packet)
 
-    _: ScoutStore = AgentCoreMemory(FakeMemoryClient(), make_config())  # type: ignore[type-abstract]
+    def test_round_trip_and_explicit_semantic_exclusion(self) -> None:
+        self.assertEqual(self.memory.publish(self.note, self.packet), self.note.note_id)
+        context = self.memory.retrieve(self.packet)
+        self.assertEqual(context.notes, (self.note,))
+        self.assertEqual(context.extracted_text, ())
+        self.assertIn("semantic_retrieval_disabled:no_trusted_record_link", context.excluded)
+        self.assertTrue(self.client.listed[0]["includePayloads"])
 
+    def test_opponent_session_shared_across_matches_not_across_opponents(self) -> None:
+        packets = [
+            self.packet, make_packet(match_id="second-match"),
+            make_packet(opponent_id="other-opponent"),
+        ]
+        for packet in packets:
+            self.memory.publish(make_note(packet=packet), packet)
+        self.assertEqual(self.client.created[0]["sessionId"], self.client.created[1]["sessionId"])
+        self.assertNotEqual(self.client.created[0]["sessionId"], self.client.created[2]["sessionId"])
+        self.assertEqual(len(self.memory.retrieve(self.packet).notes), 2)
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_note_digest_is_idempotency_token_and_duplicates_are_deduplicated(self) -> None:
+        self.memory.publish(self.note, self.packet)
+        self.memory.publish(self.note, self.packet)
+        self.assertEqual(self.client.created[0]["clientToken"], self.client.created[1]["clientToken"])
+        self.assertEqual(self.memory.retrieve(self.packet).notes, (self.note,))
+
+    def test_rejects_untrusted_note_identity_digest_claims_and_extended_expiry(self) -> None:
+        for update in (
+            {"team_id": "other"}, {"opponent_id": "other"}, {"match_id": "other"},
+            {"profile_version": "other"}, {"packet_digest": "0" * 64},
+            {"played_at": self.note.played_at - timedelta(seconds=1)},
+            {"expires_at": self.packet.expires_at + timedelta(days=1)},
+            {"claims": (self.note.claims[0].model_copy(update={"text": "invented"}),)},
+        ):
+            with self.subTest(update=update), self.assertRaises(OfflineServiceError):
+                self.memory.publish(self.note.model_copy(update=update), self.packet)
+        self.assertEqual(self.client.created, [])
+
+    def test_invalid_and_expired_events_are_excluded_without_aborting_page(self) -> None:
+        self.memory.publish(self.note, self.packet)
+        good = copy.deepcopy(self.client.events[0])
+        mutations = [
+            lambda e: e.update(memoryId="another-memory"),
+            lambda e: e.update(eventTimestamp=self.packet.played_at + timedelta(seconds=1)),
+            lambda e: e.update(payload=[]),
+            lambda e: e.update(payload=[{"conversational": {"role": "USER",
+                                                           "content": {"text": "[]"}}}]),
+        ]
+        for mutate in mutations:
+            event = copy.deepcopy(good)
+            mutate(event)
+            self.client.events.append(event)
+        for key, value in (
+            ("note_digest", "0" * 64),
+            ("note", {"expires_at": "2027-01-01"}),
+            ("packet", {"match_id": "tampered"}),
+        ):
+            event = copy.deepcopy(good)
+            content = event["payload"][0]["conversational"]["content"]
+            env = json.loads(content["text"])
+            if isinstance(value, dict):
+                env[key].update(value)
+            else:
+                env[key] = value
+            content["text"] = json.dumps(env)
+            self.client.events.append(event)
+        now = datetime.now(timezone.utc)
+        expired = self.packet.model_copy(update={
+            "played_at": now - timedelta(days=2), "expires_at": now - timedelta(days=1),
+        })
+        self.memory.publish(make_note(packet=expired), expired)
+        context = self.memory.retrieve(self.packet)
+        self.assertEqual(context.notes, (self.note,))
+        self.assertEqual(context.excluded.count("invalid_or_expired_event"), 8)
+
+    def test_pagination_finds_note_after_expired_page_and_bounds_results(self) -> None:
+        memory = AgentCoreMemory(self.client, make_config(), max_records=1)
+        now = datetime.now(timezone.utc)
+        expired = self.packet.model_copy(update={
+            "played_at": now - timedelta(days=2), "expires_at": now - timedelta(days=1),
+        })
+        memory.publish(make_note(packet=expired), expired)
+        memory.publish(self.note, self.packet)
+        self.assertEqual(memory.retrieve(self.packet).notes, (self.note,))
+        self.assertEqual(self.client.listed[1]["nextToken"], "1")
+
+    def test_repeating_token_fails_and_page_limit_is_reported(self) -> None:
+        class Pages(FakeMemoryClient):
+            def list_events(self, **kwargs: Any) -> dict[str, Any]:
+                self.listed.append(kwargs)
+                return {"events": [], "nextToken": str(len(self.listed))}
+
+        pages = Pages()
+        memory = AgentCoreMemory(pages, make_config())
+        self.assertIn("event_page_limit", memory.retrieve(self.packet).excluded)
+        self.assertEqual(len(pages.listed), 10)
+
+        class Repeated(FakeMemoryClient):
+            def list_events(self, **kwargs: Any) -> dict[str, Any]:
+                return {"events": [], "nextToken": "same"}
+
+        with self.assertRaises(OfflineServiceError):
+            AgentCoreMemory(Repeated(), make_config()).retrieve(self.packet)
+
+    def test_service_failures_are_explicit_with_cause(self) -> None:
+        self.client.failure = PermissionError("denied")
+        with self.assertRaises(OfflineServiceError) as publish:
+            self.memory.publish(self.note, self.packet)
+        with self.assertRaises(OfflineServiceError) as retrieve:
+            self.memory.retrieve(self.packet)
+        for error in (publish.exception, retrieve.exception):
+            self.assertIs(error.__cause__, self.client.failure)
+            self.assertEqual(error.service, "memory")

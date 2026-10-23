@@ -17,9 +17,9 @@ Commands:
 
 Exit codes: 0=success, 1=user error, 2=service/validation failure.
 
-Cost controls: doctor reports unknown pricing; no dollar estimate is claimed.
-Every apply call enforces finite page/token/session limits; actual usage is
-not a hard budget enforcement.
+Cost controls: resource creation bounds memory retention and judge tokens.
+This script does not invoke models or start interpreter sessions; configuration
+limits are not a hard dollar budget.
 
 AWS AUTHORIZATION: This script is ready to run but does NOT provision, change
 IAM or delete unless --approve is passed AND the caller has verified
@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -37,6 +38,8 @@ from typing import Any
 
 DEPLOY = Path(__file__).resolve().parent
 ROOT = DEPLOY.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 # ── SDK shape constants (verified against published API) ─────────────────────
 
@@ -44,7 +47,72 @@ _NETWORK_MODE_SANDBOX = "SANDBOX"
 _EVALUATOR_LEVEL_TRACE = "TRACE"
 _POLL_INTERVAL = 5  # seconds between readiness polls
 _POLL_DEADLINE = 120  # maximum seconds to wait for resource activation
-_MAX_RETRIES = 3
+_RESOURCES = {
+    "memory": ("Memory", "memoryId", "memory"),
+    "interpreter": ("CodeInterpreter", "codeInterpreterId", "code-interpreter-custom"),
+    "evaluator": ("Evaluator", "evaluatorId", "evaluator"),
+}
+
+
+def _validate_request(operation: str, request: dict[str, Any]) -> dict[str, Any]:
+    """Validate offline, including patterns/enums which botocore does not enforce."""
+    import botocore.session
+    from botocore.exceptions import ParamValidationError
+    from botocore.validate import validate_parameters
+
+    shape = botocore.session.get_session().get_service_model(
+        "bedrock-agentcore-control"
+    ).operation_model(operation).input_shape
+    try:
+        validate_parameters(request, shape)
+    except ParamValidationError as exc:
+        raise ValueError(f"{operation}: {exc}") from exc
+
+    def check(value: Any, member: Any, path: str) -> None:
+        if member.type_name == "structure":
+            for key, item in value.items():
+                check(item, member.members[key], f"{path}.{key}")
+        elif member.type_name == "list":
+            for item in value:
+                check(item, member.member, path)
+        elif member.type_name == "map":
+            for key, item in value.items():
+                check(key, member.key, f"{path}.key")
+                check(item, member.value, path)
+        elif member.type_name == "string":
+            metadata = member.metadata
+            if "pattern" in metadata and not re.fullmatch(metadata["pattern"], value):
+                raise ValueError(f"{path} does not match SDK pattern {metadata['pattern']}")
+            if "enum" in metadata and value not in metadata["enum"]:
+                raise ValueError(f"{path} must be one of {metadata['enum']}")
+
+    check(request, shape, operation)
+    return request
+
+
+def _control_client(config: dict[str, Any]) -> Any:
+    import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        "bedrock-agentcore-control",
+        region_name=config["region"],
+        config=Config(retries={"total_max_attempts": 1}),
+    )
+
+
+def _identity(config: dict[str, Any]) -> dict[str, str]:
+    return {key: config[key] for key in ("account", "region", "team_id")}
+
+
+def _validate_identity(config: dict[str, Any]) -> None:
+    for key, pattern in [
+        ("account", r"[0-9]{12}"),
+        ("region", r"[a-z]{2}(?:-[a-z]+)+-[0-9]+"),
+        ("team_id", r"[a-zA-Z0-9_]+"),
+    ]:
+        if not isinstance(config.get(key), str) or not re.fullmatch(pattern, config[key]):
+            raise ValueError(f"invalid config {key}")
 
 
 # ── Config loading ────────────────────────────────────────────────────────────
@@ -55,10 +123,13 @@ def _load_config(path: str) -> dict[str, Any]:
         data = json.loads(Path(path).read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read config {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("config must be a JSON object")
     required = {"account", "region", "team_id", "memory", "interpreter", "evaluator"}
     missing = required - set(data)
     if missing:
         raise ValueError(f"config missing keys: {sorted(missing)}")
+    _validate_identity(data)
     # Store config directory so receipts live beside the config, not the source tree.
     data["_data_dir"] = str(Path(path).resolve().parent)
     return data
@@ -68,6 +139,7 @@ def _load_config(path: str) -> dict[str, Any]:
 
 
 def _receipt_path(config: dict[str, Any]) -> Path:
+    _validate_identity(config)
     base = Path(config["_data_dir"]) if "_data_dir" in config else ROOT
     return base / f".offline_coach_resources_{config['team_id']}.json"
 
@@ -77,9 +149,18 @@ def _load_receipt(config: dict[str, Any]) -> dict[str, Any]:
     if not p.exists():
         return {}
     try:
-        return json.loads(p.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
+        receipt = json.loads(p.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read receipt {p}: {exc}; refusing to provision/delete") from exc
+    if not isinstance(receipt, dict) or receipt.get("_identity") != _identity(config):
+        raise ValueError(f"corrupt or foreign receipt {p}: account/region/team identity mismatch")
+    allowed = {"_identity"} | {f"{kind}_{key}" for kind in _RESOURCES for key in ("id", "name")}
+    if set(receipt) - allowed:
+        raise ValueError(f"corrupt receipt {p}: unexpected fields")
+    for kind, (operation, parameter, _) in _RESOURCES.items():
+        if f"{kind}_id" in receipt:
+            _validate_request(f"Get{operation}", {parameter: receipt[f"{kind}_id"]})
+    return receipt
 
 
 def _save_receipt(config: dict[str, Any], receipt: dict[str, Any]) -> None:
@@ -93,7 +174,7 @@ def _save_receipt(config: dict[str, Any], receipt: dict[str, Any]) -> None:
             mode="w", dir=p.parent, prefix=f".{p.name}.", delete=False
         ) as f:
             tmp = Path(f.name)
-            json.dump(receipt, f, indent=2, sort_keys=True)
+            json.dump({**receipt, "_identity": _identity(config)}, f, indent=2, sort_keys=True)
             f.write("\n")
             f.flush()
             os.fsync(f.fileno())
@@ -110,70 +191,33 @@ def _invocation_policy(config: dict[str, Any], receipt: dict[str, Any]) -> dict[
     """Least-privilege policy for the offline CLI operator (invoke only, no management)."""
     region = config["region"]
     account = config["account"]
-    team = config["team_id"]
-    model_id = config["evaluator"]["model_id"]
-
-    resources: list[str] = []
-    if "memory_id" in receipt:
-        resources.append(
-            f"arn:aws:bedrock-agentcore:{region}:{account}:memory/{receipt['memory_id']}"
-        )
-    if "interpreter_id" in receipt:
-        resources.append(
-            f"arn:aws:bedrock-agentcore:{region}:{account}:code-interpreter/{receipt['interpreter_id']}"
-        )
-    if "evaluator_id" in receipt:
-        resources.append(
-            f"arn:aws:bedrock-agentcore:{region}:{account}:evaluator/{receipt['evaluator_id']}"
-        )
-
-    return {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "OfflineCoachInvoke",
-                "Effect": "Allow",
-                "Action": [
-                    "bedrock-agentcore:GetMemory",
-                    "bedrock-agentcore:RetrieveMemoryRecords",
-                    "bedrock-agentcore:IngestMemoryRecord",
-                    "bedrock-agentcore:InvokeCodeInterpreter",
-                    "bedrock-agentcore:GetCodeInterpreterSession",
-                    "bedrock-agentcore:StartCodeInterpreterSession",
-                    "bedrock-agentcore:StopCodeInterpreterSession",
-                    "bedrock-agentcore:CreateEvaluationJob",
-                    "bedrock-agentcore:GetEvaluationJob",
-                ],
-                "Resource": resources or [
-                    f"arn:aws:bedrock-agentcore:{region}:{account}:memory/*",
-                    f"arn:aws:bedrock-agentcore:{region}:{account}:code-interpreter/*",
-                    f"arn:aws:bedrock-agentcore:{region}:{account}:evaluator/*",
-                ],
-                "Condition": {"StringEquals": {"aws:RequestedRegion": region}},
-            },
-            {
-                "Sid": "JudgeModelInvoke",
-                "Effect": "Allow",
-                "Action": ["bedrock:InvokeModel"],
-                "Resource": [
-                    f"arn:aws:bedrock:{region}::foundation-model/{model_id}",
-                    f"arn:aws:bedrock:{region}:{account}:inference-profile/{model_id}",
-                ],
-            },
-            {
-                "Sid": "TagResourceOwner",
-                "Effect": "Allow",
-                "Action": ["tag:GetResources"],
-                "Resource": "*",
-                "Condition": {
-                    "StringEquals": {
-                        "aws:ResourceTag/afc:team": team,
-                        "aws:ResourceTag/afc:component": "offline-coach",
-                    }
-                },
-            },
+    operations = {
+        "memory": ["CreateEvent", "ListEvents"],
+        "interpreter": [
+            "InvokeCodeInterpreter", "GetCodeInterpreter",
+            "StartCodeInterpreterSession", "StopCodeInterpreterSession",
         ],
+        "evaluator": ["Evaluate"],
     }
+    statements = []
+    for kind, (_, _, arn_kind) in _RESOURCES.items():
+        resource_id = receipt.get(f"{kind}_id", f"{config[kind]['name']}-*")
+        statements.append({
+            "Sid": f"OfflineCoach{kind.title()}Invoke",
+            "Effect": "Allow",
+            "Action": [f"bedrock-agentcore:{action}" for action in operations[kind]],
+            "Resource": [f"arn:aws:bedrock-agentcore:{region}:{account}:{arn_kind}/{resource_id}"],
+            "Condition": {"StringEquals": {"aws:RequestedRegion": region}},
+        })
+    model_arns = config["evaluator"].get("model_resource_arns", [])
+    if model_arns:
+        statements.append({
+            "Sid": "JudgeModelInvoke",
+            "Effect": "Allow",
+            "Action": ["bedrock:InvokeModel"],
+            "Resource": model_arns,
+        })
+    return {"Version": "2012-10-17", "Statement": statements}
 
 
 def _provisioning_policy(config: dict[str, Any]) -> dict[str, Any]:
@@ -181,32 +225,29 @@ def _provisioning_policy(config: dict[str, Any]) -> dict[str, Any]:
     region = config["region"]
     account = config["account"]
 
-    return {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "OfflineCoachManage",
-                "Effect": "Allow",
-                "Action": [
-                    "bedrock-agentcore:CreateMemory",
-                    "bedrock-agentcore:DeleteMemory",
-                    "bedrock-agentcore:GetMemory",
-                    "bedrock-agentcore:CreateCodeInterpreter",
-                    "bedrock-agentcore:DeleteCodeInterpreter",
-                    "bedrock-agentcore:GetCodeInterpreter",
-                    "bedrock-agentcore:CreateEvaluator",
-                    "bedrock-agentcore:DeleteEvaluator",
-                    "bedrock-agentcore:GetEvaluator",
-                ],
-                "Resource": [
-                    f"arn:aws:bedrock-agentcore:{region}:{account}:memory/*",
-                    f"arn:aws:bedrock-agentcore:{region}:{account}:code-interpreter/*",
-                    f"arn:aws:bedrock-agentcore:{region}:{account}:evaluator/*",
-                ],
-                "Condition": {"StringEquals": {"aws:RequestedRegion": region}},
-            },
-        ],
-    }
+    statements = [{
+        "Sid": "OfflineCoachCreate",
+        "Effect": "Allow",
+        "Action": [f"bedrock-agentcore:Create{operation}"
+                   for operation, _, _ in _RESOURCES.values()],
+        # Create operations have no resource ID yet and require Resource "*".
+        "Resource": "*",
+        "Condition": {"StringEquals": {"aws:RequestedRegion": region}},
+    }]
+    for kind, (operation, _, arn_kind) in _RESOURCES.items():
+        statements.append({
+            "Sid": f"OfflineCoach{kind.title()}Manage",
+            "Effect": "Allow",
+            "Action": [
+                f"bedrock-agentcore:Get{operation}", f"bedrock-agentcore:Delete{operation}",
+                "bedrock-agentcore:TagResource",
+            ],
+            "Resource": [
+                f"arn:aws:bedrock-agentcore:{region}:{account}:{arn_kind}/{config[kind]['name']}-*"
+            ],
+            "Condition": {"StringEquals": {"aws:RequestedRegion": region}},
+        })
+    return {"Version": "2012-10-17", "Statement": statements}
 
 
 # ── Resource request builders ─────────────────────────────────────────────────
@@ -214,47 +255,73 @@ def _provisioning_policy(config: dict[str, Any]) -> dict[str, Any]:
 
 def _memory_request(config: dict[str, Any]) -> dict[str, Any]:
     mem = config["memory"]
-    return {
+    if mem["strategy"].get("type") != "SEMANTIC":
+        raise ValueError("memory.strategy.type must be SEMANTIC")
+    if "{actorId}" not in mem["strategy"]["namespace"]:
+        raise ValueError("memory.strategy.namespace must scope records with {actorId}")
+    return _validate_request("CreateMemory", {
         "name": mem["name"],
         "description": f"Offline coach scouting memory for team {config['team_id']}",
+        "eventExpiryDuration": mem["event_expiry_days"],
         "memoryStrategies": [
             {
                 "semanticMemoryStrategy": {
-                    "name": mem["strategy"]["namespace"],
-                    "configuration": {
-                        "semanticMemoryConfiguration": {
-                            "maxTokens": 2048,
-                        }
-                    },
+                    "name": mem["strategy"]["name"],
+                    "namespaces": [mem["strategy"]["namespace"]],
                 }
             }
         ],
         "tags": config.get("tags", {}),
-    }
+    })
 
 
 def _interpreter_request(config: dict[str, Any]) -> dict[str, Any]:
     interp = config["interpreter"]
-    return {
+    forbidden = {
+        "executionRoleArn", "execution_role_arn", "execution_role", "mounts",
+        "filesystemConfigurations", "filesystem_configurations", "certificates",
+        "networkConfiguration", "vpcConfig",
+    }
+    if interp.get("network_mode") != _NETWORK_MODE_SANDBOX or forbidden & set(interp):
+        raise ValueError("interpreter requires SANDBOX, no execution role, mounts, or certificates")
+    return _validate_request("CreateCodeInterpreter", {
         "name": interp["name"],
         "description": f"Offline coach sandbox interpreter for team {config['team_id']}",
         "networkConfiguration": {"networkMode": _NETWORK_MODE_SANDBOX},
         "tags": config.get("tags", {}),
         # No executionRoleArn: SANDBOX mode does not require a role
         # No filesystem mounts
-    }
+    })
 
 
 def _evaluator_request(config: dict[str, Any]) -> dict[str, Any]:
     ev = config["evaluator"]
     from agent.advisor.offline.evaluation import JUDGE_INSTRUCTIONS, RUBRIC_VERSION
 
-    return {
-        "name": ev["name"],
+    if any("role" in key.lower() for key in ev):
+        raise ValueError("installed CreateEvaluator API has no execution role parameter")
+    if not isinstance(ev.get("model_id"), str) or not ev["model_id"].strip():
+        raise ValueError("evaluator.model_id is required: choose an enabled supported Bedrock model")
+    arns = ev.get("model_resource_arns", [])
+    if not isinstance(arns, list) or any(
+        not isinstance(arn, str) or not re.fullmatch(
+            r"arn:aws:bedrock:[a-z0-9-]+:(?:[0-9]{12})?:"
+            r"(?:foundation-model|inference-profile|application-inference-profile)/[^*?\s]+", arn
+        )
+        for arn in arns
+    ):
+        raise ValueError(
+            "evaluator.model_resource_arns must contain only exact Bedrock invoke ARNs"
+        )
+    if ev.get("level", _EVALUATOR_LEVEL_TRACE) != _EVALUATOR_LEVEL_TRACE:
+        raise ValueError("the offline judge rubric requires evaluator.level TRACE")
+    return _validate_request("CreateEvaluator", {
+        "evaluatorName": ev["name"],
+        "level": ev.get("level", _EVALUATOR_LEVEL_TRACE),
         "description": f"Offline coach faithfulness evaluator (rubric {RUBRIC_VERSION}) for team {config['team_id']}",
         "evaluatorConfig": {
             "llmAsAJudge": {
-                "judgeModelConfig": {
+                "modelConfig": {
                     "bedrockEvaluatorModelConfig": {
                         "modelId": ev["model_id"],
                         "inferenceConfig": {
@@ -263,17 +330,17 @@ def _evaluator_request(config: dict[str, Any]) -> dict[str, Any]:
                     }
                 },
                 "instructions": JUDGE_INSTRUCTIONS,
-                "level": ev.get("level", _EVALUATOR_LEVEL_TRACE),
                 "ratingScale": {
                     "numerical": [
-                        {"value": entry["value"], "definition": entry["definition"]}
+                        {"value": entry["value"], "definition": entry["definition"],
+                         "label": entry["label"]}
                         for entry in ev.get("rating_scale", [])
                     ]
                 },
             }
         },
         "tags": config.get("tags", {}),
-    }
+    })
 
 
 # ── Readiness polling ─────────────────────────────────────────────────────────
@@ -281,20 +348,28 @@ def _evaluator_request(config: dict[str, Any]) -> dict[str, Any]:
 
 def _poll_ready(client: Any, resource_type: str, resource_id: str) -> str:
     """Poll until resource reaches an active/available state or deadline."""
-    get_fn = {
-        "memory": (client.get_memory, "memoryId", "status"),
-        "interpreter": (client.get_code_interpreter, "codeInterpreterId", "status"),
-        "evaluator": (client.get_evaluator, "evaluatorId", "status"),
-    }[resource_type]
-    fn, id_key, status_key = get_fn
+    operation, id_key, _ = _RESOURCES[resource_type]
+    method = {"memory": "get_memory", "interpreter": "get_code_interpreter",
+              "evaluator": "get_evaluator"}[resource_type]
+    request = _validate_request(f"Get{operation}", {id_key: resource_id})
     deadline = time.monotonic() + _POLL_DEADLINE
     while True:
-        resp = fn(**{id_key: resource_id})
-        status = resp.get(status_key, "UNKNOWN")
+        resp = getattr(client, method)(**request)
+        data = resp.get("memory", {}) if resource_type == "memory" else resp
+        status = data.get("status", "UNKNOWN")
+        if resource_type == "memory":
+            strategy_statuses = [strategy.get("status") for strategy in data.get("strategies", [])]
+            if any(state not in ("ACTIVE", "CREATING") for state in strategy_statuses):
+                raise RuntimeError(f"memory {resource_id} strategy status: {strategy_statuses}")
+            if status == "ACTIVE" and "CREATING" in strategy_statuses:
+                status = "CREATING"
         if status in ("ACTIVE", "AVAILABLE", "READY"):
             return status
-        if status in ("FAILED", "DELETED", "ERROR"):
-            raise RuntimeError(f"{resource_type} {resource_id} reached terminal status {status}")
+        if status not in ("CREATING", "UPDATING"):
+            raise RuntimeError(
+                f"{resource_type} {resource_id} reached status {status}: "
+                f"{data.get('failureReason', '')}"
+            )
         if time.monotonic() > deadline:
             raise TimeoutError(
                 f"{resource_type} {resource_id} did not become active within {_POLL_DEADLINE}s"
@@ -308,6 +383,7 @@ def _poll_ready(client: Any, resource_type: str, resource_id: str) -> str:
 def _cmd_plan(config: dict[str, Any]) -> int:
     """Print intended resource/IAM changes without any AWS calls."""
     receipt = _load_receipt(config)
+    requests = _create_requests(config)
     plan: dict[str, Any] = {
         "account": config["account"],
         "region": config["region"],
@@ -316,25 +392,40 @@ def _cmd_plan(config: dict[str, Any]) -> int:
         "policies": {},
     }
 
-    for kind, req_fn in [
-        ("memory", _memory_request),
-        ("interpreter", _interpreter_request),
-        ("evaluator", _evaluator_request),
-    ]:
+    for kind in _RESOURCES:
         id_key = f"{kind}_id"
         if id_key in receipt:
             plan["resources"][kind] = {"action": "existing", "id": receipt[id_key]}
         else:
-            plan["resources"][kind] = {"action": "create", "request": req_fn(config)}
+            plan["resources"][kind] = {"action": "create", "request": requests[kind]}
 
     plan["policies"]["invocation"] = _invocation_policy(config, receipt)
     plan["policies"]["provisioning"] = _provisioning_policy(config)
+    plan["iam_note"] = (
+        "Policies are printed only, never attached. Create APIs require region-constrained "
+        "creation permissions; tag-on-create requires bedrock-agentcore:TagResource. "
+        "Get/Delete/Tag permissions use owned resource name prefixes. STS GetCallerIdentity "
+        "verifies the account. The installed CreateEvaluator and Evaluate SDK models do not "
+        "accept an execution role; no IAM role is created, passed, or modified. "
+        "Judge InvokeModel permissions are omitted unless evaluator.model_resource_arns "
+        "explicitly supplies the profile and all routed foundation-model ARNs. "
+        "SDK validation does not verify account entitlements or regional service availability."
+    )
     plan["note"] = (
         "No AWS calls made. Run 'apply --approve' to provision missing resources. "
         "Player runtimes r4_gk/r4_def/r4_mid/r4_fwd1/r4_fwd2 are NOT touched."
     )
     print(json.dumps(plan, indent=2))
     return 0
+
+
+def _create_requests(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    _validate_identity(config)
+    return {
+        "memory": _memory_request(config),
+        "interpreter": _interpreter_request(config),
+        "evaluator": _evaluator_request(config),
+    }
 
 
 def _cmd_apply(config: dict[str, Any], approve: bool) -> int:
@@ -347,10 +438,22 @@ def _cmd_apply(config: dict[str, Any], approve: bool) -> int:
         )
         return 1
 
-    # Account/region guard — must be verified before any AWS call
+    # Validate every request and receipt locally before identity lookup or mutation.
+    try:
+        receipt = _load_receipt(config)
+        requests = _create_requests(config)
+    except Exception as exc:
+        print(f"apply: preflight failed: {exc}", file=sys.stderr)
+        return 2
+
     try:
         import boto3
-        sts = boto3.client("sts", region_name=config["region"])
+        from botocore.config import Config
+
+        sts = boto3.client(
+            "sts", region_name=config["region"],
+            config=Config(retries={"total_max_attempts": 1}),
+        )
         identity = sts.get_caller_identity()
     except Exception as exc:
         print(f"apply: cannot verify AWS identity: {exc}", file=sys.stderr)
@@ -364,78 +467,60 @@ def _cmd_apply(config: dict[str, Any], approve: bool) -> int:
         )
         return 2
 
-    receipt = _load_receipt(config)
-    client = boto3.client("bedrock-agentcore", region_name=config["region"])
-    updated = dict(receipt)
+    try:
+        client = _control_client(config)
+        updated = dict(receipt)
+        # Ensure a writable durable receipt before creating any resource.
+        _save_receipt(config, updated)
+        for kind, method, response_key in [
+            ("memory", "create_memory", "id"),
+            ("interpreter", "create_code_interpreter", "codeInterpreterId"),
+            ("evaluator", "create_evaluator", "evaluatorId"),
+        ]:
+            id_key = f"{kind}_id"
+            if id_key not in updated:
+                resp = getattr(client, method)(**requests[kind])
+                data = resp["memory"] if kind == "memory" else resp
+                resource_id = data[response_key]
+                updated[id_key] = resource_id
+                updated[f"{kind}_name"] = config[kind]["name"]
+                # Never poll or attempt another create before the returned ID is durable.
+                try:
+                    _save_receipt(config, updated)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"cannot persist {kind} ID {resource_id}; record it for manual recovery: {exc}"
+                    ) from exc
+                print(f"{kind} returned ID: {resource_id}", flush=True)
+            _poll_ready(client, kind, updated[id_key])
+            print(f"{kind} ready: {updated[id_key]}")
+    except Exception as exc:
+        print(f"apply: provisioning stopped: {exc}", file=sys.stderr)
+        return 2
 
-    # Memory
-    if "memory_id" not in receipt:
-        try:
-            resp = client.create_memory(**_memory_request(config))
-            memory_id = resp["memoryId"]
-            _poll_ready(client, "memory", memory_id)
-            updated["memory_id"] = memory_id
-            updated["memory_name"] = config["memory"]["name"]
-            print(f"memory created: {memory_id}")
-        except Exception as exc:
-            print(f"apply: memory creation failed: {exc}", file=sys.stderr)
-            _save_receipt(config, updated)
-            return 2
-    else:
-        print(f"memory exists: {receipt['memory_id']}")
-
-    # Interpreter
-    if "interpreter_id" not in receipt:
-        try:
-            resp = client.create_code_interpreter(**_interpreter_request(config))
-            interp_id = resp["codeInterpreterId"]
-            _poll_ready(client, "interpreter", interp_id)
-            updated["interpreter_id"] = interp_id
-            updated["interpreter_name"] = config["interpreter"]["name"]
-            print(f"interpreter created: {interp_id}")
-        except Exception as exc:
-            print(f"apply: interpreter creation failed: {exc}", file=sys.stderr)
-            _save_receipt(config, updated)
-            return 2
-    else:
-        print(f"interpreter exists: {receipt['interpreter_id']}")
-
-    # Evaluator
-    if "evaluator_id" not in receipt:
-        try:
-            resp = client.create_evaluator(**_evaluator_request(config))
-            ev_id = resp["evaluatorId"]
-            _poll_ready(client, "evaluator", ev_id)
-            updated["evaluator_id"] = ev_id
-            updated["evaluator_name"] = config["evaluator"]["name"]
-            print(f"evaluator created: {ev_id}")
-        except Exception as exc:
-            print(f"apply: evaluator creation failed: {exc}", file=sys.stderr)
-            _save_receipt(config, updated)
-            return 2
-    else:
-        print(f"evaluator exists: {receipt['evaluator_id']}")
-
-    _save_receipt(config, updated)
     print(json.dumps({"status": "ok", "receipt": str(_receipt_path(config))}))
     return 0
 
 
 def _cmd_status(config: dict[str, Any]) -> int:
     """Describe existing owned resources (read-only)."""
-    receipt = _load_receipt(config)
-    if not receipt:
+    try:
+        receipt = _load_receipt(config)
+    except ValueError as exc:
+        print(f"status: {exc}", file=sys.stderr)
+        return 2
+    if not any(f"{kind}_id" in receipt for kind in _RESOURCES):
         print(json.dumps({"status": "no resources recorded", "receipt_path": str(_receipt_path(config))}))
         return 0
 
     try:
-        import boto3
-        client = boto3.client("bedrock-agentcore", region_name=config["region"])
+        client = _control_client(config)
     except Exception as exc:
         print(f"status: cannot create AWS client: {exc}", file=sys.stderr)
         return 2
 
     report: dict[str, Any] = {"resources": {}}
+    failed = False
 
     for kind, id_key, get_fn_name, id_param in [
         ("memory", "memory_id", "get_memory", "memoryId"),
@@ -444,12 +529,24 @@ def _cmd_status(config: dict[str, Any]) -> int:
     ]:
         if id_key in receipt:
             try:
-                resp = getattr(client, get_fn_name)(**{id_param: receipt[id_key]})
+                operation = _RESOURCES[kind][0]
+                request = _validate_request(f"Get{operation}", {id_param: receipt[id_key]})
+                resp = getattr(client, get_fn_name)(**request)
+                data = resp.get("memory", {}) if kind == "memory" else resp
+                status = data.get("status", "UNKNOWN")
+                if status not in ("ACTIVE", "READY", "CREATING", "UPDATING"):
+                    failed = True
+                if kind == "memory" and any(
+                    strategy.get("status") not in ("ACTIVE", "CREATING")
+                    for strategy in data.get("strategies", [])
+                ):
+                    failed = True
                 report["resources"][kind] = {
                     "id": receipt[id_key],
-                    "status": resp.get("status", "unknown"),
+                    "status": status,
                 }
             except Exception as exc:
+                failed = True
                 report["resources"][kind] = {
                     "id": receipt[id_key],
                     "error": str(exc),
@@ -462,12 +559,16 @@ def _cmd_status(config: dict[str, Any]) -> int:
         "pricing/account entitlements are unknown; doctor does not estimate costs."
     )
     print(json.dumps(report, indent=2))
-    return 0
+    return 2 if failed else 0
 
 
 def _cmd_cleanup(config: dict[str, Any], approve: bool) -> int:
     """Delete owned resources (recorded IDs only). Requires --approve."""
-    receipt = _load_receipt(config)
+    try:
+        receipt = _load_receipt(config)
+    except ValueError as exc:
+        print(f"cleanup: {exc}", file=sys.stderr)
+        return 2
     if not receipt:
         print("cleanup: no recorded resources to delete")
         return 0
@@ -493,7 +594,12 @@ def _cmd_cleanup(config: dict[str, Any], approve: bool) -> int:
 
     try:
         import boto3
-        sts = boto3.client("sts", region_name=config["region"])
+        from botocore.config import Config
+
+        sts = boto3.client(
+            "sts", region_name=config["region"],
+            config=Config(retries={"total_max_attempts": 1}),
+        )
         identity = sts.get_caller_identity()
     except Exception as exc:
         print(f"cleanup: cannot verify AWS identity: {exc}", file=sys.stderr)
@@ -507,7 +613,7 @@ def _cmd_cleanup(config: dict[str, Any], approve: bool) -> int:
         )
         return 2
 
-    client = boto3.client("bedrock-agentcore", region_name=config["region"])
+    client = _control_client(config)
     updated = dict(receipt)
     failed = False
 
@@ -518,7 +624,9 @@ def _cmd_cleanup(config: dict[str, Any], approve: bool) -> int:
     ]:
         if id_key in receipt:
             try:
-                getattr(client, del_fn_name)(**{id_param: receipt[id_key]})
+                operation = _RESOURCES[kind][0]
+                request = _validate_request(f"Delete{operation}", {id_param: receipt[id_key]})
+                getattr(client, del_fn_name)(**request)
                 print(f"{kind} deleted: {receipt[id_key]}")
                 del updated[id_key]
                 name_key = f"{kind}_name"

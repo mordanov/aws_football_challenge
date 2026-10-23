@@ -106,3 +106,67 @@ publish() is a separate explicit CLI step. Evaluation score is evidence, not app
 `candidate_profile` in the artifact becomes the live profile only after an explicit operator
 `AFC_PROFILE` change and redeployment — separate steps not included in this pipeline.
 **Source:** `agent/advisor/offline/`, `deploy/offline_coach.py`, `docs/offline_coaching.md`.
+
+The `prepare` CLI calls the shared evidence builder; it does not bypass manifest
+and report claim extraction. `generate-analysis` makes one bounded Converse call
+and writes code, usage and the evidence digest; `analyze` separately requires
+execution consent and an exact digest match. Optional analysis results supplied
+to `run --analysis` must match the canonical evidence data digest.
+Generation writes `<output>.diagnostics.json` atomically on success or provider/
+validation failure. Usage is captured before validating the script; service
+failure without a response leaves usage null. Only fixed reasons, byte count,
+SHA-256, recognized stop/format labels and bounded usage metadata are retained,
+not response text. A complete outer JSON Markdown fence may be removed before
+the strict single-code-field object validation; prose and malformed JSON fail.
+Invocation exceptions contribute only allowlisted error codes, integer HTTP
+status (100..599) and bounded alphanumeric/hyphen request IDs to diagnostics.
+Messages, headers, endpoints and unknown code strings are never persisted.
+Script-generation prompts carry the EvidencePacket JSON Schema instead of
+packet values. Generated code defines one synchronous `analyze(evidence)` function.
+AST validation rejects executable top-level statements, defaults, annotations,
+decorators, type parameters or other signatures with `INVALID_ANALYSIS_FUNCTION`;
+usage is retained. A fixed wrapper loads `evidence.json`, calls the function,
+requires a dict and prints finite JSON. The assembled script is byte-bounded.
+This syntactic guard does not prove data dependence or safety: review remains
+mandatory before sandbox execution.
+For canonical SHOOT counts, `count-analysis` bypasses the model: validated packet
+-> trusted parser -> atomic digest-bound script artifact with origin and null
+model usage. The exported script uses the exact same function source and fixed
+wrapper, not embedded match results. Optional sandbox execution remains explicit.
+Local advisor preparation always computes `shooting_counts` using that parser,
+even without `--analysis`; malformed/duplicate canonical claims fail before any
+model call. The advisor's grounded context and evaluation spans include counts
+with claim/source provenance. The model only interprets them.
+Interpreter stdout is parsed in full as one JSON object (compact or multiline),
+not merely its final line. Additional prose, multiple objects, arrays and
+nonfinite values fail; existing stream/output bounds and cleanup still apply.
+Advisor output schemas are serialized JSON strings for Converse. Input is
+conservatively bounded by UTF-8 bytes against the configured token cap, output
+by bytes, with SDK connect/read timeouts. Bedrock and evaluation clients use
+standard SDK retries capped at three total attempts; requests may incur charges
+even when a transport error prevents receipt delivery. Mutation/sandbox clients
+retain disabled retries. No AWS_MAX_ATTEMPTS environment override is required.
+Advisor JSON fence removal shares the generator's strict whole-response helper.
+Usage is captured before stop/size/JSON/schema checks and copied into failed
+run artifacts; raw advisor replies are not logged by the normal CLI.
+Run artifacts persist the actual grounding text in recognized generic GenAI
+agent spans (`scope.name=opentelemetry.instrumentation.football_advisor`).
+`evaluate` reuses those spans and recomputes status against the current threshold.
+The unapproved `proposed_profile` is persisted even when evaluation fails/rejects;
+only passing proposals expose `candidate_profile`. Reevaluation records the current
+configuration digest and can restore that candidate without another advisor call.
+No model call, profile write or invented evidence is used during reevaluation.
+
+Memory uses `memoryId`, timestamped conversational event payloads and a bounded,
+paginated team/opponent session; unlinked semantic extraction is excluded.
+Interpreter preflight uses `bedrock-agentcore-control` and runtime invocation
+uses `bedrock-agentcore`. Top-level SANDBOX configuration is checked before
+starting a session and runtime `stream` events are bounded and validated before
+producing an analysis result. All CLI-injected AWS clients use explicit
+connect/read timeouts; mutation/sandbox clients keep SDK retries disabled.
+
+Resource create responses flow immediately to an atomic identity-bound local
+receipt before readiness polling, so timeout preserves returned IDs. Management
+calls use the control-plane client. IAM policies are printed as plans, not
+attached to player roles. The first provisioning failure prevents subsequent
+resource requests; recorded receipts support later explicit operator inspection.

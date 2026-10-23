@@ -37,16 +37,14 @@ class FakeEvaluationClient:
 
 def _default_eval_result(score: float = 3.0) -> dict[str, Any]:
     return {
-        "evaluatorId": "evaluator-001",
-        "traceId": "eval-trace-001",
         "evaluationResults": [
             {
-                "criteria": "faithfulness",
-                "score": score,
+                "evaluatorId": "evaluator-001",
+                "context": {"spanContext": {"sessionId": "run-001", "traceId": "eval-trace-001"}},
+                "value": score,
                 "explanation": "advice references provided evidence IDs",
             }
         ],
-        "status": "COMPLETED",
     }
 
 
@@ -78,12 +76,16 @@ def _valid_span(
         "attributes": {
             "gen_ai.operation.name": "chat",
             "gen_ai.task.input": "evidence payload",
-            "gen_ai.task.output": json.dumps({
-                "settings": {}, "style": {}, "rationale": "maintain baseline",
-                "evidence_ids": ["claim-shoot-observed"],
-                "uncertainties": ["SHOOT contradiction"],
-                "counter_tests": ["verify shot range"],
-            }),
+            "gen_ai.task.output": json.dumps(
+                {
+                    "settings": {},
+                    "style": {},
+                    "rationale": "maintain baseline",
+                    "evidence_ids": ["claim-shoot-observed"],
+                    "uncertainties": ["SHOOT contradiction"],
+                    "counter_tests": ["verify shot range"],
+                }
+            ),
             "football.trace.match_id": match_id,
         },
         "status": {"code": "OK"},
@@ -206,7 +208,7 @@ class ServiceErrorTest(unittest.TestCase):
             "evaluatorId": "evaluator-001",
             "traceId": "eval-trace-001",
             "evaluationResults": [
-                {"criteria": "other_dimension", "score": 2.0, "explanation": "..."}
+                {"evaluatorId": "evaluator-001", "explanation": "score not available"}
             ],
             "status": "COMPLETED",
         }

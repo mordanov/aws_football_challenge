@@ -1,10 +1,9 @@
-"""AgentCore Memory adapter: shared opponent scouting notes.
+"""Exact AgentCore Memory events, scoped by trusted team and opponent identity.
 
-Writes validated ScoutingNote envelopes as short-term conversational events and
-reads them back via exact listing. Semantic context from RetrieveMemoryRecords
-is optional: unlinked extracted text is recorded as excluded, not used as evidence.
-
-No AWS credentials are discovered here — callers inject a boto3-like client.
+The caller supplies the SDK runtime client. A canonical note digest and its
+source packet travel together; these are integrity checks, not signatures.
+IAM must restrict event writers. Optional semantic extraction is deliberately
+excluded: an extracted record cannot prove its text came from a validated note.
 """
 
 from __future__ import annotations
@@ -15,8 +14,9 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from pydantic import ValidationError
+
 from .contracts import (
-    EvidenceClaim,
     EvidencePacket,
     OfflineConfig,
     OfflineServiceError,
@@ -24,217 +24,181 @@ from .contracts import (
     ScoutingNote,
 )
 
-# ── Memory client protocol ────────────────────────────────────────────────────
-
 
 class _MemoryClient(Protocol):
     def create_event(self, **kwargs: Any) -> dict[str, Any]: ...
 
     def list_events(self, **kwargs: Any) -> dict[str, Any]: ...
 
-    def retrieve_memory_records(self, **kwargs: Any) -> dict[str, Any]: ...
 
-
-# ── Namespace helpers ─────────────────────────────────────────────────────────
-
-_UNSAFE_RE = re.compile(r"[^a-z0-9]")
-_MAX_SLUG = 32
-_DIGEST_SUFFIX_LEN = 8
-_MAX_EXTRACTED_BYTES = 4096
+_MAX_EVENT_BYTES = 100_000
+_MAX_PAGES = 10
 
 
 def _safe_component(value: str) -> str:
-    """Lowercase slug + 8-char SHA-256 suffix; safe for namespace injection."""
-    slug = _UNSAFE_RE.sub("_", value.lower())[:_MAX_SLUG]
-    suffix = hashlib.sha256(value.encode()).hexdigest()[:_DIGEST_SUFFIX_LEN]
-    return f"{slug}_{suffix}"
+    slug = re.sub(r"[^a-z0-9]", "_", value.lower())[:32].strip("_") or "id"
+    return f"{slug}_{hashlib.sha256(value.encode()).hexdigest()}"
 
 
-# ── AgentCore Memory adapter ──────────────────────────────────────────────────
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _note_digest(note: ScoutingNote) -> str:
+    return hashlib.sha256(_canonical(note.model_dump(mode="json")).encode()).hexdigest()
+
+
+def _validate_note(note: ScoutingNote, packet: EvidencePacket) -> None:
+    for field in ("team_id", "opponent_id", "match_id", "profile_version", "played_at"):
+        if getattr(note, field) != getattr(packet, field):
+            raise ValueError(f"note {field} does not match packet")
+    if note.packet_digest != packet.digest:
+        raise ValueError("note packet digest does not match packet")
+    if not packet.played_at < note.expires_at <= packet.expires_at:
+        raise ValueError("note expiry is outside packet validity")
+    if not packet.complete:
+        raise ValueError("incomplete packet is not scouting evidence")
+    if any(claim not in packet.claims for claim in note.claims):
+        raise ValueError("note claims do not match packet evidence")
+    if any(sid not in packet.source_digests for c in note.claims for sid in c.source_ids):
+        raise ValueError("note claim has an unknown source")
 
 
 class AgentCoreMemory:
-    """ScoutStore backed by AgentCore Memory.
+    """Publish and retrieve bounded exact events in a deterministic opponent session.
 
-    publish: writes a JSON event (ScoutingNote fields + packet digest).
-    retrieve: lists events for the team's actor, reconstructs notes by
-              opponent_id and application expiry; optionally retrieves
-              semantic context (unlinked text is excluded, not silently accepted).
+    Existing match-specific sessions are not scanned or silently trusted.
+    Retrieval follows at most ten pages and reports any excluded/truncated data.
     """
 
     def __init__(
-        self,
-        client: _MemoryClient,
-        config: OfflineConfig,
-        *,
-        max_records: int = 20,
+        self, client: _MemoryClient, config: OfflineConfig, *, max_records: int = 20
     ) -> None:
+        if not 1 <= max_records <= 100:
+            raise ValueError("max_records must be between 1 and 100")
         self._client = client
         self._config = config
         self._max_records = max_records
 
-    # ── publish ───────────────────────────────────────────────────────────────
-
     def publish(self, note: ScoutingNote, packet: EvidencePacket) -> str:
-        """Write note as a short-term memory event; returns note_id on success."""
-        actor_id = _safe_component(note.team_id)
-        # Deterministic session scopes this note's event for idempotency
-        session_id = _safe_component(f"{note.match_id}_{note.note_id}")
-
-        envelope: dict[str, Any] = {
-            "note_id": note.note_id,
-            "team_id": note.team_id,
-            "opponent_id": note.opponent_id,
-            "match_id": note.match_id,
-            "profile_version": note.profile_version,
-            "played_at": note.played_at.isoformat(),
-            "expires_at": note.expires_at.isoformat(),
-            "packet_digest": note.packet_digest,
-            "claims": [
-                {
-                    "id": c.id,
-                    "text": c.text,
-                    "kind": c.kind,
-                    "source_ids": list(c.source_ids),
-                }
-                for c in note.claims
-            ],
-        }
-        payload = json.dumps(envelope, sort_keys=True, allow_nan=False)
+        """Validate against the caller's packet before any service request."""
+        try:
+            _validate_note(note, packet)
+            digest = _note_digest(note)
+            payload = _canonical({
+                "note": note.model_dump(mode="json"),
+                "note_digest": digest,
+                "packet": packet.model_dump(mode="json"),
+            })
+            if len(payload.encode()) > _MAX_EVENT_BYTES:
+                raise ValueError("note envelope exceeds event byte limit")
+        except ValueError as exc:
+            raise OfflineServiceError(
+                "Invalid scouting note or packet", service="memory",
+                stage="publish_validate", error_code="INVALID_NOTE",
+            ) from exc
 
         try:
             self._client.create_event(
-                memoryStoreId=self._config.memory_store_id,
-                actorId=actor_id,
-                sessionId=session_id,
-                messages=[{"role": "user", "content": [{"text": payload}]}],
+                memoryId=self._config.memory_store_id,
+                actorId=_safe_component(packet.team_id),
+                sessionId=_safe_component(packet.opponent_id),
+                eventTimestamp=packet.played_at,
+                payload=[{"conversational": {"role": "USER", "content": {"text": payload}}}],
+                clientToken=digest,
             )
         except Exception as exc:
             raise OfflineServiceError(
                 f"Memory publish failed: {type(exc).__name__}",
-                service="memory",
-                stage="publish",
+                service="memory", stage="publish", outcome="unknown",
             ) from exc
-
         return note.note_id
 
-    # ── retrieve ──────────────────────────────────────────────────────────────
-
     def retrieve(self, packet: EvidencePacket) -> ScoutingContext:
-        """Return scouting notes and optional semantic text for this packet's opponent.
-
-        Empty context is legitimate after a successful query with no results.
-        Service call failure always raises OfflineServiceError.
-        Application expiry is enforced even when AWS has not expired the event.
-        """
+        """List payloads for this team's opponent session, checking every envelope."""
         actor_id = _safe_component(packet.team_id)
-        now = datetime.now(tz=timezone.utc)
-
-        # 1. Exact event listing for provenance
-        try:
-            response = self._client.list_events(
-                memoryStoreId=self._config.memory_store_id,
-                actorId=actor_id,
-                maxResults=self._max_records,
-            )
-        except Exception as exc:
-            raise OfflineServiceError(
-                f"Memory list_events failed: {type(exc).__name__}",
-                service="memory",
-                stage="retrieve_list",
-                outcome="unknown",
-            ) from exc
-
-        events = response.get("events") or response.get("memoryRecords") or []
-        valid_notes: list[ScoutingNote] = []
-        valid_digests: set[str] = set()
-
-        for event in events:
-            raw = _extract_text(event)
-            if not raw:
-                continue
+        session_id = _safe_component(packet.opponent_id)
+        now = datetime.now(timezone.utc)
+        notes: dict[str, ScoutingNote] = {}
+        excluded = ["semantic_retrieval_disabled:no_trusted_record_link"]
+        token: str | None = None
+        seen_tokens: set[str] = set()
+        for _ in range(_MAX_PAGES):
+            params: dict[str, Any] = {
+                "memoryId": self._config.memory_store_id,
+                "actorId": actor_id,
+                "sessionId": session_id,
+                "includePayloads": True,
+                "maxResults": self._max_records,
+            }
+            if token is not None:
+                params["nextToken"] = token
             try:
-                env = json.loads(raw)
-            except (json.JSONDecodeError, ValueError):
-                continue
-
-            # Isolate by opponent_id and team_id — never accept another team's data
-            if env.get("opponent_id") != packet.opponent_id:
-                continue
-            if env.get("team_id") != packet.team_id:
-                continue
-
-            # Application-level expiry check
-            try:
-                expires_at = datetime.fromisoformat(env["expires_at"])
-            except (KeyError, ValueError):
-                continue
-            if expires_at <= now:
-                continue
-
-            try:
-                note = ScoutingNote(
-                    note_id=env["note_id"],
-                    team_id=env["team_id"],
-                    opponent_id=env["opponent_id"],
-                    match_id=env["match_id"],
-                    profile_version=env["profile_version"],
-                    played_at=env["played_at"],
-                    expires_at=env["expires_at"],
-                    packet_digest=env["packet_digest"],
-                    claims=tuple(
-                        EvidenceClaim(
-                            id=c["id"],
-                            text=c["text"],
-                            kind=c["kind"],
-                            source_ids=tuple(c["source_ids"]),
-                        )
-                        for c in env.get("claims") or []
-                    ),
+                response = self._client.list_events(**params)
+            except Exception as exc:
+                raise OfflineServiceError(
+                    f"Memory list_events failed: {type(exc).__name__}",
+                    service="memory", stage="retrieve_list", outcome="unknown",
+                ) from exc
+            events = response.get("events")
+            if not isinstance(events, list) or len(events) > self._max_records:
+                raise OfflineServiceError(
+                    "Malformed Memory event page", service="memory", stage="retrieve_list",
                 )
-                valid_notes.append(note)
-                valid_digests.add(note.packet_digest)
-            except Exception:
-                continue
+            for event in events:
+                try:
+                    note, digest = self._read_event(event, actor_id, session_id)
+                    if note.team_id != packet.team_id or note.opponent_id != packet.opponent_id:
+                        raise ValueError("event does not match requested identity")
+                    if note.expires_at <= now:
+                        raise ValueError("event expired")
+                    notes[digest] = note
+                except (ValueError, KeyError, TypeError, ValidationError, RecursionError):
+                    excluded.append("invalid_or_expired_event")
+            token = response.get("nextToken")
+            if not token:
+                break
+            if not isinstance(token, str) or token in seen_tokens:
+                raise OfflineServiceError(
+                    "Invalid Memory pagination token", service="memory", stage="retrieve_list",
+                )
+            seen_tokens.add(token)
+        else:
+            excluded.append("event_page_limit")
 
-        # 2. Optional semantic extraction — failure degrades to excluded
-        extracted: list[str] = []
-        excluded: list[str] = []
-
-        try:
-            sem_resp = self._client.retrieve_memory_records(
-                memoryStoreId=self._config.memory_store_id,
-                actorId=actor_id,
-                query=f"opponent {packet.opponent_id} scouting",
-                maxResults=self._max_records,
-            )
-            for rec in sem_resp.get("memoryRecords") or []:
-                text = (rec.get("content") or {}).get("text") or ""
-                if not text:
-                    continue
-                provenance = (rec.get("metadata") or {}).get("packet_digest") or ""
-                if provenance in valid_digests:
-                    extracted.append(text[:_MAX_EXTRACTED_BYTES])
-                else:
-                    excluded.append(f"provenance_unlinked:{provenance[:16]}")
-        except Exception as exc:
-            excluded.append(f"semantic_retrieval_failed:{type(exc).__name__}")
-
+        ordered = sorted(notes.values(), key=lambda n: (n.played_at, n.note_id), reverse=True)
+        if len(ordered) > self._max_records:
+            excluded.append("note_limit")
         return ScoutingContext(
-            notes=tuple(valid_notes),
-            extracted_text=tuple(extracted),
-            excluded=tuple(excluded),
+            notes=tuple(ordered[:self._max_records]), extracted_text=(), excluded=tuple(excluded),
         )
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _extract_text(event: dict[str, Any]) -> str:
-    """Extract text from a conversational event payload."""
-    parts: list[str] = []
-    for msg in event.get("messages") or []:
-        for block in msg.get("content") or []:
-            if "text" in block:
-                parts.append(block["text"])
-    return "".join(parts)
+    def _read_event(
+        self, event: Any, actor_id: str, session_id: str
+    ) -> tuple[ScoutingNote, str]:
+        if not isinstance(event, dict):
+            raise ValueError("event is not an object")
+        if (
+            event.get("memoryId") != self._config.memory_store_id
+            or event.get("actorId") != actor_id or event.get("sessionId") != session_id
+        ):
+            raise ValueError("event service identity mismatch")
+        payload = event["payload"]
+        if not isinstance(payload, list) or len(payload) != 1:
+            raise ValueError("unexpected event payload")
+        conversational = payload[0]["conversational"]
+        if conversational["role"] != "USER":
+            raise ValueError("unexpected event role")
+        raw = conversational["content"]["text"]
+        if not isinstance(raw, str) or len(raw.encode()) > _MAX_EVENT_BYTES:
+            raise ValueError("event envelope too large")
+        env = json.loads(raw)
+        if not isinstance(env, dict) or set(env) != {"note", "note_digest", "packet"}:
+            raise ValueError("invalid event envelope")
+        note = ScoutingNote.model_validate(env["note"])
+        source_packet = EvidencePacket.model_validate(env["packet"])
+        _validate_note(note, source_packet)
+        digest = _note_digest(note)
+        if env["note_digest"] != digest or event["eventTimestamp"] != source_packet.played_at:
+            raise ValueError("event digest or timestamp mismatch")
+        return note, digest

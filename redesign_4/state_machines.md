@@ -110,7 +110,44 @@ No transition proves the result transfers to the AWS platform.
 - advice_evaluated → rejected: faithfulness < `judge_min_score` (successful evaluation, not a service error).
 - proposal → published: operator calls `publish` explicitly (separate step; `run_offline()` never publishes).
 - Any required-stage `OfflineServiceError` → failed.
+Advisor format guard accepts complete outer JSON fences, not extra prose.
+Post-response validation failure retains usage without exposing a candidate.
 **Constraints:** proposal is never approved, deployed or promoted automatically. A separate operator
 decision and `AFC_PROFILE` change are required. Evaluation score 0..4 is advisory; no score
 gates deployment. `candidate_profile` in the artifact is a proposal, not the live profile.
 **Source:** `agent/advisor/offline/workflow.py`, `agent/advisor/offline/__main__.py`, `docs/offline_coaching.md`.
+
+Reevaluation requires persisted grounded spans. Successful numeric scoring at or
+above the configured threshold creates a proposal only when its validated
+unapproved profile is preserved; lower scores clear the candidate and reject.
+The separate unapproved profile remains available for recovery without repeating
+inference. Partial/failed service
+results, missing spans, or a missing candidate cannot become a proposal.
+Generated code moves from generated artifact to reviewed script to sandbox
+execution only through the explicit execution flag and matching evidence digest.
+Generation validation accepts raw JSON or a complete outer JSON fence, then
+requires exactly one nonempty string `code` field. Truncation, output overflow,
+malformed JSON or additional fields -> failed diagnostics, with no new script.
+Neither generating nor unwrapping a script executes it.
+An invalid AST function contract -> failed diagnostics. Valid generated
+`analyze(evidence)` -> fixed file-loader/invocation/JSON-output wrapper appended.
+Passing this guard is not approval: reviewed code must derive its result from
+the loaded packet, not substitute literal counts.
+Sandbox output -> analysis result only if complete stdout is a single finite
+JSON object; multiline whitespace is accepted. Extra text or multiple results
+-> failed execution with explicit cleanup outcome.
+Trusted count preparation: canonical claims -> found(count, provenance) or
+missing(null); malformed counts or multiple canonical claims of one kind ->
+explicit failure, never a successful result carrying an errors list. Local
+preparation failure writes no new script and blocks model advice. Successful
+`count-analysis` creates a trusted artifact without model generation or execution.
+
+## Offline resource provisioning
+
+**States:** planned, create-returned, receipt-recorded, ready, stopped.
+**Transitions:** approved apply -> SDK-validated control-plane create ->
+immediate identity-bound receipt -> bounded readiness polling -> ready.
+The first AWS/create/readiness failure stops the sequence before later
+resources. A recorded ID remains recoverable when readiness times out; timeout
+does not imply deletion. Foreign/corrupt receipts fail closed.
+**Source:** `deploy/offline_coach.py`.

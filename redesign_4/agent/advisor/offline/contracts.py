@@ -39,9 +39,7 @@ _SHA256_HEX_LEN = 64
 
 def _canonical_digest(data: Any) -> str:
     """SHA-256 of canonical sorted JSON (allow_nan=False)."""
-    return hashlib.sha256(
-        json.dumps(data, sort_keys=True, allow_nan=False).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(data, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
 # ── Errors ────────────────────────────────────────────────────────────────────
@@ -89,6 +87,8 @@ class EvidenceClaim(BaseModel):
     @classmethod
     def _nonempty_source_ids(cls, v: Any) -> Any:
         if isinstance(v, (list, tuple)):
+            if not v:
+                raise ValueError("source_ids must not be empty")
             for sid in v:
                 if not isinstance(sid, str) or not sid:
                     raise ValueError("each source_id must be a nonempty string")
@@ -120,6 +120,15 @@ class EvidencePacket(BaseModel):
     def _expires_after_played(self) -> Self:
         if self.expires_at <= self.played_at:
             raise ValueError("expires_at must be after played_at")
+        ids = [claim.id for claim in self.claims]
+        if len(ids) != len(set(ids)):
+            raise ValueError("claim IDs must be unique")
+        if any(
+            source not in self.source_digests
+            for claim in self.claims
+            for source in claim.source_ids
+        ):
+            raise ValueError("claim source IDs must resolve to source digests")
         return self
 
     @property
@@ -327,11 +336,13 @@ class RunArtifact(BaseModel):
     stage_receipts: dict[str, UsageReceipt]
     advice: OfflineAdvice | None = None
     candidate_profile: dict[str, Any] | None = None
+    proposed_profile: dict[str, Any] | None = None
     evaluation: EvaluationReport | None = None
+    evaluation_spans: list[dict[str, JsonValue]] = Field(default_factory=list)
     status: Literal["proposal", "rejected", "failed"]
     failure: str | None = None
 
-    @field_validator("candidate_profile", mode="after")
+    @field_validator("candidate_profile", "proposed_profile", mode="after")
     @classmethod
     def _valid_profile(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
         if v is not None:
@@ -383,9 +394,7 @@ class OfflineConfig(BaseModel):
     @model_validator(mode="after")
     def _explicit_cache_requires_capability(self) -> Self:
         if self.cache_mode == "explicit" and not self.explicit_cache:
-            raise ValueError(
-                "cache_mode='explicit' requires explicit_cache=True in capabilities"
-            )
+            raise ValueError("cache_mode='explicit' requires explicit_cache=True in capabilities")
         return self
 
 
@@ -441,4 +450,5 @@ class RunOffline(Protocol):
         evaluator: AdviceEvaluator,
         sandbox: AnalysisSandbox | None = None,
         analysis: AnalysisRequest | None = None,
+        analysis_result: AnalysisResult | None = None,
     ) -> RunArtifact: ...

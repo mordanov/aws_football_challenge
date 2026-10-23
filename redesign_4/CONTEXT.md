@@ -108,3 +108,42 @@ _Avoid_: AWS bot.
 Optional off-tick LLM component producing profile or parameter proposals that
 still require profile approval.
 _Avoid_: live agent brain, auto-deploy.
+
+**Evidence packet**:
+Expiry-stamped offline claims with unique IDs and resolvable source digests.
+Preparation preserves telemetry/report contradictions; a digest is not a
+cryptographic signature or proof the source is true.
+_Avoid_: verified match outcome, signed evidence.
+
+**Run artifact**:
+Offline proposal, rejection or failure with usage receipts and preserved
+evaluation spans. Reevaluation uses that original grounding, not invented
+empty evidence. The unapproved `proposed_profile` is retained across outages
+and rejections so reevaluation need not repeat paid inference; `candidate_profile`
+is populated only for a passing proposal. A passing score never authorizes deployment.
+_Avoid_: approved profile, deployed team.
+
+Advisor replies accept plain JSON or a complete outer JSON Markdown fence;
+extra prose remains invalid. Response usage survives validation failures.
+
+**Generation diagnostics**:
+Bounded sidecar metadata for an analysis-script generation attempt: fixed
+validation reason, response size/digest, format, stop reason and provider usage
+when available. It contains no prompt, generated code or raw provider exception.
+Service failures include allowlisted provider/transport codes and validated
+HTTP status/request ID; unrecognized codes remain `UNKNOWN`.
+_Avoid_: executable script, raw model transcript.
+
+The model generates one `analyze(evidence)` function, checked structurally with
+AST parsing without execution. A deterministic wrapper loads UTF-8
+`evidence.json`, calls it and validates/prints its dict result. The model receives
+the packet schema, not values; review still checks data dependence and safety.
+An analysis result is exactly one finite JSON object covering the whole stdout;
+pretty-printing is allowed, but surrounding logs or multiple objects are not.
+
+**Shooting counts**:
+Deterministically parsed canonical observed/report count claims, with count,
+found/missing status, claim ID, kind and source IDs. Narrative advice is not a
+count claim. Missing differs from zero; malformed or duplicate canonical claims
+fail closed. Counts describe issued commands/report claims, not executed actions
+or goals. The advisor interprets these values; it does not compute them.

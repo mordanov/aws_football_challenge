@@ -18,6 +18,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -71,41 +72,54 @@ def _load_note(path_str: str) -> Any:
     return ScoutingNote.model_validate(data)
 
 
-def _real_scouts(config: Any) -> Any:
+def _aws_client(config: Any, service: str, *, retry_reads: bool = False) -> Any:
     import boto3
+    from botocore.config import Config
+
+    return boto3.client(
+        service,
+        region_name=config.region,
+        config=Config(
+            connect_timeout=min(10, config.timeout_seconds),
+            read_timeout=config.timeout_seconds,
+            retries=(
+                {"mode": "standard", "total_max_attempts": 3}
+                if retry_reads
+                else {"max_attempts": 0}
+            ),
+        ),
+    )
+
+
+def _real_scouts(config: Any) -> Any:
 
     from .memory import AgentCoreMemory
 
-    client = boto3.client("bedrock-agentcore", region_name=config.region)
+    client = _aws_client(config, "bedrock-agentcore")
     return AgentCoreMemory(client, config)
 
 
 def _real_advisor(config: Any) -> Any:
-    import boto3
-
-    from ..archetypes import ARCHETYPES
+    from ...archetypes import ARCHETYPES
     from .bedrock import GroundedAdvisor
 
-    client = boto3.client("bedrock-runtime", region_name=config.region)
+    client = _aws_client(config, "bedrock-runtime", retry_reads=True)
     return GroundedAdvisor(client, config, ARCHETYPES)
 
 
 def _real_evaluator(config: Any) -> Any:
-    import boto3
-
     from .evaluation import AgentCoreEvaluator
 
-    client = boto3.client("bedrock-agentcore", region_name=config.region)
+    client = _aws_client(config, "bedrock-agentcore", retry_reads=True)
     return AgentCoreEvaluator(client, config)
 
 
 def _real_sandbox(config: Any) -> Any:
-    import boto3
-
     from .interpreter import AgentCoreInterpreter
 
-    client = boto3.client("bedrock-agentcore", region_name=config.region)
-    return AgentCoreInterpreter(client, config)
+    client = _aws_client(config, "bedrock-agentcore")
+    control = _aws_client(config, "bedrock-agentcore-control")
+    return AgentCoreInterpreter(client, config, control_client=control)
 
 
 # ── Sub-command implementations ───────────────────────────────────────────────
@@ -113,9 +127,10 @@ def _real_sandbox(config: Any) -> Any:
 
 def _cmd_prepare(args: argparse.Namespace) -> int:
     """Build EvidencePacket locally from manifest + report + coach-claims + profile."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    from .contracts import EvidenceClaim, EvidencePacket
+    from .contracts import EvidenceClaim
+    from .evidence import prepare_evidence
 
     try:
         manifest = _load_json(args.manifest)
@@ -123,38 +138,19 @@ def _cmd_prepare(args: argparse.Namespace) -> int:
         coach_claims_data = _load_json(args.coach_claims)
         profile = load_profile(args.profile)
         expires_at = datetime.fromisoformat(args.expires_at)
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
 
         # Build claims from manifest and report
         claims: list[EvidenceClaim] = []
         for raw in coach_claims_data.get("claims", []):
             claims.append(EvidenceClaim.model_validate(raw))
 
-        played_at_str = manifest.get("played_at") or report.get("played_at")
-        if not played_at_str:
-            raise ValueError("manifest or report must contain played_at")
-        played_at = datetime.fromisoformat(played_at_str)
-        if played_at.tzinfo is None:
-            played_at = played_at.replace(tzinfo=timezone.utc)
-
-        source_digests: dict[str, str] = {}
-        for sid, digest in manifest.get("source_digests", {}).items():
-            source_digests[sid] = digest
-        for sid, digest in report.get("source_digests", {}).items():
-            source_digests[sid] = digest
-
-        packet = EvidencePacket(
+        packet = prepare_evidence(
+            manifest,
+            report,
+            tuple(claims),
             team_id=args.team,
-            opponent_id=manifest.get("opponent_id", "unknown"),
-            match_id=manifest.get("match_id", "unknown"),
             profile_version=profile.version,
-            played_at=played_at,
             expires_at=expires_at,
-            complete=bool(manifest.get("complete", True)),
-            result=tuple(manifest["result"]) if "result" in manifest else None,
-            claims=tuple(claims),
-            source_digests=source_digests,
         )
         write_atomic(
             Path(args.output),
@@ -192,7 +188,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace, services: Services) -> int:
     """Run the full offline coaching workflow."""
-    from .contracts import OfflineServiceError
+    from .contracts import AnalysisResult, OfflineServiceError
     from .workflow import run_offline
 
     try:
@@ -206,6 +202,9 @@ def _cmd_run(args: argparse.Namespace, services: Services) -> int:
             services.evaluator if services.evaluator is not None else _real_evaluator(config)
         )
         sandbox = services.sandbox  # analysis = None → no sandbox execution
+        analysis_result = (
+            AnalysisResult.model_validate(_load_json(args.analysis)) if args.analysis else None
+        )
 
         artifact = run_offline(
             packet,
@@ -215,6 +214,7 @@ def _cmd_run(args: argparse.Namespace, services: Services) -> int:
             advisor=advisor,
             evaluator=evaluator,
             sandbox=sandbox,
+            analysis_result=analysis_result,
         )
 
         write_atomic(
@@ -234,14 +234,44 @@ def _cmd_run(args: argparse.Namespace, services: Services) -> int:
     return 0
 
 
+def _cmd_count_analysis(args: argparse.Namespace) -> int:
+    """Export the trusted deterministic counter locally, without model calls."""
+    from .counts import build_count_script
+
+    try:
+        packet = _load_packet(args.evidence)
+        artifact = build_count_script(packet)
+        write_atomic(Path(args.output), json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    except (ValueError, OSError) as exc:
+        print(f"count-analysis error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps({"script": args.output, "executed": False, "model_called": False}))
+    return 0
+
+
 def _cmd_generate_analysis(args: argparse.Namespace) -> int:
     """Generate a Python analysis script via one bounded model call (no execution)."""
-    # shortcut: generate-analysis not yet implemented; add AnalysisGenerator protocol when needed
-    print(
-        "generate-analysis: not yet implemented — use the SDK directly to generate a script",
-        file=sys.stderr,
-    )
-    return 2
+    from .contracts import OfflineServiceError
+
+    try:
+        config = _load_config(args.config)
+        packet = _load_packet(args.evidence)
+        advisor = _real_advisor(config)
+        try:
+            artifact = advisor.generate_analysis(packet, args.instruction)
+        finally:
+            if advisor.last_generation_diagnostics is not None:
+                write_atomic(
+                    Path(args.output + ".diagnostics.json"),
+                    json.dumps(advisor.last_generation_diagnostics, indent=2, sort_keys=True)
+                    + "\n",
+                )
+        write_atomic(Path(args.output), json.dumps(artifact, indent=2, sort_keys=True) + "\n")
+    except (ValueError, OSError, OfflineServiceError) as exc:
+        print(f"generate-analysis error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps({"script": args.output, "executed": False}))
+    return 0
 
 
 def _cmd_analyze(args: argparse.Namespace, services: Services) -> int:
@@ -265,7 +295,7 @@ def _cmd_analyze(args: argparse.Namespace, services: Services) -> int:
 
         packet = EvidencePacket.model_validate(evidence)
         expected_digest = script_data.get("evidence_digest")
-        if expected_digest and packet.digest != expected_digest:
+        if packet.digest != expected_digest:
             print(
                 f"analyze: evidence digest mismatch (expected {expected_digest})",
                 file=sys.stderr,
@@ -274,7 +304,7 @@ def _cmd_analyze(args: argparse.Namespace, services: Services) -> int:
 
         request = AnalysisRequest(
             code=script_data["code"],
-            data_json=json.dumps(evidence),
+            data_json=json.dumps(packet.model_dump(mode="json"), sort_keys=True),
             timeout_seconds=config.timeout_seconds,
         )
 
@@ -296,7 +326,6 @@ def _cmd_analyze(args: argparse.Namespace, services: Services) -> int:
 def _cmd_evaluate(args: argparse.Namespace, services: Services) -> int:
     """Score an existing run artifact with the evaluator (recovery path)."""
     from .contracts import OfflineServiceError, RunArtifact
-    from .workflow import _build_advisor_span
 
     try:
         config = _load_config(args.config)
@@ -307,28 +336,35 @@ def _cmd_evaluate(args: argparse.Namespace, services: Services) -> int:
             print("evaluate: run artifact has no advice to evaluate", file=sys.stderr)
             return 2
 
-        # Build synthetic span from the run artifact (recovery path, no re-inference)
-        spans = _build_advisor_span(
-            run_artifact.run_id,
-            _synthetic_packet(run_artifact),
-            run_artifact.advice,
-        )
+        spans = run_artifact.evaluation_spans
+        if not spans:
+            raise ValueError(
+                "run artifact has no preserved evaluation evidence; rerun with evidence"
+            )
 
         evaluator = (
             services.evaluator if services.evaluator is not None else _real_evaluator(config)
         )
         evaluation = evaluator.evaluate(spans)
+        candidate = run_artifact.proposed_profile or run_artifact.candidate_profile
+        status = "proposal"
+        failure = None
+        if evaluation.status != "ok" or "faithfulness" not in evaluation.scores:
+            status, failure = "failed", "evaluation has no complete faithfulness score"
+        elif evaluation.scores["faithfulness"] < config.judge_min_score:
+            status, failure = "rejected", "faithfulness below configured minimum"
+        elif candidate is None:
+            status, failure = "failed", "no preserved candidate profile; rerun advice with evidence"
 
-        updated = RunArtifact(
-            run_id=run_artifact.run_id,
-            source_digest=run_artifact.source_digest,
-            config_digest=run_artifact.config_digest,
-            stage_receipts=run_artifact.stage_receipts,
-            advice=run_artifact.advice,
-            candidate_profile=run_artifact.candidate_profile,
-            evaluation=evaluation,
-            status=run_artifact.status,
-            failure=run_artifact.failure,
+        updated = RunArtifact.model_validate(
+            {
+                **run_artifact.model_dump(),
+                "evaluation": evaluation,
+                "config_digest": hashlib.sha256(config.model_dump_json().encode()).hexdigest(),
+                "candidate_profile": candidate if status == "proposal" else None,
+                "status": status,
+                "failure": failure,
+            }
         )
 
         write_atomic(
@@ -346,26 +382,6 @@ def _cmd_evaluate(args: argparse.Namespace, services: Services) -> int:
     if status == "failed":
         return 2
     return 0
-
-
-def _synthetic_packet(run_artifact: Any) -> Any:
-    """Build a minimal EvidencePacket from run_artifact metadata for span construction."""
-    from datetime import datetime, timezone
-
-    from .contracts import EvidencePacket
-
-    now = datetime.now(tz=timezone.utc)
-    return EvidencePacket(
-        team_id="unknown",
-        opponent_id="unknown",
-        match_id=run_artifact.run_id,
-        profile_version="unknown",
-        played_at=now,
-        expires_at=now.replace(year=now.year + 1),
-        complete=False,
-        claims=(),
-        source_digests={},
-    )
 
 
 def _cmd_publish(args: argparse.Namespace, services: Services) -> int:
@@ -402,21 +418,25 @@ def _build_parser() -> argparse.ArgumentParser:
     prep.add_argument("--manifest", required=True, metavar="M", help="match manifest JSON path")
     prep.add_argument("--report", required=True, metavar="R", help="match report JSON path")
     prep.add_argument(
-        "--coach-claims", required=True, metavar="C", dest="coach_claims",
+        "--coach-claims",
+        required=True,
+        metavar="C",
+        dest="coach_claims",
         help="coach claims JSON path",
     )
     prep.add_argument("--profile", required=True, metavar="P", help="player profile JSON path")
     prep.add_argument("--team", required=True, help="team identifier")
     prep.add_argument(
-        "--expires-at", required=True, metavar="UTC", dest="expires_at",
+        "--expires-at",
+        required=True,
+        metavar="UTC",
+        dest="expires_at",
         help="ISO-8601 UTC expiry datetime",
     )
     prep.add_argument("--output", required=True, metavar="E", help="output evidence JSON path")
 
     # doctor
-    doc = ops.add_parser(
-        "doctor", help="check config and report service IDs (no paid calls)"
-    )
+    doc = ops.add_parser("doctor", help="check config and report service IDs (no paid calls)")
     doc.add_argument("--config", required=True, metavar="K", help="offline config JSON path")
 
     # run
@@ -428,6 +448,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--analysis", metavar="A", default=None, help="optional analysis result JSON path"
     )
     run_p.add_argument("--output", required=True, metavar="O", help="output run artifact path")
+
+    counter = ops.add_parser(
+        "count-analysis", help="prepare trusted shooting-count script locally (no model call)"
+    )
+    counter.add_argument("--evidence", required=True, metavar="E")
+    counter.add_argument("--output", required=True, metavar="S")
 
     # generate-analysis
     gen = ops.add_parser(
@@ -445,7 +471,9 @@ def _build_parser() -> argparse.ArgumentParser:
     ana.add_argument("--evidence", required=True, metavar="E")
     ana.add_argument("--script", required=True, metavar="S")
     ana.add_argument(
-        "--execute-generated-code", action="store_true", dest="execute_generated_code",
+        "--execute-generated-code",
+        action="store_true",
+        dest="execute_generated_code",
         help="required explicit flag to permit sandbox execution",
     )
     ana.add_argument("--output", required=True, metavar="A")
@@ -481,6 +509,8 @@ def main(argv: list[str] | None = None, *, services: Services | None = None) -> 
             return _cmd_run(args, services)
         if cmd == "generate-analysis":
             return _cmd_generate_analysis(args)
+        if cmd == "count-analysis":
+            return _cmd_count_analysis(args)
         if cmd == "analyze":
             return _cmd_analyze(args, services)
         if cmd == "evaluate":

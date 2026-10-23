@@ -134,21 +134,45 @@ def _validate_spans(spans: list[dict[str, JsonValue]]) -> None:
 
 
 def _parse_response(response: dict[str, Any], config_evaluator_id: str) -> EvaluationReport:
-    evaluator_id = response.get("evaluatorId") or config_evaluator_id
-    trace_id = response.get("traceId") or "unknown"
+    evaluator_id = config_evaluator_id
+    trace_id = "unknown"
 
     results = response.get("evaluationResults") or []
     scores: dict[str, float] = {}
     explanations: list[str] = []
 
     for item in results:
-        criteria = item.get("criteria") or ""
-        raw_score = item.get("score")
+        if item.get("errorCode") or item.get("errorMessage"):
+            raise OfflineServiceError(
+                "Evaluator returned an unscored service error",
+                service="evaluator",
+                stage="evaluate",
+                error_code=item.get("errorCode"),
+            )
+        if item.get("evaluatorId") != config_evaluator_id:
+            raise OfflineServiceError(
+                "Evaluation returned an unexpected evaluator",
+                service="evaluator",
+                stage="evaluate",
+            )
+        trace_id = item.get("context", {}).get("spanContext", {}).get("traceId") or trace_id
+        raw_score = item.get("value")
         explanation = item.get("explanation") or ""
-        if criteria and raw_score is not None:
+        if raw_score is not None:
+            if isinstance(raw_score, bool) or not isinstance(raw_score, (float, int)):
+                raise OfflineServiceError(
+                    "Evaluator returned a nonnumeric score",
+                    service="evaluator",
+                    stage="evaluate",
+                )
             score_val = float(raw_score)
-            if math.isfinite(score_val):
-                scores[criteria] = score_val
+            if not math.isfinite(score_val) or not 0 <= score_val <= 4:
+                raise OfflineServiceError(
+                    "Evaluator returned an out-of-range score",
+                    service="evaluator",
+                    stage="evaluate",
+                )
+            scores["faithfulness"] = min(scores.get("faithfulness", 4.0), score_val)
         if explanation:
             explanations.append(explanation)
 
