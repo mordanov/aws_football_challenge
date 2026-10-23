@@ -8,7 +8,7 @@ are discovered, cached or used.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -18,17 +18,19 @@ from agent.advisor.offline.contracts import (
     AnalysisResult,
     AnalysisSandbox,
     EvaluationReport,
+    EvidenceAdvisor,
     EvidenceClaim,
     EvidencePacket,
     JsonValue,
     OfflineAdvice,
     OfflineConfig,
+    RunArtifact,
     ScoutingContext,
     ScoutingNote,
     ScoutStore,
     UsageReceipt,
 )
-from agent.model import DEFAULT_SETTINGS, DEFAULT_STYLE
+from agent.model import DEFAULT_SETTINGS, DEFAULT_STYLE, Profile
 
 # ── Canonical test timestamps ─────────────────────────────────────────────────
 
@@ -230,6 +232,10 @@ class FakeMemory:
         self._side_effect = side_effect
         self._notes: list[ScoutingNote] = []
 
+    @property
+    def publish_calls(self) -> list[tuple[ScoutingNote, EvidencePacket]]:
+        return self.published
+
     def publish(self, note: ScoutingNote, packet: EvidencePacket) -> str:
         if self._side_effect is not None:
             raise self._side_effect
@@ -375,3 +381,110 @@ class FakeBedrockClient:
             "usage": usage,
             "ResponseMetadata": {"RequestId": "fake-request-id-001"},
         }
+
+
+# ── Fake advisor ──────────────────────────────────────────────────────────────
+
+
+class FakeAdvisor:
+    """Fake EvidenceAdvisor for workflow tests.
+
+    Returns a fixed (advice, profile) pair; raises ``side_effect`` if set.
+    """
+
+    def __init__(self, *, side_effect: Exception | None = None) -> None:
+        self.calls: list[Any] = []
+        self._side_effect = side_effect
+
+    def review_evidence(
+        self,
+        packet: EvidencePacket,
+        current: Profile,
+        scouting: Any,
+        analysis: Any,
+    ) -> tuple[OfflineAdvice, Profile]:
+        if self._side_effect is not None:
+            raise self._side_effect
+        self.calls.append((packet, current, scouting, analysis))
+        return _default_advice(), current
+
+
+# Structural check: FakeAdvisor satisfies EvidenceAdvisor at runtime.
+____: EvidenceAdvisor = FakeAdvisor()  # type: ignore[type-abstract]
+
+
+# ── Workflow test harness ─────────────────────────────────────────────────────
+
+
+@dataclass
+class WorkflowCase:
+    """Assembled fake ports and a run() method for workflow integration tests."""
+
+    memory: FakeMemory
+    advisor: FakeAdvisor
+    evaluator: FakeEvaluator
+    sandbox: FakeInterpreter | None
+    deployment_calls: list[Any]
+    _analysis: AnalysisRequest | None
+
+    def run(self) -> RunArtifact:
+        from agent.advisor.offline.workflow import run_offline
+
+        return run_offline(
+            make_packet(),
+            Profile(),
+            make_config(),
+            scouts=self.memory,
+            advisor=self.advisor,
+            evaluator=self.evaluator,
+            sandbox=self.sandbox,
+            analysis=self._analysis,
+        )
+
+
+def make_workflow_case(
+    *,
+    fail_stage: str | None = None,
+    score: float = 3.0,
+    with_sandbox: bool = False,
+    with_analysis: bool = True,
+) -> WorkflowCase:
+    """Build a WorkflowCase with fake ports, optionally injecting a stage failure."""
+    from agent.advisor.offline.contracts import OfflineServiceError
+
+    def _err(stage: str) -> OfflineServiceError:
+        return OfflineServiceError(f"fake {stage} failure", service=stage, stage=stage)
+
+    memory = FakeMemory(
+        side_effect=_err("retrieve") if fail_stage == "retrieve" else None
+    )
+    advisor = FakeAdvisor(
+        side_effect=_err("advise") if fail_stage == "advise" else None
+    )
+    evaluator = FakeEvaluator(
+        score=score,
+        side_effect=_err("evaluate") if fail_stage == "evaluate" else None,
+    )
+    sandbox = (
+        FakeInterpreter(
+            side_effect=_err("analyze") if fail_stage == "analyze" else None
+        )
+        if with_sandbox
+        else None
+    )
+    analysis: AnalysisRequest | None = None
+    if with_sandbox and with_analysis:
+        analysis = AnalysisRequest(
+            code="import json; print(json.dumps({'ok': True}))",
+            data_json="[]",
+            timeout_seconds=60,
+        )
+
+    return WorkflowCase(
+        memory=memory,
+        advisor=advisor,
+        evaluator=evaluator,
+        sandbox=sandbox,
+        deployment_calls=[],
+        _analysis=analysis,
+    )
