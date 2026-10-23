@@ -1,0 +1,37 @@
+{
+  "_comment": "Copy to offline_coach.json, fill in account/region, run 'python deploy/offline_coach.py plan'.",
+  "account": "123456789012",
+  "region": "us-east-1",
+  "team_id": "r4",
+  "memory": {
+    "name": "r4-offline-coach-memory",
+    "event_expiry_seconds": 604800,
+    "strategy": {
+      "type": "SEMANTIC",
+      "namespace": "football.coach.offline",
+      "actor": "team:r4"
+    }
+  },
+  "interpreter": {
+    "name": "r4-offline-coach-interpreter",
+    "network_mode": "SANDBOX"
+  },
+  "evaluator": {
+    "name": "r4-offline-coach-evaluator",
+    "model_id": "us.anthropic.claude-haiku-4-5:0",
+    "level": "TRACE",
+    "max_tokens": 512,
+    "rating_scale": [
+      {"value": 0, "definition": "Contradicts evidence or proposes disallowed behavior"},
+      {"value": 1, "definition": "Invents a material fact or goal cause"},
+      {"value": 2, "definition": "Bounded but misses a material discrepancy or counter-strategy"},
+      {"value": 3, "definition": "Grounded with uncertainty and a counter-test"},
+      {"value": 4, "definition": "Distinguishes all source limitations with concrete measurable counter-tests"}
+    ]
+  },
+  "tags": {
+    "afc:project": "redesign_4",
+    "afc:component": "offline-coach",
+    "afc:team": "r4"
+  }
+}
