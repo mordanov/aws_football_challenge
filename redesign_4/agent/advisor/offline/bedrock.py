@@ -215,6 +215,10 @@ class GroundedAdvisor(Advisor):
         evidence_json = json.dumps(evidence_payload, sort_keys=True, allow_nan=False)
 
         system_blocks: list[dict[str, Any]] = [{"text": _SYSTEM_PREFIX}]
+        if cfg.cache_mode == "explicit":
+            # Stable prefix ends here; per-packet evidence follows in the user turn.
+            # Off mode cannot guarantee the provider's implicit caching is disabled.
+            system_blocks.append({"cachePoint": {"type": "default"}})
         converse_kwargs: dict[str, Any] = {
             "modelId": cfg.model_id,
             "system": system_blocks,

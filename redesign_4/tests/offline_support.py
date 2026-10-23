@@ -348,17 +348,22 @@ class FakeBedrockClient:
         *,
         stop_reason: str = "end_turn",
         side_effect: Exception | None = None,
+        cache_tokens: dict[str, int] | None = None,
     ) -> None:
         self.calls: list[dict[str, Any]] = []
         self._response_json = response_json
         self._stop_reason = stop_reason
         self._side_effect = side_effect
+        self._cache_tokens = cache_tokens
 
     def converse(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(kwargs)
         if self._side_effect is not None:
             raise self._side_effect
         content = self._response_json if self._response_json is not None else _make_default_advice_json()
+        usage: dict[str, int] = {"inputTokens": 100, "outputTokens": 50}
+        if self._cache_tokens:
+            usage.update(self._cache_tokens)
         return {
             "output": {
                 "message": {
@@ -367,6 +372,6 @@ class FakeBedrockClient:
                 }
             },
             "stopReason": self._stop_reason,
-            "usage": {"inputTokens": 100, "outputTokens": 50},
+            "usage": usage,
             "ResponseMetadata": {"RequestId": "fake-request-id-001"},
         }

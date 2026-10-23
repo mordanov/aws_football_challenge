@@ -238,5 +238,116 @@ class LegacyAdvisorPreservationTest(unittest.TestCase):
         self.assertIsNotNone(candidate)
 
 
+@unittest.skipUnless(HAS_LANGCHAIN, "install the llm extra")
+class PromptCachingTest(unittest.TestCase):
+    """Task 05: stable prefix, cachePoint injection, cache token receipts."""
+
+    def setUp(self) -> None:
+        from agent.advisor.offline.bedrock import _SYSTEM_PREFIX, GroundedAdvisor  # noqa: PLC0415
+        from tests.offline_support import FakeBedrockClient, make_config, make_packet
+
+        self.GroundedAdvisor = GroundedAdvisor
+        self.SYSTEM_PREFIX = _SYSTEM_PREFIX
+        self.FakeBedrockClient = FakeBedrockClient
+        self.make_config = make_config
+        self.make_packet = make_packet
+
+    def _empty_scouting(self):
+        from agent.advisor.offline.contracts import ScoutingContext
+
+        return ScoutingContext(notes=(), extracted_text=(), excluded=())
+
+    def test_stable_system_prefix_same_across_different_packets(self):
+        from agent.model import Profile
+
+        packet_a = self.make_packet(match_id="match-001", opponent_id="opp-a")
+        packet_b = self.make_packet(match_id="match-002", opponent_id="opp-b")
+        client = self.FakeBedrockClient()
+        config = self.make_config()
+        advisor = self.GroundedAdvisor(client, config, {"baseline": Profile()})
+
+        advisor.review_evidence(packet_a, Profile(), self._empty_scouting(), None)
+        advisor.review_evidence(packet_b, Profile(), self._empty_scouting(), None)
+
+        # First system block text must be identical for both calls
+        sys_a = client.calls[0]["system"][0]["text"]
+        sys_b = client.calls[1]["system"][0]["text"]
+        self.assertEqual(sys_a, sys_b)
+
+        # User evidence content must differ
+        user_a = client.calls[0]["messages"][0]["content"][0]["text"]
+        user_b = client.calls[1]["messages"][0]["content"][0]["text"]
+        self.assertNotEqual(user_a, user_b)
+
+    def test_explicit_cache_mode_emits_cache_point(self):
+        from agent.model import Profile
+
+        config = self.make_config(cache_mode="explicit", explicit_cache=True)
+        packet = self.make_packet()
+        client = self.FakeBedrockClient()
+        advisor = self.GroundedAdvisor(client, config, {"baseline": Profile()})
+        advisor.review_evidence(packet, Profile(), self._empty_scouting(), None)
+
+        system_blocks = client.calls[0]["system"]
+        self.assertEqual(len(system_blocks), 2)
+        self.assertEqual(system_blocks[1]["cachePoint"]["type"], "default")
+
+    def test_off_cache_mode_no_cache_point(self):
+        from agent.model import Profile
+
+        config = self.make_config(cache_mode="off")
+        packet = self.make_packet()
+        client = self.FakeBedrockClient()
+        advisor = self.GroundedAdvisor(client, config, {"baseline": Profile()})
+        advisor.review_evidence(packet, Profile(), self._empty_scouting(), None)
+
+        system_blocks = client.calls[0]["system"]
+        self.assertEqual(len(system_blocks), 1)
+        self.assertNotIn("cachePoint", system_blocks[0])
+
+    def test_cache_read_tokens_captured(self):
+        from agent.model import Profile
+
+        config = self.make_config(cache_mode="explicit", explicit_cache=True)
+        packet = self.make_packet()
+        client = self.FakeBedrockClient(
+            cache_tokens={"cacheReadInputTokens": 80, "cacheWriteInputTokens": 20}
+        )
+        advisor = self.GroundedAdvisor(client, config, {"baseline": Profile()})
+        advisor.review_evidence(packet, Profile(), self._empty_scouting(), None)
+
+        receipt = advisor.last_receipt
+        assert receipt is not None
+        self.assertEqual(receipt.cache_read_tokens, 80)
+        self.assertEqual(receipt.cache_write_tokens, 20)
+
+    def test_absent_cache_token_fields_are_none_not_zero(self):
+        from agent.model import Profile
+
+        config = self.make_config()
+        packet = self.make_packet()
+        client = self.FakeBedrockClient()  # no cache_tokens set
+        advisor = self.GroundedAdvisor(client, config, {"baseline": Profile()})
+        advisor.review_evidence(packet, Profile(), self._empty_scouting(), None)
+
+        receipt = advisor.last_receipt
+        assert receipt is not None
+        self.assertIsNone(receipt.cache_read_tokens)
+        self.assertIsNone(receipt.cache_write_tokens)
+
+    def test_implicit_cache_mode_no_cache_point(self):
+        from agent.model import Profile
+
+        config = self.make_config(cache_mode="implicit")
+        packet = self.make_packet()
+        client = self.FakeBedrockClient()
+        advisor = self.GroundedAdvisor(client, config, {"baseline": Profile()})
+        advisor.review_evidence(packet, Profile(), self._empty_scouting(), None)
+
+        system_blocks = client.calls[0]["system"]
+        # implicit mode: no explicit checkpoint, provider may use its own
+        self.assertEqual(len(system_blocks), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
