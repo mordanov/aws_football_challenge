@@ -472,6 +472,15 @@ weights and coach policy; the code-only correction is tagged
 `r4v4_match3_keeper_outlet`. Implementation instructions and acceptance criteria
 are in `../prompts/redesign_4_report3_fixes.md`.
 
+Deployed on 2026-10-23 to all five existing runtimes: each is READY with
+`DEFAULT` on version 5 and unchanged runtime ARN. Direct AWS checks exercised
+57 invocations: all seats, both teams, sample/live contracts, stamina extremes,
+the five refreshed known portal Fitness Check sessions, and all three captured
+shots plus ordinary/congested keeper distributions mirrored across both teams.
+All responses matched local commands; CloudWatch confirmed all 57 decisions
+under the new profile with no telemetry drop/delivery failures. These are
+synthetic integration checks, not a new portal verdict or competitive result.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued

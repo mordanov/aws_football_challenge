@@ -70,3 +70,20 @@ Keep initial roster errors and ambiguous possession explicit. Their raw inputs
 are absent from snapshots, so this win does not justify guessed readiness
 handling, looser holder attribution, more shooting everywhere or wider goal
 geometry. Compare future matches before attributing a higher win rate.
+
+## Implementation status
+
+Implemented in `351bcdb`, profile `r4v4_match3_keeper_outlet`. All 116 agent
+tests and Ruff/mypy checks passed. The rebuilt simulator entrant passed 205
+nonbrowser tests and seven subtests; viewer tests remain excluded because
+Playwright is absent. The 278-decision replay changes only the keeper hold
+at tick 9786, preserving all three shots and both ordinary distributions.
+Bidirectional adversarial tests cover pressure on the nearest safe receiver
+and on the preferred contested receiver.
+
+All five existing runtime ARNs now serve version 5 on READY DEFAULT endpoints.
+On 2026-10-23, 57 direct AWS invocations matched local commands, including
+mirrored captured frames and refreshed known Fitness Check sessions. CloudWatch
+confirmed all 57 under the new profile without telemetry drops/delivery errors.
+The portal verdict and performance against a real coordinated press still
+require a new Fitness Check and match; no win-rate improvement is established.
