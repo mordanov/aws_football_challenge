@@ -607,6 +607,39 @@ and report zero dropped/failed telemetry records. Verification UUID:
 Exclude its synthetic ticks 990010-990053 from match analysis. Existing match
 sessions can remain pinned to older versions; use a new match for this revision.
 
+### Route/stamina candidate (not deployed)
+
+`r4v7_route_stamina` adds short lateral/diagonal carry targets only when the direct
+next segment is blocked and the alternative passes a stricter clearance check.
+The targets stay inside the shared compact command bounds, use current/predicted
+opponent positions, and do not relax shot or pass guards. No clear escape means
+the previous fallback remains; this does not guarantee retaining possession.
+
+For routine pressing, a materially fresher teammate can replace the fastest
+arrival only within a 0.35-second tolerance. Close duels, deep defensive threats
+and free-ball interception retain the quickest response. Calm carriers away from
+goal need 0.55 stamina to request sprint; current/imminent pressure and nearby scoring chances
+retain the existing 0.35 floor.
+
+Regulation is 120 seconds. A tied game continues until the next goal or 240
+seconds, so `clock > duration` is valid and must not force a duration override.
+Tied extra-time posture remains balanced. A tempo-0.65 candidate changed none
+of 292 captured tied-extra-time decisions; that is no evidence of competitive
+benefit, so the more aggressive policy was not promoted.
+
+Mirrored tests cover escape routes, predicted blockers, touchline bounds, fresh
+press selection and its emergency exceptions, sprint reserves and extra-time
+shooting. Captured-frame replay covers 1,036 decisions from matches
+`a5ddac07-007f-4d78-8c97-cb7f9b1fcc42` and
+`2d4dd176-ca81-4dd6-88de-e3e99b9a3e97`. It checks command identity, determinism,
+clearance after wire conversion, cover/interceptor constraints, and preservation
+of captured shots, keeper outlets and interceptions. It is not a counterfactual
+match simulation or proof of reduced stamina consumption or improved results.
+Evidence is saved in session files as `route-stamina-evaluation.json`.
+
+These are source changes only. AWS remains on `r4v6_three_match_feedback`,
+runtime version 7; deploying this candidate requires a separate operator rollout.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued

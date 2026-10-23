@@ -27,6 +27,13 @@ option selection: clear forward carries, center aim against a stranded keeper,
 forward-progress ranking of safe keeper outlets, goal-line keeper positioning
 and less rigid midfield support/pressing. Telemetry reasons retain lane/clear-run
 information. No external service or shared runtime state enters these decisions.
+The candidate `r4v7_route_stamina` retains those numeric settings and adds bounded
+escape-route selection, fresh near-tie press allocation and calm-carry sprint
+reserves. Escape limits reuse the protocol's compact lateral limit and coordinate
+scale even for sample inputs; the conservative inner envelope keeps the selected
+route reachable in both contracts. Reasons label `escape blocked route`; wire and
+snapshot schemas are unchanged. This source candidate is not the deployed v6
+profile (which runs on AgentCore runtime version 7).
 The actual pinned AgentCore adapter wraps the array string in one SSE data event.
 On AgentCore each of the five runtimes runs the same staged code and profile;
 its `AFC_PLAYER_ID` seat only fills a missing `myPlayers` (explicit routing wins).
