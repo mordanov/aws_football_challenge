@@ -7,6 +7,7 @@ are discovered, cached or used.
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
@@ -316,3 +317,56 @@ class FakeEvaluator:
 
 # Structural check: FakeEvaluator satisfies AdviceEvaluator at runtime.
 ___: AdviceEvaluator = FakeEvaluator()
+
+
+# ── Default Converse response JSON for FakeBedrockClient ─────────────────────
+# References "claim-shoot-observed" which must exist in make_packet().
+
+def _make_default_advice_json() -> str:
+    return json.dumps(
+        {
+            "settings": asdict(DEFAULT_SETTINGS),
+            "style": asdict(DEFAULT_STYLE),
+            "rationale": "maintain baseline; evidence insufficient for a specific change",
+            "evidence_ids": ["claim-shoot-observed"],
+            "uncertainties": ["SHOOT count contradicts between manifest and report"],
+            "counter_tests": ["verify shot range if opponent increases press intensity"],
+        }
+    )
+
+
+class FakeBedrockClient:
+    """Fake Bedrock Converse client that records calls and returns a fixed response.
+
+    Satisfies the ``_ConverseClient`` protocol used by ``GroundedAdvisor``.
+    No AWS credentials are discovered, cached or used.
+    """
+
+    def __init__(
+        self,
+        response_json: str | None = None,
+        *,
+        stop_reason: str = "end_turn",
+        side_effect: Exception | None = None,
+    ) -> None:
+        self.calls: list[dict[str, Any]] = []
+        self._response_json = response_json
+        self._stop_reason = stop_reason
+        self._side_effect = side_effect
+
+    def converse(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(kwargs)
+        if self._side_effect is not None:
+            raise self._side_effect
+        content = self._response_json if self._response_json is not None else _make_default_advice_json()
+        return {
+            "output": {
+                "message": {
+                    "role": "assistant",
+                    "content": [{"text": content}],
+                }
+            },
+            "stopReason": self._stop_reason,
+            "usage": {"inputTokens": 100, "outputTokens": 50},
+            "ResponseMetadata": {"RequestId": "fake-request-id-001"},
+        }
