@@ -17,6 +17,16 @@ class EvaluationDeferred(RuntimeError):
     """No attempt was reserved because evaluation cannot finish in this invocation."""
 
 
+class RolloutCooldown(RuntimeError):
+    """Legacy runtime sessions must expire before new profiles may be promoted."""
+
+
+def require_promotion_ready(context, *, now_ms: int) -> None:
+    if now_ms < int(os.environ.get("AFC_PROMOTION_NOT_BEFORE_MS", "0")):
+        raise RolloutCooldown("legacy runtime sessions have not reached their maximum lifetime")
+    require_evaluation_budget(context)
+
+
 def require_evaluation_budget(context) -> None:
     if context is not None and context.get_remaining_time_in_millis() < 660_000:
         raise EvaluationDeferred("continue in a fresh invocation before reserving an attempt")
@@ -121,8 +131,10 @@ def learner(event: dict, context) -> dict:
                 source=CompetitionEvidence(source),
                 evaluator=evaluate_profiles,
                 now_ms=now_ms,
-                before_reservation=lambda: require_evaluation_budget(context),
+                before_reservation=lambda: require_promotion_ready(context, now_ms=now_ms),
             )
+        except RolloutCooldown:
+            result = {"status": "rollout_cooldown", "generation": registry.active().generation}
         except EvaluationDeferred:
             if trigger.renew(token, now_ms=round(time.time() * 1000)):
                 dispatch(invocation, token)
@@ -136,6 +148,7 @@ def learner(event: dict, context) -> dict:
             "evidence_plan": source.last_plan,
             "publication_recovery": recovery,
             "analysis_ms": round((time.monotonic() - analysis_started) * 1000),
+            "promotion_not_before_ms": int(os.environ.get("AFC_PROMOTION_NOT_BEFORE_MS", "0")),
         }
         s3.put_object(
             Bucket=config["bucket"],

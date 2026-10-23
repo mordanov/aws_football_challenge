@@ -453,6 +453,26 @@ p=0.9270); no crashes or illegal actions occurred. This was an offline plumbing
 check, not eligible live evidence, a production promotion, or a consumed
 generation attempt. The registry baseline was not changed to force acceptance.
 
+The live automatic cycle subsequently verified the ten diagnostic records,
+excluded them from candidate evidence, persisted `insufficient_evidence` in
+1,097 ms and cleared its work latch. The failure archive was empty.
+
+To preserve match-wide consistency during the namespace migration, the S3
+configuration supports `promotion_not_before_ms` (nonnegative UTC epoch
+milliseconds, default 0). Before this deadline an otherwise eligible candidate
+produces `rollout_cooldown` without consuming a generation attempt. Evidence
+collection/analysis continue and the work latch settles normally; later
+activity after the deadline automatically resumes eligibility, with no
+manual re-enabling or perpetual timer. Insufficient evidence still reports
+`insufficient_evidence`.
+
+For this deployment the deadline is **2026-10-24 07:48:37 UTC**
+(`1792828117195`), computed from the latest five-player update plus the verified
+28,800-second maximum session lifetime and 120-second margin. Older sessions
+retain their prior profile while they drain. Both new Lambdas remain enabled;
+the deadline is a promotion guard, not a disabled collector or a claim that
+any real match has ended.
+
 The failure archive is a separate private AES256-encrypted owned bucket,
 retained outside the stack. The first S3 rollout exposed Lambda's destination
 permission validation and denied bucket tagging; those were resolved by using

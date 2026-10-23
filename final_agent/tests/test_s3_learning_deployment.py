@@ -55,6 +55,18 @@ def test_collector_cannot_write_profile_registry_and_players_are_not_changed():
     assert all(r["Type"] != "AWS::BedrockAgentCore::Runtime" for r in resources.values())
 
 
+def test_rollout_deadline_is_validated_and_reaches_deployed_worker():
+    cfg = {**config(), "promotion_not_before_ms": 1792828117195}
+    deploy.learning.checked_config(cfg)
+    value = deploy.template(cfg, "code.zip")
+    assert value["Resources"]["Learner"]["Properties"]["Environment"]["Variables"][
+        "AFC_PROMOTION_NOT_BEFORE_MS"
+    ] == "1792828117195"
+    for invalid in (-1, True, "1792828117195"):
+        with pytest.raises(ValueError, match="promotion_not_before_ms"):
+            deploy.learning.checked_config({**cfg, "promotion_not_before_ms": invalid})
+
+
 def test_failure_archive_owner_privacy_and_encryption_are_checked_before_deployment():
     requests = []
     block = {

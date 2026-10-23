@@ -101,6 +101,7 @@ def template(config: dict, code_key: str) -> dict:
             "AFC_OWNER_ACCOUNT": account,
             "AFC_LEARNER_FUNCTION": stack + "-learner",
             "AFC_LEARNING_ENABLED": enabled,
+            "AFC_PROMOTION_NOT_BEFORE_MS": str(config.get("promotion_not_before_ms", 0)),
         }
         if label == "collector":
             function["Environment"]["Variables"]["AFC_LOG_GROUPS"] = json.dumps(

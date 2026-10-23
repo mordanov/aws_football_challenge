@@ -30,6 +30,7 @@ def checked_config(config: dict) -> None:
     if not isinstance(config, dict) or not required <= set(config) <= required | {
         "learning_enabled",
         "failure_bucket",
+        "promotion_not_before_ms",
     }:
         raise ValueError("learning config must supply exactly the documented fields")
     for key, pattern in {
@@ -71,6 +72,11 @@ def checked_config(config: dict) -> None:
         raise ValueError("collection_enabled must be a boolean")
     if type(config.get("learning_enabled", False)) is not bool:
         raise ValueError("learning_enabled must be a boolean")
+    if (
+        type(config.get("promotion_not_before_ms", 0)) is not int
+        or not 0 <= config.get("promotion_not_before_ms", 0) <= 10**13
+    ):
+        raise ValueError("promotion_not_before_ms must be a nonnegative epoch millisecond integer")
 
 
 def template(config: dict, code_key: str) -> dict:

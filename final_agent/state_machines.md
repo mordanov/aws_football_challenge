@@ -139,6 +139,9 @@ The S3 backend conditionally creates a winning match pin from a validated ACTIVE
 snapshot; a racing promotion can leave that new match on the preceding generation,
 but never splits its five players. ACTIVE compare-and-swap is its promotion commit.
 Evaluation budget too short -> continuation before reservation, not failed attempt.
+Eligible candidate before the configured legacy-session drain deadline ->
+rollout_cooldown without reserving an attempt. Activity after the deadline ->
+normal evaluation eligibility; no operator re-enable is required.
 **Source:** `agent/learning_source.py`, `learning_policy.py`, `learning_worker.py`,
 `learning_evaluation.py`, `profile_registry.py`.
 

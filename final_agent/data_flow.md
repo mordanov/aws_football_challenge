@@ -176,6 +176,9 @@ runtime observations, but proposal guards require the exact current generation
 and profile digest. The simulator and players import the same merged tactics;
 legacy golden tests disable rush/desperate modes, while explicit scenario tests
 exercise enabled modes. No regenerated golden fixture hides a behavior change.
+The deployment's `promotion_not_before_ms` flows to the Lambda environment and
+pre-reservation guard. This lets old runtime sessions expire before the new
+namespace may promote a profile; collection and exact Memory reads continue.
 **Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
 `agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
 `agent/learning_source.py`, `agent/learning_policy.py`, `agent/learning_worker.py`,
