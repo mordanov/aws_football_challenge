@@ -589,8 +589,21 @@ the reports: candidate CloudWatch match/team attribution is unresolved, and PDF
 statistics conflict internally. The Bedrock profile proposal was not applied.
 The new scenarios are mirrored for both teams; the default golden audit changes
 36 of 750 commands for the documented shot/outlet/support/pressing policies.
-The carry-enabled scenarios are checked separately. This section records a
-source revision, not an AWS rollout or proof of improved match results.
+The carry-enabled scenarios are checked separately. A replay of the three
+provisional telemetry bundles validates 1,291 decisions and changes 31 commands;
+neither the replay nor these scenarios demonstrate improved match results.
+
+Implementation commit `781fcfc` was deployed to all five existing runtimes:
+each is READY, and each DEFAULT endpoint now selects runtime version **7** with
+profile `r4v6_three_match_feedback`. Runtime ARNs are unchanged. Direct AWS
+verification matched 44 responses against the local runtime, covering all
+five seats, both teams, sample/compact inputs and all six feedback scenarios.
+All 44 corresponding CloudWatch decisions contain the new profile version
+and report zero dropped/failed telemetry records. Verification UUID:
+`db73581e-dda4-4405-a717-a985421f2b3a`; detailed receipt:
+`three-match-series/feedback-deployment-verification.json` in session files.
+Exclude its synthetic ticks 990010-990053 from match analysis. Existing match
+sessions can remain pinned to older versions; use a new match for this revision.
 
 ## Telemetry and deadline limits
 
