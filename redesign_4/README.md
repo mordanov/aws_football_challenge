@@ -522,6 +522,22 @@ formation. Instructions and acceptance are in
 `../prompts/redesign_4_report4_fixes.md`. No offline AgentCore service integration
 is included in this match correction.
 
+All five existing runtimes were updated in place to **version 6**, with DEFAULT
+READY on version 6 and unchanged ARNs. Verification made 65 direct AWS
+invocations covering all seats, both teams, both input contracts, stamina
+extremes, both captured shots mirrored, all five original shots mirrored, and
+the previous contested keeper-distribution case. Responses matched local
+commands; CloudWatch confirmed all 65 new-profile decisions with no recorded
+telemetry drops or failures. Maximum observed round trip was 4.521 seconds;
+this is not a per-tick deadline guarantee.
+
+The five exact known portal Fitness Check sessions were refreshed, without
+stopping unrelated match sessions. Run the portal Fitness Check before the next
+match; ARNs need no replacement. Verification UUID
+`c32a673f-1380-45d4-ad3d-0c68ceffe193`; exclude synthetic ticks 990008/990009 from
+match research. Detailed evidence is persisted in the session files directory
+as `report4-deployment-verification.json`; implementation commit `4799bb0`.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued

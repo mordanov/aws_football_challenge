@@ -1,7 +1,8 @@
 # Report 4: keeper reaction to fast incoming balls
 
-Status: implemented and locally verified; AWS deployment pending. Keep these corrections separate
-from the proposed offline AgentCore coaching integrations.
+Status: implemented and deployed to all five runtimes as version 6, with
+unchanged ARNs. Keep these corrections separate from the proposed offline
+AgentCore coaching integrations.
 
 ## Evidence and attribution
 
@@ -85,3 +86,21 @@ Report 3 replay preserves its three shots and prior keeper-outlet fix.
 The full agent suite has 120 passing tests; Ruff, formatting and mypy pass.
 The simulator entrant was rebuilt (`ac797304c030` hash prefix); 205 nonbrowser
 tests and seven subtests pass. No sprint/save benefit is claimed from that suite.
+
+## Deployment outcome
+
+All five runtimes and their DEFAULT endpoints are READY on version 6. Verified
+65 direct AWS invocations against local expected commands: five seats, both
+teams, sample/live input contracts, stamina extremes, both captured shots
+mirrored with depleted/full keeper stamina, all five actual shots mirrored, and
+the previous contested keeper-distribution correction mirrored. The five exact
+known portal Fitness Check sessions were refreshed and exercised; unrelated
+live sessions were untouched.
+
+CloudWatch confirms all 65 new-profile decisions, with zero recorded telemetry
+drops/failures. Verification UUID `c32a673f-1380-45d4-ad3d-0c68ceffe193`;
+synthetic ticks 990008/990009 must be excluded from match analysis.
+Maximum measured invocation round trip was 4.521 seconds, not a competitive
+per-tick latency guarantee. Evidence is persisted as
+`report4-deployment-verification.json` in the session files directory.
+Implementation commit: `4799bb0`.
