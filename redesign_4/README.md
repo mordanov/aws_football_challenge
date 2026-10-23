@@ -592,6 +592,8 @@ The new scenarios are mirrored for both teams; the default golden audit changes
 The carry-enabled scenarios are checked separately. A replay of the three
 provisional telemetry bundles validates 1,291 decisions and changes 31 commands;
 neither the replay nor these scenarios demonstrate improved match results.
+The generated `local_simulator/entrants/redesign_4_v2` copy is rebuilt from the
+same agent source, with entrant hash prefix `722443191b26`.
 
 Implementation commit `781fcfc` was deployed to all five existing runtimes:
 each is READY, and each DEFAULT endpoint now selects runtime version **7** with
