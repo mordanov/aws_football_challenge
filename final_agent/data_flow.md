@@ -157,6 +157,18 @@ terminal receipt references their ordered keys and content digest. The optional
 player CDK binding imports the learning stack's table/policy exports and wires
 the same table/team plus restricted managed policy to all five runtimes;
 it defaults off and never enables the learner as a side effect.
+The workshop alternative replaces DynamoDB state with conditional S3 objects:
+collector -> immutable observation/day references -> exact Memory event ->
+immutable acknowledgement. An S3 CAS wake-up coalesces activity into one delayed
+learner; revision checks preserve arrivals during evaluation. Pending publication
+recovery precedes exact Memory reads; expired partial sessions cannot support
+proposals. Evaluation artifacts/generation ancestry are stored before ACTIVE CAS;
+the pointer binds the committed generation to its immutable receipt. A racing
+new match can pin the prior validated ACTIVE snapshot but all seats retain that
+winning pin. Async failures flow to the owned S3 bucket; visible CloudWatch alarms
+need no SNS/SQS/EventBridge. Serving roles can only read registry data and
+conditionally create match pins. Diagnostic deployment evidence is excluded from
+candidate input.
 **Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
 `agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
 `agent/learning_source.py`, `agent/learning_policy.py`, `agent/learning_worker.py`,

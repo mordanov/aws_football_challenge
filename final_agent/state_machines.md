@@ -133,8 +133,26 @@ Oversized raw evaluations -> immutable chunks with a digest/reference receipt.
 Concurrent baseline change -> stale_baseline, never overwrite. Repeating a
 reserved generation -> already_attempted, not another significance test.
 Neither analysis delay nor promotion confirms a match end or real efficacy.
+The S3 backend conditionally creates a winning match pin from a validated ACTIVE
+snapshot; a racing promotion can leave that new match on the preceding generation,
+but never splits its five players. ACTIVE compare-and-swap is its promotion commit.
+Evaluation budget too short -> continuation before reservation, not failed attempt.
 **Source:** `agent/learning_source.py`, `learning_policy.py`, `learning_worker.py`,
 `learning_evaluation.py`, `profile_registry.py`.
+
+## S3 learning wake-up
+
+**States:** idle, dispatch_pending, dispatched, waiting_for_quiet, analyzing,
+continued, settled; expired.
+**Transitions:** observation delivery -> conditional work reservation and latest
+activity revision; Lambda acceptance -> dispatch acknowledgement. Further logs ->
+same owner, increased revision. Quiet activity delay -> exact evidence analysis.
+Insufficient invocation budget -> same-owner continuation without consuming an
+evaluation attempt. Settlement checks the observed revision; concurrent activity
+keeps work pending. Expired lease -> new owner on subsequent collection activity.
+Async errors exhausted -> retained S3 invocation record and CloudWatch metrics.
+No transition claims official match completion or unlimited automatic retry.
+**Source:** `agent/s3_trigger.py`, `agent/s3_worker.py`, `deploy/s3_learning.py`.
 
 ## Pass inference
 

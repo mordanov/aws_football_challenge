@@ -1,0 +1,19 @@
+{
+  "account": "123456789012",
+  "region": "us-east-1",
+  "team_id": "our_team",
+  "stack_name": "final-agent-s3-learning",
+  "memory_id": "Memory_ourteam-abcdefghij",
+  "artifact_bucket": "our-owned-existing-assets",
+  "failure_bucket": "our-owned-private-failure-archive",
+  "alarm_topic_arn": "",
+  "collection_enabled": false,
+  "learning_enabled": false,
+  "log_groups": [
+    "/aws/bedrock-agentcore/runtimes/our-seat-0-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our-seat-1-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our-seat-2-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our-seat-3-DEFAULT",
+    "/aws/bedrock-agentcore/runtimes/our-seat-4-DEFAULT"
+  ]
+}

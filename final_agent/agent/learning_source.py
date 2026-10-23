@@ -61,9 +61,34 @@ class MemoryObservationSource:
             params["Limit"] = 3000 - len(rows)
         else:
             raise RuntimeError("Memory evidence index exceeded pagination limit")
+        return verify_observation_documents(
+            self.memory,
+            [(json.loads(row["document"]["S"]), row["status"]["S"]) for row in rows],
+            memory_id=self.memory_id,
+            team_id=self.team_id,
+            now_ms=now_ms,
+        )
+
+
+def verify_observation_documents(
+    memory: EvidenceMemory,
+    documents: list[tuple[dict, str]],
+    *,
+    memory_id: str,
+    team_id: str,
+    now_ms: int,
+) -> list[dict]:
+    """Verify exact Memory events against durable documents and acknowledgements."""
+    return _DocumentVerifier(memory, memory_id, team_id).load(documents, now_ms=now_ms)
+
+
+class _DocumentVerifier:
+    def __init__(self, memory: EvidenceMemory, memory_id: str, team_id: str):
+        self.memory, self.memory_id, self.team_id = memory, memory_id, team_id
+
+    def load(self, documents: list[tuple[dict, str]], *, now_ms: int) -> list[dict]:
         groups: dict[tuple[str, int], list[tuple[dict, str]]] = defaultdict(list)
-        for row in rows:
-            document = json.loads(row["document"]["S"])
+        for document, status in documents:
             content = document["content"]
             if (
                 content["team_id"] != self.team_id
@@ -72,7 +97,7 @@ class MemoryObservationSource:
             ):
                 raise RuntimeError("Memory evidence index identity/digest mismatch")
             groups[(content["match_id"], content["team_side"])].append(
-                (document, row["status"]["S"])
+                (document, status)
             )
         result = {}
         if len(groups) > 20:

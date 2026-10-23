@@ -94,7 +94,7 @@ jobs:
         run: |
           ruff check agent tests
           if [ "${{ matrix.project }}" = "final_agent" ]; then
-            ruff check deploy/learning.py
+            ruff check deploy/learning.py deploy/s3_learning.py
           fi
 
       - name: Type check

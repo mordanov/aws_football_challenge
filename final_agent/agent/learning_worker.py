@@ -9,25 +9,40 @@ from typing import Protocol
 
 from .learning_policy import propose
 from .model import Profile
-from .profile_registry import DynamoProfileRegistry, canonical, profile_document
+from .profile_registry import ActiveProfile, DynamoProfileRegistry, canonical, profile_document
 
 
 class ObservationSource(Protocol):
     def load(self, *, now_ms: int) -> list[dict]: ...
 
 
+class LearningRegistry(Protocol):
+    def active(self) -> ActiveProfile: ...
+
+    def begin_attempt(
+        self, baseline: ActiveProfile, candidate: Profile, evidence_digest: str
+    ) -> bool: ...
+
+    def finish_attempt(
+        self, baseline: ActiveProfile, candidate: Profile, evidence_digest: str, evaluation: dict
+    ) -> dict: ...
+
+
 def run_learning(
     *,
-    registry: DynamoProfileRegistry,
+    registry: LearningRegistry,
     source: ObservationSource,
     evaluator: Callable[[Profile, Profile], dict],
     now_ms: int,
+    before_reservation: Callable[[], None] | None = None,
 ) -> dict:
     baseline = registry.active()
     documents = source.load(now_ms=now_ms)
     candidate = propose(baseline.selection.profile, documents)
     if candidate is None:
         return {"status": "insufficient_evidence", "generation": baseline.generation}
+    if before_reservation is not None:
+        before_reservation()
     if not registry.begin_attempt(baseline, candidate.profile, candidate.evidence_digest):
         return {"status": "already_attempted", "generation": baseline.generation}
     try:

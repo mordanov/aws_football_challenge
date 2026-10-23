@@ -252,7 +252,102 @@ There is no automatic real-result win-rate claim, official completion inference,
 opponent identification, free-form LLM/code generation or automatic formation
 change. The empty/insufficient/rejected paths are expected healthy outcomes.
 
-## Activation status
+## S3 backend for workshop permissions
+
+The alternative backend uses ordinary permitted S3/Lambda/AgentCore operations,
+not DynamoDB, SNS, SQS or EventBridge. The existing DynamoDB backend remains
+available but is not a dependency of this alternative.
+
+```text
+CloudWatch -> collector Lambda -> immutable S3 observation/day index
+                              -> exact Memory event -> immutable S3 acknowledgement
+                              -> S3 CAS work latch -> async learner Lambda
+130 seconds without collection activity -> exact Memory verification
+ -> bounded candidate -> fixed simulator gate -> S3 ACTIVE compare-and-swap
+async Lambda failure -> separate owned S3 failure archive + CloudWatch alarms
+```
+
+S3 is the authoritative coordination/evidence archive. Memory is the exact
+observational store, not a lock or mutable active-profile pointer. `CreateEvent`
+idempotency does not provide compare-and-swap among different requests.
+Conditional S3 creates preserve artifacts, match pins, attempts and evaluations;
+ETag-conditional writes update ACTIVE and the work latch. Expected bucket owner
+and account-scoped IAM conditions guard every storage boundary.
+
+The registry prefix is `final-agent-learning/<team>/registry/`: `ACTIVE.json`,
+`profiles/`, `generations/`, `evaluations/`, `attempts/`, `proposals/`, `results/`
+and `matches/<UUID>/<side>.json`. The first successful conditional pin selects
+one caller's validated ACTIVE snapshot. Unlike the DynamoDB transaction, S3
+does not atomically check ACTIVE and create a separate pin: a racing promotion
+can select the preceding generation for that new match. All five players still
+use the same immutable winning selection. Existing pins never change.
+Immutable generation ancestry binds promotion to the full evaluation and
+recovers committed results after uncertain responses or a crash before result
+materialization. A single-object ACTIVE CAS is the promotion commit point.
+
+Observations and acknowledgements are immutable, separately scoped objects.
+UTC day discovery references keep scans bounded to seven days rather than the
+whole historical archive. At most 30,000 discovery references across eight UTC
+partitions are ranked by each session's most recent S3 modification. The newest
+whole sessions fitting 20 sessions/3,000 documents are selected; oversized,
+capacity-excluded and expired sessions are excluded whole, never partially
+sampled. Eight parallel readers and per-call immutable-document reuse bound
+network overhead. The learner's stored status includes the evidence selection
+plan, exclusion counts, publication recovery and analysis duration.
+Selected sessions are checked in full. Pending
+publication is recovered before analysis. Entire sessions crossing Memory's
+retention boundary are excluded; partial expired sessions are not tactical
+support. Missing/contradictory in-window events still fail explicitly.
+
+The work latch coalesces log bursts under one owner with an expiring lease.
+Dispatch remains pending until Lambda accepts it; failed dispatch can be retried.
+Revision-conditional settlement prevents arrivals during evaluation from being
+lost. A learner waits for collection quietness, not official match completion.
+An invocation nearing its wait budget continues asynchronously with the same
+owner token. Before reserving an evaluation, it checks that at least 660 seconds
+remain for the 600-second evaluator and finalization. No reservation is consumed
+merely because a delayed worker needs a fresh invocation.
+
+The learner's reserved concurrency is one; deliberate Lambda recursion is
+enabled only for this coalesced continuation. Continuous incoming games can keep
+it active and incur billed waiting time. No new activity means the worker settles
+and stops; there is no perpetual timer. Lambda async retries are bounded; expired
+leases recover on subsequent activity, not an unconditional scheduled guarantee.
+Errors/exhausted invocations are retained under
+`aws/lambda/async/<function>/` in the separate owned `failure_bucket`. Replay a failed
+collector's `requestPayload`, or re-signal pending learner work deliberately;
+do not delete evidence/pins to retry an evaluation. CloudWatch alarms have no
+SNS actions and require dashboard/metrics monitoring.
+
+Start from `deploy/s3_learning.example.json`. Use a separate stack name
+`final-agent-s3-learning`, `alarm_topic_arn=""`, an existing private `failure_bucket`,
+and learning disabled. The archive must belong to the configured account and
+have public access blocked and default encryption enabled. It is external to
+CloudFormation and is never deleted with the stack. Lambda validates write access
+to the whole archive bucket; a dedicated bucket avoids granting broad writes to
+the assets bucket. Workshop bucket tagging is not permitted, so create/configure
+the archive with permitted S3 operations, not a tagged CloudFormation resource:
+
+```sh
+python deploy/s3_learning.py plan --config local/s3-learning.json
+python deploy/s3_learning.py apply --config local/s3-learning.json --approve
+python deploy/s3_learning.py bootstrap --config local/s3-learning.json --approve
+```
+
+Both Lambda roles use explicitly permitted `AgentCore-*` names. Player CDK
+configuration uses `afcLearning.backend="s3"`, `bucket`, `teamId`, `enabled`.
+Players can read registry objects and conditionally create only match pins;
+they cannot write ACTIVE, profiles or evaluation outcomes. Keep learning disabled
+through the five-player rollout and baseline/digest verification, then enable
+and reapply the S3 stack config. This changes no formation or tactical baseline.
+
+The fixed diagnostic match UUID
+`6dc3a574-299e-44e4-81aa-6eb36c5776ef` is reserved for live-shaped deployment
+probes. Its records exercise collection and exact Memory delivery but are
+explicitly excluded from candidate evidence. Fitness probes keep their existing
+synthetic-session handling.
+
+## Original DynamoDB activation attempt
 
 The activation attempt on 2026-10-23 was blocked by the workshop participant
 role's permissions. CloudFormation `final-agent-learning` reached
@@ -264,11 +359,71 @@ to the existing private CDK assets bucket; temporary log groups were rolled back
 The existing five runtime deployments and their policies/environment were not
 changed, and `afcLearning.enabled` remains false.
 
-An authorized administrator must provision the stack's resources or grant the
+For that original backend, an authorized administrator would have to provision the stack's resources or grant the
 deployment identity the required lifecycle permissions for the scoped resources.
 The three denials are confirmed blockers, not an exhaustive permissions list:
 provisioning did not reach every resource. Retrying requires resolving the
 failed CloudFormation stack (inspect any retained resources before explicit
 deletion/recreation), then bootstrap, controlled player rollout, verification,
 and finally learner activation. Do not enable players against an absent registry
-or remove DynamoDB coordination/failure monitoring to bypass workshop restrictions.
+or remove coordination/failure monitoring to bypass workshop restrictions.
+The S3 alternative above replaces those components using normally permitted
+services rather than attempting denied actions or changing participant policies.
+
+## Verified S3 activation
+
+The S3 alternative was activated on 2026-10-23 (UTC):
+
+- CloudFormation `final-agent-s3-learning` completed, with five log subscriptions,
+  collector/learner Lambdas, scoped `AgentCore-*` roles, account-bound S3 failure
+  destinations and visible CloudWatch alarms.
+- All five existing runtimes and DEFAULT endpoints are **version 9, READY**.
+  Their ARNs are unchanged; deployment source is exclusively `final_agent`.
+- ACTIVE generation 1 remains the exact `r4v7_route_stamina` profile, digest
+  `934692a57fd8b542227d31b24b88292ffb186a3585d60116abd7f6fb3bb4d7b5`.
+  All five seats emitted this same digest and shared the diagnostic match pin.
+- Fifteen recorded live-shaped/fitness invocations returned correctly routed
+  commands. Ten distinct diagnostic observations were verified byte-for-byte
+  between S3 and Memory, with ten durable acknowledgements.
+- Both collector and learner have learning enabled. Real post-activation log
+  delivery automatically dispatched the learner, which settled its work latch
+  and persisted `status=insufficient_evidence`, generation 1. No profile was
+  forced through acceptance; diagnostic records cannot support a candidate.
+
+### Current safety pause after parallel tactical deployment
+
+Automatic application was subsequently disabled in both Lambdas on
+2026-10-23; CloudWatch collection and S3/Memory publication remain enabled.
+The latest completed learner run verified 370 documents from two sessions in
+14,867 ms, excluded no sessions, returned `insufficient_evidence`, and cleared
+the work latch. ACTIVE remains generation 1 and the failure archive is empty.
+
+Another development session switched the original shared worktree to
+`rush-desperate-attack` and added commits `850f586` and `1485ea2` during this
+implementation. Direct S3 inspection confirmed that all five live version-9
+artifacts already contain the `1485ea2` tactical code. Their tactical SHA-256 is
+`eaead9a76ca0c9d2c722f929daea691760204e0105f940b22408e92be7699f2c`.
+That branch currently fails two legacy golden-decision checks.
+
+The S3 changes were preserved in a separate worktree based on `831b4fa`,
+without reverting, modifying, or importing those parallel tactics. This
+learning branch's simulator therefore must not evaluate promotions for the
+currently deployed rush tactics. Before re-enabling, integrate the intended
+tactics and evaluator, resolve their golden expectations, and update the
+compatibility generation so old and new tactical evidence cannot be combined
+under the unchanged `match_profiles_v1` label. Then verify compatible registry
+documents, match pins, and all five serving artifacts before enabling learning.
+Do not reactivate merely because this isolated S3 branch passes its own tests.
+
+The failure archive is a separate private AES256-encrypted owned bucket,
+retained outside the stack. The first S3 rollout exposed Lambda's destination
+permission validation and denied bucket tagging; those were resolved by using
+this dedicated existing archive, not by broadening participant permissions.
+The failed intermediate S3 stack metadata was removed while preserving that
+archive. The earlier inactive DynamoDB stack remains historical rollback metadata.
+
+Fresh match sessions use version 9; already existing AgentCore sessions may
+continue on their original runtime version. Keep the initial baseline unchanged
+through a rollout and disqualify mixed-code evidence. Registry cache misses add
+S3 network dependency/latency; small synthetic probes do not establish a
+production p95 latency guarantee.

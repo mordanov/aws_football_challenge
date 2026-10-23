@@ -28,6 +28,13 @@ class MemoryClient(Protocol):
     def create_event(self, **kwargs: Any) -> dict: ...
 
 
+class Outbox(Protocol):
+    @property
+    def team_id(self) -> str: ...
+
+    def publish(self, observation: Observation) -> bool: ...
+
+
 class ObservationOutbox:
     def __init__(
         self,
@@ -115,7 +122,7 @@ class ObservationOutbox:
         return True
 
 
-def collect(event: dict, outbox: ObservationOutbox, *, log_groups: tuple[str, ...]) -> dict:
+def collect(event: dict, outbox: Outbox, *, log_groups: tuple[str, ...]) -> dict:
     data = event["awslogs"]["data"]
     if not isinstance(data, str) or len(data) > 6_000_000:
         raise ValueError("invalid subscription envelope size")

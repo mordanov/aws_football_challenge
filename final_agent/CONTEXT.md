@@ -122,6 +122,10 @@ One durable evaluation reservation per active profile generation. Additional
 evidence or process retries cannot repeatedly test the same baseline until it
 passes; failure and inconclusive results leave the active profile unchanged.
 
+**Learning wake-up**:
+A coalesced request to analyze newly collected evidence after an activity delay.
+It is neither match completion nor an instruction to retry a reserved evaluation.
+
 **Match manifest**:
 Operator-supplied match identity, opponent identity and final-result availability.
 Completeness describes result availability, not full replay coverage.

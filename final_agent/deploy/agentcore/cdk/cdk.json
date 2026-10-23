@@ -6,8 +6,10 @@
   },
   "context": {
     "afcLearning": {
-      "enabled": false,
-      "stackName": "final-agent-learning",
+      "enabled": true,
+      "backend": "s3",
+      "bucket": "cdk-hnb659fds-assets-559922262840-us-east-1",
+      "stackName": "final-agent-s3-learning",
       "teamId": "aleksalotl"
     },
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,

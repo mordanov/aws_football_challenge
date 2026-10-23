@@ -28,7 +28,8 @@ def checked_config(config: dict) -> None:
         "log_groups",
     }
     if not isinstance(config, dict) or not required <= set(config) <= required | {
-        "learning_enabled"
+        "learning_enabled",
+        "failure_bucket",
     }:
         raise ValueError("learning config must supply exactly the documented fields")
     for key, pattern in {
@@ -41,6 +42,11 @@ def checked_config(config: dict) -> None:
     }.items():
         if not isinstance(config[key], str) or not re.fullmatch(pattern, config[key]):
             raise ValueError(f"invalid learning config {key}")
+    if "failure_bucket" in config and (
+        not isinstance(config["failure_bucket"], str)
+        or not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", config["failure_bucket"])
+    ):
+        raise ValueError("invalid learning config failure_bucket")
     topic_prefix = f"arn:aws:sns:{config['region']}:{config['account']}:"
     if config["alarm_topic_arn"] != "" and (
         not isinstance(config["alarm_topic_arn"], str)
@@ -516,6 +522,10 @@ def package(output: Path) -> str:
         "tactics.py",
         "coach.py",
         "archetypes.py",
+        "s3_registry.py",
+        "s3_learning.py",
+        "s3_trigger.py",
+        "s3_worker.py",
     ):
         files["agent/" + name] = ROOT / "agent" / name
     simulator = ROOT.parent / "local_simulator" / "src" / "football_lab"
@@ -571,7 +581,7 @@ def owned_stack(client, config: dict) -> dict | None:
     return stack
 
 
-def apply(config: dict) -> None:
+def apply(config: dict, *, template_builder=template, named_iam: bool = False) -> None:
     from botocore.exceptions import ClientError
 
     checked_config(config)
@@ -592,8 +602,8 @@ def apply(config: dict) -> None:
         )
     request = {
         "StackName": config["stack_name"],
-        "TemplateBody": json.dumps(template(config, key)),
-        "Capabilities": ["CAPABILITY_IAM"],
+        "TemplateBody": json.dumps(template_builder(config, key)),
+        "Capabilities": ["CAPABILITY_NAMED_IAM" if named_iam else "CAPABILITY_IAM"],
         "Parameters": [
             {
                 "ParameterKey": "CollectionEnabled",
