@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 from .model import DEFAULT_SETTINGS, DEFAULT_STYLE, Decision, Player, Settings, Snapshot, Style
+from .protocol import MATCH_COORDINATE_SCALE, MATCH_Y_LIMIT
 
 
 def distance(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -114,6 +115,16 @@ def assignments(snapshot: Snapshot, settings: Settings = DEFAULT_SETTINGS) -> di
     if s.owner is not None and s.owner[0] != s.team:
         best = min(active, key=lambda p: (arrival(p, s.ball), p.id))
         radius = min(30, settings.press_radius + (5 if s.coach == "press_high" else 0))
+        if s.direction * s.ball[0] > -30 and distance(point(best), s.ball) > 3:
+            fresh = tuple(
+                p
+                for p in active
+                if p.stamina >= best.stamina + 0.2
+                and arrival(p, s.ball) <= arrival(best, s.ball) + 0.35
+                and distance(point(p), s.ball) <= radius
+            )
+            if fresh:
+                best = min(fresh, key=lambda p: (-p.stamina, arrival(p, s.ball), p.id))
         if distance(point(best), s.ball) <= radius:
             presser = best.id
     cover = 2 if presser == 1 else 1
@@ -187,12 +198,44 @@ def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str
     """Reward an unpressured clear run without overriding shots or passing under pressure."""
     ahead = [distance(point(p), point(o)) for o in s.opponents if s.direction * (o.x - p.x) > 0]
     space = min([12.0, *ahead])
-    move = movement(s, p, s.direction * 50.0, max(-10.0, min(10.0, p.y * 0.6)), urgent=True)
+    urgent = (
+        p.stamina >= 0.55
+        or min(distance(point(p, t), point(o, t)) for o in s.opponents for t in (0.0, 0.8)) <= 8
+        or distance(point(p), (s.direction * 55.0, 0.0)) <= 29
+    )
+    move = movement(s, p, s.direction * 50.0, max(-10.0, min(10.0, p.y * 0.6)), urgent=urgent)
     target = (move["parameters"]["target_x"], move["parameters"]["target_y"])
     length = distance(point(p), target)
     fraction = min(1.0, 12.0 / length) if length else 0.0
     next_point = (p.x + (target[0] - p.x) * fraction, p.y + (target[1] - p.y) * fraction)
     lane = clearance(point(p), next_point, s.opponents)
+    escape = False
+    if lane < 3:
+        y_limit = MATCH_Y_LIMIT * MATCH_COORDINATE_SCALE
+        routes = [
+            (
+                max(-50.0, min(50.0, p.x + s.direction * dx)),
+                max(-y_limit, min(y_limit, p.y + dy)),
+            )
+            for dx in (8, 0)
+            for dy in (-8, 8)
+        ]
+        routes = [xy for xy in routes if 5 <= distance(point(p), xy) <= 12]
+        route = max(
+            routes,
+            default=target,
+            key=lambda xy: (
+                clearance(point(p), xy, s.opponents),
+                s.direction * (xy[0] - p.x),
+                -abs(xy[1]),
+            ),
+        )
+        route_lane = clearance(point(p), route, s.opponents)
+        if route_lane >= 3 and route_lane >= lane + 1:
+            target, lane = route, route_lane
+            length = distance(point(p), target)
+            move = movement(s, p, target[0], target[1], urgent=urgent)
+            escape = True
     clear_run = (
         length > 5
         and s.direction * (target[0] - p.x) > 0
@@ -204,7 +247,8 @@ def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str
         style.carry * (30 + space + (24 if clear_run else 0)),
         move,
         f"carry: {space:.1f} m free ahead; lane={lane:.1f}"
-        + ("; clear forward run" if clear_run else ""),
+        + ("; clear forward run" if clear_run else "")
+        + ("; escape blocked route" if escape else ""),
     )
 
 

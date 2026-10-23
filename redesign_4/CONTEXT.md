@@ -37,7 +37,18 @@ Free-ball interception is outfield-only; the keeper retains its bounded goal-lin
 position. The nearest active defender may press in midfield if the midfielder
 takes cover. A committed midfielder can support deeper attacks while retaining
 the profile's attack cap and fixed formation.
+When a direct carry is blocked, short predicted-clear diagonal or lateral escapes
+may replace its target; an escape is not proof the ball will stay with the carrier.
+Routine pressing can prefer a materially fresher near-tie arrival, but close duels,
+deep defensive threats and free-ball interception retain the quickest response.
+Unpressured carriers reserve stamina away from goal instead of always sprinting.
 _Avoid_: outcome, accepted action.
+
+**Sudden death**:
+A tied match continues after the 120-second regulation period until the first goal
+or 240 seconds. `duration=120` remains regulation time, not an inconsistent input;
+the current policy keeps tied extra-time posture balanced.
+_Avoid_: duration override, guaranteed all-out attack.
 
 **Keeper outlet**:
 With known keeper possession, the furthest-forward normally safe distribution
