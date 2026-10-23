@@ -112,25 +112,14 @@ def assignments(snapshot: Snapshot, settings: Settings = DEFAULT_SETTINGS) -> di
     predicted = (s.ball[0] + 0.8 * s.velocity[0], s.ball[1] + 0.8 * s.velocity[1])
     presser = None
     if s.owner is not None and s.owner[0] != s.team:
-        eligible = tuple(p for p in active if p.id != 1 or s.direction * s.ball[0] < 5) or active
-        best = min(eligible, key=lambda p: (arrival(p, s.ball), p.id))
+        best = min(active, key=lambda p: (arrival(p, s.ball), p.id))
         radius = min(30, settings.press_radius + (5 if s.coach == "press_high" else 0))
         if distance(point(best), s.ball) <= radius:
             presser = best.id
     cover = 2 if presser == 1 else 1
     interceptor = None
     if s.free:
-        pool = list(active)
-        keeper = s.player(0)
-        opponent_eta = min(arrival(p, predicted) for p in s.opponents)
-        if (
-            s.direction * s.ball[0] < -40
-            and abs(s.ball[1]) < 15
-            and arrival(keeper, predicted) + 0.4 < opponent_eta
-            and distance(point(keeper), predicted) < 12
-        ):
-            pool.append(keeper)
-        interceptor = min(pool, key=lambda p: (arrival(p, predicted), p.id)).id
+        interceptor = min(active, key=lambda p: (arrival(p, predicted), p.id)).id
         if interceptor == cover:
             cover = 2 if interceptor == 1 else 1
     threats = sorted(
@@ -163,7 +152,10 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     if angle < 0.12:
         return None
     choices = []
-    for y, aim in ((-2.6, "BL"), (2.6, "BR")):
+    targets: tuple[tuple[float, str], ...] = ((-2.6, "BL"), (2.6, "BR"))
+    if stranded:
+        targets = (*targets, (0.0, "CENTER"))
+    for y, aim in targets:
         target = (goal[0], y)
         lane = clearance(point(p), target, s.opponents)
         if lane >= 1.8:
@@ -178,20 +170,41 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
                 )
             )
     return (
-        max(choices, key=lambda item: (item[0], item[1]["parameters"]["aim_location"]))
+        max(
+            choices,
+            key=lambda item: (
+                stranded and item[1]["parameters"]["aim_location"] == "CENTER",
+                item[0],
+                item[1]["parameters"]["aim_location"],
+            ),
+        )
         if choices
         else None
     )
 
 
 def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str]:
-    """Dribble toward goal; scored by style.carry and free space ahead (capped at 12 m)."""
+    """Reward an unpressured clear run without overriding shots or passing under pressure."""
     ahead = [distance(point(p), point(o)) for o in s.opponents if s.direction * (o.x - p.x) > 0]
     space = min([12.0, *ahead])
+    move = movement(s, p, s.direction * 50.0, max(-10.0, min(10.0, p.y * 0.6)), urgent=True)
+    target = (move["parameters"]["target_x"], move["parameters"]["target_y"])
+    length = distance(point(p), target)
+    fraction = min(1.0, 12.0 / length) if length else 0.0
+    next_point = (p.x + (target[0] - p.x) * fraction, p.y + (target[1] - p.y) * fraction)
+    lane = clearance(point(p), next_point, s.opponents)
+    clear_run = (
+        length > 5
+        and s.direction * (target[0] - p.x) > 0
+        and lane >= 6
+        and style.tempo >= 0.5
+        and posture(s) != "protect"
+    )
     return (
-        style.carry * (30 + space),
-        movement(s, p, s.direction * 50.0, max(-10.0, min(10.0, p.y * 0.6)), urgent=True),
-        f"carry: {space:.1f} m free ahead",
+        style.carry * (30 + space + (24 if clear_run else 0)),
+        move,
+        f"carry: {space:.1f} m free ahead; lane={lane:.1f}"
+        + ("; clear forward run" if clear_run else ""),
     )
 
 
@@ -253,6 +266,7 @@ def carrier_options(
             keeper_outlets.append(candidate)
     calm = min(distance(point(p), point(o)) for o in s.opponents) > 8
     hold = max(0.0, 0.5 - style.tempo) * 120 if calm else 0.0
+    safe_keeper_outlet = p.id == 0 and bool(options)
     if p.id == 0:
         options = options or keeper_outlets
     else:
@@ -268,6 +282,9 @@ def carrier_options(
     return sorted(
         options,
         key=lambda item: (
+            -s.direction * s.player(item[1]["parameters"]["target_player_id"]).x
+            if safe_keeper_outlet
+            else 0,
             -item[0],
             item[1]["commandType"],
             item[1]["parameters"].get("target_player_id", -1),
@@ -289,7 +306,7 @@ def support(
     if kind == "DEF":
         return d * max(-42, min(-10, bp - 18)), flip * (-8 if s.ball[1] > 0 else 8)
     if kind == "MID":
-        return d * max(-30, min(23, bp - 9 + shift)), flip * (
+        return d * max(-30, min(23 if defending else 40, bp - 9 + shift)), flip * (
             -1 if s.ball[1] >= 0 else 1
         ) * settings.support_width * 0.65
     link = kind == "LINK"
@@ -318,12 +335,6 @@ def decide(
         )
         return Decision(selected, reason, alternatives, plan)
     if player_id == 0:
-        if s.free and plan["interceptor"] == 0:
-            return Decision(
-                command(s, 0, "INTERCEPT", aggressive=False),
-                "sweep: safe first arrival",
-                assignments=plan,
-            )
         d = s.direction
         x = -d * min(52.0, max_move_x)
         depth = 55 + d * x

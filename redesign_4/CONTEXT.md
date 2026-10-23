@@ -29,10 +29,19 @@ lane checks; it does not establish an empty net or a guaranteed goal.
 Keeper reactions to explicitly free incoming goal threats retain the stamina
 guard but permit short nonzero-distance sprints. Threat classification may use
 the modeled goal crossing while movement still targets its reachable plane.
+An unpressured clear next segment rewards carrying over sideways recycling,
+without overriding protecting/slow-tempo posture or safe shots. Against a keeper
+projected behind the carrier, an unobstructed center shot is preferred to corner
+aiming; this is a targeting policy, not a guarantee of shot accuracy.
+Free-ball interception is outfield-only; the keeper retains its bounded goal-line
+position. The nearest active defender may press in midfield if the midfielder
+takes cover. A committed midfielder can support deeper attacks while retaining
+the profile's attack cap and fixed formation.
 _Avoid_: outcome, accepted action.
 
 **Keeper outlet**:
-With known keeper possession, a normally safe distribution is preferred.
+With known keeper possession, the furthest-forward normally safe distribution
+is preferred, with existing outlet scores breaking equal-progress ties.
 If all fail the normal filters, rank non-self teammates with the existing outlet
 score and attempt an explicitly contested emergency kick. Neither ordinary nor
 slow-tempo holding competes with keeper distribution. This is a legal-action

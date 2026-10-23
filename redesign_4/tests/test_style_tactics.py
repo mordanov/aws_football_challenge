@@ -64,6 +64,34 @@ class RoleAnchorTest(unittest.TestCase):
 
 
 class BlockAndCommitTest(unittest.TestCase):
+    def test_committed_midfielder_supports_box_attack_without_changing_formation(self):
+        for team in (0, 1):
+            s = snap(team=team, owner=(0, 4), ball=(44, 0), ours=[*OURS[:4], (44, 0)])
+            with self.subTest(team=team):
+                advanced = decide(s, 2)
+                self.assertGreater(s.direction * target(advanced)[0], 30)
+                one = replace(DEFAULT_STYLE, attackers_committed=1)
+                self.assertLessEqual(
+                    s.direction * target(decide(s, 2, DEFAULT_SETTINGS, one))[0], 0
+                )
+                self.assertLessEqual(s.direction * target(decide(s, 1))[0], -8)
+
+    def test_nearest_defender_can_press_in_midfield_with_midfielder_cover(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(1, 1),
+                ball=(8, 0),
+                ours=[(-51, 0), (5, 0), (-15, 0), (30, -15), (30, 15)],
+                theirs=[(51, 0), (8, 0), (20, 20), (20, -20), (25, 20)],
+            )
+            with self.subTest(team=team):
+                plan = assignments(s)
+                self.assertEqual(plan["presser"], 1)
+                self.assertEqual(plan["cover"], 2)
+                self.assertEqual(decide(s, 1).command["commandType"], "PRESS_BALL")
+                self.assertLessEqual(s.direction * target(decide(s, 2))[0], -8)
+
     def test_attack_cap_values(self):
         defending = snap(owner=(1, 1), ball=(30, 0))
         self.assertIsNone(attack_cap(defending, 3, DEFAULT_STYLE))
@@ -241,6 +269,67 @@ class CarryTest(unittest.TestCase):
             )
             self.assertFalse(carry["parameters"]["sprint"])
 
+    def test_clear_run_beats_sideways_recycling_but_not_an_open_shot(self):
+        style = replace(DEFAULT_STYLE, carry=1.0)
+        for team in (0, 1):
+            for x, expected in ((15, "MOVE_TO"), (40, "SHOOT")):
+                s = snap(
+                    team=team,
+                    owner=(0, 4),
+                    ball=(x, 0),
+                    ours=[(-51, 0), (-28, 0), (-5, 0), (x, 18), (x, 0)],
+                    theirs=[(51, 0), (-20, -25), (-15, -25), (-10, -25), (-5, -25)],
+                )
+                with self.subTest(team=team, x=x):
+                    action = decide(s, 4, DEFAULT_SETTINGS, style).command
+                    self.assertEqual(action["commandType"], expected)
+                    if expected == "MOVE_TO":
+                        self.assertGreater(s.direction * action["parameters"]["target_x"], x)
+
+    def test_blocked_run_keeps_safe_sideways_pass(self):
+        style = replace(DEFAULT_STYLE, carry=1.0)
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(15, 0),
+                ours=[(-51, 0), (-28, 0), (-5, 0), (15, 18), (15, 0)],
+                theirs=[(51, 0), (24, 0), (-15, -25), (-10, -25), (-5, -25)],
+            )
+            with self.subTest(team=team):
+                action = decide(s, 4, DEFAULT_SETTINGS, style).command
+                self.assertEqual(action["commandType"], "PASS")
+                self.assertEqual(action["parameters"]["target_player_id"], 3)
+
+    def test_clear_run_does_not_override_progressive_pass_or_protecting_a_lead(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(-10, 0),
+                ours=[(-51, 0), (-28, 0), (-20, -20), (35, 18), (-10, 0)],
+                theirs=[(51, 0), (-35, -25), (-30, -25), (-25, -25), (-20, -25)],
+            )
+            with self.subTest(team=team, case="progressive"):
+                action = decide(s, 4, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, carry=1)).command
+                self.assertEqual(action["commandType"], "PASS")
+                self.assertEqual(action["parameters"]["target_player_id"], 3)
+            s = snap(
+                team=team,
+                owner=(0, 4),
+                ball=(15, 0),
+                ours=[(-51, 0), (-28, 0), (-5, 0), (15, 18), (15, 0)],
+                theirs=[(51, 0), (-20, -25), (-15, -25), (-10, -25), (-5, -25)],
+            )
+            for style, frame in (
+                (replace(DEFAULT_STYLE, carry=1, tempo=0), s),
+                (replace(DEFAULT_STYLE, carry=1), replace(s, coach="slow_the_tempo")),
+            ):
+                with self.subTest(team=team, case="protect", tempo=style.tempo):
+                    self.assertNotEqual(
+                        decide(frame, 4, DEFAULT_SETTINGS, style).command["commandType"], "MOVE_TO"
+                    )
+
 
 class StrandedKeeperTest(unittest.TestCase):
     def captured_counter(self, team=0):
@@ -326,8 +415,48 @@ class StrandedKeeperTest(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertNotEqual(decide(s, 4).command["commandType"], "SHOOT")
 
+    def test_empty_goal_uses_center_unless_center_lane_is_blocked(self):
+        for team in (0, 1):
+            for blocked in (False, True):
+                s = snap(
+                    team=team,
+                    owner=(0, 4),
+                    ball=(40, 0),
+                    ours=[*OURS[:4], (40, 0)],
+                    theirs=[
+                        (0, 0),
+                        (54, 0) if blocked else (-20, -25),
+                        (-15, -25),
+                        (-10, -25),
+                        (-5, -25),
+                    ],
+                )
+                with self.subTest(team=team, blocked=blocked):
+                    action = decide(s, 4).command
+                    self.assertEqual(action["commandType"], "SHOOT")
+                    if blocked:
+                        self.assertNotEqual(action["parameters"]["aim_location"], "CENTER")
+                    else:
+                        self.assertEqual(action["parameters"]["aim_location"], "CENTER")
+
 
 class KeeperShotReactionTest(unittest.TestCase):
+    def test_keeper_holds_goal_line_even_when_it_would_win_a_sweep(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=None,
+                ball=(-45, 10),
+                ours=[(-51, 0), (-10, 0), (0, 0), (20, -15), (23, 15)],
+                theirs=[(51, 0), (30, 0), (8, 20), (10, -20), (12, 20)],
+            )
+            with self.subTest(team=team):
+                action = decide(s, 0, max_move_x=51.2).command
+                self.assertEqual(action["commandType"], "MOVE_TO")
+                self.assertLessEqual(abs(action["parameters"]["target_y"]), 2.8)
+                self.assertEqual(action["parameters"]["target_x"], -s.direction * 51.2)
+                self.assertNotEqual(assignments(s)["interceptor"], 0)
+
     def shot(self, team, *, edge=False):
         d = 1 if team == 0 else -1
         s = snap(team=team, owner=None)
@@ -394,6 +523,21 @@ class KeeperShotReactionTest(unittest.TestCase):
 
 
 class KeeperDistributionTest(unittest.TestCase):
+    def test_keeper_prefers_furthest_forward_safe_outlet_not_safest_short_pass(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(0, 0),
+                ball=(-51, 0),
+                ours=[(-51, 0), (-40, 15), (-20, 0), (-10, 20), (0, 0)],
+                theirs=[(51, 0), (0, 6), (30, -25), (35, -25), (40, -25)],
+            )
+            with self.subTest(team=team):
+                action = decide(s, 0).command
+                self.assertEqual(action["commandType"], "GK_DISTRIBUTE")
+                self.assertEqual(action["parameters"]["target_player_id"], 4)
+                self.assertEqual(action["parameters"]["method"], "KICK")
+
     def congested(self, team=0):
         # Full canonical player frame at report-3 tick 9786.
         rows = (

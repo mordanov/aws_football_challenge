@@ -563,6 +563,35 @@ match; ARNs need no replacement. Verification UUID
 match research. Detailed evidence is persisted in the session files directory
 as `report4-deployment-verification.json`; implementation commit `4799bb0`.
 
+### Three-match feedback: targeted player corrections
+
+Reports 5-7 describe results of 0-0, 1-2 and 0-1. User observations motivate
+the following deterministic changes in `r4v6_three_match_feedback`, without
+changing numeric profile settings, formation or coach policy:
+
+- An unpressured clear forward corridor boosts carrying over sideways recycling;
+  blocked runs, protecting a lead and slow tempo retain their existing scoring.
+  A good shot or progressive pass can still win.
+- A keeper projected well behind the carrier permits CENTER aim if its lane is
+  clear; corner alternatives remain when the center is blocked. This reduces
+  unnecessary corner targeting, not a demonstrated server-side accuracy fix.
+- The keeper selects the furthest-forward outlet passing the existing distance,
+  lane and pressure filters. Unsafe long options do not displace safe short ones;
+  the existing contested fallback remains when all safe options fail.
+- The keeper no longer sweeps free balls with INTERCEPT; it retains the existing
+  bounded goal-line movement and incoming-shot reaction.
+- The nearest active defender can press in midfield with the midfielder covering.
+  A midfielder committed to an attack can support up to canonical x=40 rather
+  than stopping at x=23; committed-attacker caps still apply.
+
+These are observation-driven scenario corrections, not causal findings from
+the reports: candidate CloudWatch match/team attribution is unresolved, and PDF
+statistics conflict internally. The Bedrock profile proposal was not applied.
+The new scenarios are mirrored for both teams; the default golden audit changes
+36 of 750 commands for the documented shot/outlet/support/pressing policies.
+The carry-enabled scenarios are checked separately. This section records a
+source revision, not an AWS rollout or proof of improved match results.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued

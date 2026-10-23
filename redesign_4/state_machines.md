@@ -40,6 +40,18 @@ Known keeper possession -> best normally safe distribution, or, if none passes
 the filters, the highest-scoring contested emergency KICK to a non-self
 teammate. Keeper holding is excluded, including at slow tempo. Uncertain
 possession never enters this branch; outfield holding is unchanged.
+Safe keeper distributions are ordered by forward progress before outlet score;
+the contested fallback retains score ordering and never outranks a safe option.
+Free ball -> nearest active outfield interceptor, never keeper sweep.
+Opponent possession -> nearest active outfield presser within the configured
+radius, including the defender; defender pressing transfers cover to midfielder.
+Own possession -> midfielder support may advance to canonical attack x=40,
+still subject to the profile's committed-attacker cap. Defensive anchors remain.
+Carry scoring rewards a clear next twelve-unit segment only when the target is
+forward, farther than five units, lane clearance is at least six units, tempo
+is at least 0.5 and posture is not protect. Sprint stamina guards remain.
+Stranded-keeper shots -> CENTER when its lane passes the normal shot guard;
+otherwise corner candidates retain their usual checks and score ordering.
 **Source:** `agent/runtime.py`, `Runtime.handle`; `agent/tactics.py`, `decide`,
 `carry_option`, `shot_option`, `carrier_options`.
 
