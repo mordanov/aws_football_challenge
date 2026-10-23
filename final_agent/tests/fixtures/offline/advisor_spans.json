@@ -1,0 +1,36 @@
+{
+  "description": "Reference GenAI span envelope for one offline advisor review_evidence call.",
+  "spans": [
+    {
+      "traceId": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9",
+      "spanId": "a1b2c3d4e5f6a7b8",
+      "parentSpanId": null,
+      "name": "gen_ai.inference",
+      "kind": 1,
+      "startTimeUnixNano": 1729692000000000000,
+      "endTimeUnixNano": 1729692002500000000,
+      "attributes": {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.system": "aws.bedrock",
+        "gen_ai.request.model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "gen_ai.task.input": "You advise a 5-a-side football team between matches...",
+        "gen_ai.task.output": "{\"settings\": {}, \"style\": {}, \"rationale\": \"maintain baseline\", \"evidence_ids\": [\"claim-shoot-observed\"], \"uncertainties\": [\"SHOOT contradiction\"], \"counter_tests\": [\"verify shot range\"]}",
+        "gen_ai.input.messages": [
+          {"role": "system", "content": "You advise a 5-a-side football team..."},
+          {"role": "user", "content": "{\"match_id\": \"match-001\", \"claims\": [...]}"}
+        ],
+        "gen_ai.output.messages": [
+          {"role": "assistant", "content": "{\"settings\": {}, ...}"}
+        ],
+        "gen_ai.usage.input_tokens": 450,
+        "gen_ai.usage.output_tokens": 120,
+        "football.trace.session_id": "sess-match-001",
+        "football.trace.match_id": "match-001",
+        "football.trace.team_id": "aleksalotl"
+      },
+      "status": {"code": "OK"}
+    }
+  ],
+  "expected_score_range": [3, 4],
+  "rubric_version": "v1"
+}

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "afc-coordinated-agent"
+version = "0.1.0"
+description = "Deterministic five-player football controller with an offline evidence trainer"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+deployment = ["bedrock-agentcore==1.24.2"]
+llm = ["langchain-core>=1.0,<2", "langchain-aws>=1.0,<2"]
+offline = ["pydantic>=2.0", "boto3>=1.42", "langchain-core>=1.0,<2"]
+dev = ["pytest>=8,<10", "ruff>=0.16,<0.17", "mypy>=2.3,<2.4", "httpx>=0.28,<0.29"]
+
+[project.scripts]
+afc-agent = "agent.__main__:main"
+afc-agentcore = "agent.main:main"
+
+[tool.setuptools]
+packages = ["agent", "agent.advisor", "agent.advisor.offline"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["initial_idea", "redesign_1", "redesign_2", "redesign_3", "redesign_4"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["agent"]
+check_untyped_defs = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["bedrock_agentcore.*", "langchain_core.*", "langchain_aws.*", "boto3.*", "botocore.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# The llm extra pulls numpy stubs that need Python 3.12 syntax; do not type-check its internals.
+module = ["langchain_core.*", "langchain_aws.*"]
+follow_imports = "skip"

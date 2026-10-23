@@ -1,0 +1,90 @@
+{
+  "name": "Redesign4",
+  "version": 2,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:project-name": "Redesign4"
+  },
+  "runtimes": [
+    {
+      "name": "r4_gk",
+      "description": "redesign_4 deterministic player, seat 0 (GK)",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/player",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": false },
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "0" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" },
+        { "name": "AFC_COMPETITION_ADAPTER", "value": "1" }
+      ]
+    },
+    {
+      "name": "r4_def",
+      "description": "redesign_4 deterministic player, seat 1 (DEF)",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/player",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": false },
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "1" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" },
+        { "name": "AFC_COMPETITION_ADAPTER", "value": "1" }
+      ]
+    },
+    {
+      "name": "r4_mid",
+      "description": "redesign_4 deterministic player, seat 2 (MID)",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/player",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": false },
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "2" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" },
+        { "name": "AFC_COMPETITION_ADAPTER", "value": "1" }
+      ]
+    },
+    {
+      "name": "r4_fwd1",
+      "description": "redesign_4 deterministic player, seat 3 (FWD)",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/player",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": false },
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "3" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" },
+        { "name": "AFC_COMPETITION_ADAPTER", "value": "1" }
+      ]
+    },
+    {
+      "name": "r4_fwd2",
+      "description": "redesign_4 deterministic player, seat 4 (FWD)",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/player",
+      "runtimeVersion": "PYTHON_3_12",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "instrumentation": { "enableOtel": false },
+      "envVars": [
+        { "name": "AFC_PLAYER_ID", "value": "4" },
+        { "name": "AFC_STAMINA_SCALE", "value": "100" },
+        { "name": "AFC_COMPETITION_ADAPTER", "value": "1" }
+      ]
+    }
+  ]
+}

@@ -37,15 +37,16 @@ jobs:
             -v --tb=short
 
   redesign4-tests:
-    name: Redesign 4 tests (Python ${{ matrix.python-version }})
+    name: Agent tests (${{ matrix.project }}, Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
+        project: ["redesign_4", "final_agent"]
 
     defaults:
       run:
-        working-directory: redesign_4
+        working-directory: ${{ matrix.project }}
 
     steps:
       - uses: actions/checkout@v4

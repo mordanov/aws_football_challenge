@@ -1,0 +1,6 @@
+# Local football telemetry, coaching databases and exported profiles
+local/
+.mypy_cache/
+.ruff_cache/
+# Offline coaching resource receipts (written beside offline_coach.json by apply)
+.offline_coach_resources_*.json
