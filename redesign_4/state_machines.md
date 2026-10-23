@@ -30,8 +30,12 @@ Carrying uses that same guard, retaining non-sprint movement when depleted.
 The shot candidate's range can extend by 18 canonical units (capped at 50)
 when the opposing keeper remains over 8 units behind the carrier after a
 0.8-second projection. Existing angle and lane guards still apply.
+Known keeper possession -> best normally safe distribution, or, if none passes
+the filters, the highest-scoring contested emergency KICK to a non-self
+teammate. Keeper holding is excluded, including at slow tempo. Uncertain
+possession never enters this branch; outfield holding is unchanged.
 **Source:** `agent/runtime.py`, `Runtime.handle`; `agent/tactics.py`, `decide`,
-`carry_option`, `shot_option`.
+`carry_option`, `shot_option`, `carrier_options`.
 
 ## Decision telemetry
 

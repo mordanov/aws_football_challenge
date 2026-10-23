@@ -2,9 +2,9 @@
 
 This project in `redesign_4/` consolidates the three reference redesigns using `redesign_2`
 as its baseline. It is a deterministic five-player controller with a separate
-SQLite-backed offline trainer. It has **not run against the intended AWS
-infrastructure**. See [the audit](docs/redesign_audit.md) for findings, selection,
-local evidence and the mandatory future AWS acceptance checklist.
+SQLite-backed offline trainer, deployed to AWS AgentCore with real-match
+observations documented below. See [the audit](docs/redesign_audit.md) for
+original findings, selection, local evidence and remaining acceptance checks.
 
 Requires Python 3.11+. The core runtime, CLI and trainer use only the standard
 library. AWS serving is an optional, pinned extra.
@@ -435,6 +435,42 @@ tired-carrier regressions. Responses matched local decisions; the captured
 carrier stopped requesting sprint and the stranded-keeper opportunity selected
 SHOOT. These are synthetic checks, not a portal Fitness Check verdict or proof
 of improved competitive results. Run the portal check and another real match.
+
+### Third real match: 1-0 win and pressure-resilient keeper outlets
+
+`report3.pdf` records Aleksalotl's 1-0 win against Fort Knox Athletic. The
+available CloudWatch capture for `b728eb37-3829-48f2-b026-22040537fa76` contains
+278 decisions across 57 ticks, plus five initial invalid-roster fallbacks.
+All decisions used `r4v3_match2_corrections`. Actual commands were 199 MOVE_TO,
+36 MARK, 15 PRESS_BALL, 13 INTERCEPT, 9 PASS, 3 SHOOT, 2 GK_DISTRIBUTE and
+1 SET_STANCE. Twenty decisions across four ticks had unresolved possession.
+
+Use both teams' coach advice as hypotheses, not authoritative attribution.
+Aleksalotl's advice to increase shooting "from 0" contradicts our three logged
+shots; the PDF's opposing command column again resembles our actual telemetry.
+All three recorded shots used the stranded-keeper extension. The score first
+became 1-0 at 36.380642 s, after the second shot, but sparse observations do not
+prove which command scored or that the previous update caused the win.
+Possession and opponent shot statistics remain report-attributed.
+
+Fort Knox's advice to reduce MOVE_TO reliance and coordinate PRESS_BALL suggests
+an adversarial test: pressure our keeper and nearest receiver. Both-direction
+regressions require an alternative normally safe receiver to be preferred.
+At captured tick 9786, known keeper possession instead selected SET_STANCE
+because every ordinary outlet failed its filters. The correction preserves safe
+distribution scoring and THROW/KICK selection, but attempts a ranked, explicitly
+contested KICK if none qualifies. Keeper slow-tempo holding cannot override
+distribution. Outfield holds and uncertain-possession conservatism are unchanged.
+The observed final-tick hold may have been harmless; this correction addresses
+the keeper action contract, not a proven cause of a lost scoring opportunity.
+
+Counterfactual replay changes exactly one of 278 decisions: that hold becomes
+a KICK to player 3. All three shots, both ordinary distributions and every
+outfield decision are unchanged. This does not prove the contested kick will
+succeed or withstand every coordinated press. Keep the winning formation,
+weights and coach policy; the code-only correction is tagged
+`r4v4_match3_keeper_outlet`. Implementation instructions and acceptance criteria
+are in `../prompts/redesign_4_report3_fixes.md`.
 
 ## Telemetry and deadline limits
 

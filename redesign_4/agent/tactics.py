@@ -191,6 +191,7 @@ def carrier_options(
     s: Snapshot, p: Player, settings: Settings, style: Style = DEFAULT_STYLE
 ) -> list[tuple[float, dict, str]]:
     options = []
+    keeper_outlets = []
     if style.carry > 0 and p.id != 0:
         options.append(carry_option(s, p, style))
     shot = shot_option(s, p, settings)
@@ -200,11 +201,12 @@ def carrier_options(
         if mate.id == p.id:
             continue
         length = distance(point(p), point(mate))
-        if length < 3 or length > 60:
+        if p.id != 0 and (length < 3 or length > 60):
             continue
         lane = clearance(point(p), point(mate), s.opponents)
         pressure = min(distance(point(mate, 0.5), point(o, 0.5)) for o in s.opponents)
-        if lane < settings.pass_margin or pressure < settings.pass_margin:
+        safe = 3 <= length <= 60 and min(lane, pressure) >= settings.pass_margin
+        if not safe and p.id != 0:
             continue
         gain = s.direction * (mate.x - p.x)
         score = 22 + min(pressure, 12) * 2 + 0.6 * gain + min(lane, 8)
@@ -225,29 +227,36 @@ def carrier_options(
         kind = "GK_DISTRIBUTE" if p.id == 0 else "PASS"
         params: dict[str, int | str] = {"target_player_id": mate.id}
         if p.id == 0:
-            params["method"] = "THROW" if length < 25 else "KICK"
+            params["method"] = "THROW" if safe and length < 25 else "KICK"
         else:
             params["type"] = (
                 "THROUGH" if through else ("AERIAL" if length > 35 and lane > 5 else "GROUND")
             )
-        options.append(
-            (
-                score,
-                command(s, p.id, kind, **params),
-                f"safe {'counter ' if through else ''}outlet to {mate.id}; lane={lane:.1f}",
-            )
+        candidate = (
+            score,
+            command(s, p.id, kind, **params),
+            f"{'safe counter' if through else 'safe'} outlet to {mate.id}; lane={lane:.1f}"
+            if safe
+            else f"contested keeper outlet to {mate.id}; lane={lane:.1f}, pressure={pressure:.1f}",
         )
+        if safe:
+            options.append(candidate)
+        elif p.id == 0:
+            keeper_outlets.append(candidate)
     calm = min(distance(point(p), point(o)) for o in s.opponents) > 8
     hold = max(0.0, 0.5 - style.tempo) * 120 if calm else 0.0
-    options.append(
-        (
-            hold,
-            command(s, p.id, "SET_STANCE", stance=0),
-            "hold: slow tempo, no opponent within 8 m"
-            if hold
-            else "hold balanced: no safe supported possession action",
+    if p.id == 0:
+        options = options or keeper_outlets
+    else:
+        options.append(
+            (
+                hold,
+                command(s, p.id, "SET_STANCE", stance=0),
+                "hold: slow tempo, no opponent within 8 m"
+                if hold
+                else "hold balanced: no safe supported possession action",
+            )
         )
-    )
     return sorted(
         options,
         key=lambda item: (

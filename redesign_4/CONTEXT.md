@@ -28,6 +28,14 @@ opposing keeper permits bounded longer shots, subject to normal angle and
 lane checks; it does not establish an empty net or a guaranteed goal.
 _Avoid_: outcome, accepted action.
 
+**Keeper outlet**:
+With known keeper possession, a normally safe distribution is preferred.
+If all fail the normal filters, rank non-self teammates with the existing outlet
+score and attempt an explicitly contested emergency kick. Neither ordinary nor
+slow-tempo holding competes with keeper distribution. This is a legal-action
+fallback, not proof the receiver is safe or the pass will complete.
+_Avoid_: guaranteed clearance, inferred keeper possession.
+
 **Lesson**:
 An observation or inference with evidence references, confidence and a remedy.
 _Avoid_: proven cause, automatic success.

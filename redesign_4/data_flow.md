@@ -16,6 +16,11 @@ The coach preset comes from the platform, or from the in-agent rules coach when
 the snapshot alone, so all five players agree. The profile `style` (block depth,
 attackers committed, tackle aggression, tempo, fixed formation, carry) shapes
 anchors and option scores inside `decide`.
+Keeper outlet candidates retain normal length, lane and receiver-pressure
+filters. Rejected non-self candidates are separately ranked for an emergency
+KICK only if the keeper has no normally safe outlet. Telemetry labels these
+attempts contested; keeper holds are not candidates. This does not bypass
+ownership resolution or alter outfield possession filters.
 The actual pinned AgentCore adapter wraps the array string in one SSE data event.
 On AgentCore each of the five runtimes runs the same staged code and profile;
 its `AFC_PLAYER_ID` seat only fills a missing `myPlayers` (explicit routing wins).

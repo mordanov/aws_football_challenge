@@ -325,3 +325,124 @@ class StrandedKeeperTest(unittest.TestCase):
                 )
             with self.subTest(case=case):
                 self.assertNotEqual(decide(s, 4).command["commandType"], "SHOOT")
+
+
+class KeeperDistributionTest(unittest.TestCase):
+    def congested(self, team=0):
+        # Full canonical player frame at report-3 tick 9786.
+        rows = (
+            (-51.1230432, -4.5535424, 0, 0, 1),
+            (-44.1613464, -0.114146168, 5.7632672, 5.5484008, 0.6806041),
+            (-29.9217568, 0.38869196, -2.0868056, -7.7230328, 1),
+            (-18.1686056, -12.7105704, -0.647031248, 7.9737912, 1),
+            (-5.6756668, 0.316927016, 0, 0, 1),
+            (-46.0871888, -11.5197656, -7.9966368, 0.231954008, 1),
+            (-29.396332, -2.34409024, -8.4012344, -4.6437392, 0.93030196),
+            (1.70591008, -8.2810048, -7.9334008, -1.0301224, 0),
+            (-39.0331496, -4.64855, -11.957516, -1.00887296, 0.52702355),
+            (0.0389827344, -2.94608544, 9.4503696, 1.68325136, 0.36008412),
+        )
+        d = 1 if team == 0 else -1
+        return Snapshot(
+            team,
+            9786,
+            119.67193,
+            120,
+            tuple(
+                Player(team if i < 5 else 1 - team, i % 5, d * x, y, d * vx, vy, stamina)
+                for i, (x, y, vx, vy, stamina) in enumerate(rows)
+            ),
+            (d * -49.718288, -3.89276384),
+            (0, 0),
+            (team, 0),
+            False,
+            (1, 0) if team == 0 else (0, 1),
+        )
+
+    def test_captured_keeper_uses_contested_kick_instead_of_holding(self):
+        for team in (0, 1):
+            with self.subTest(team=team):
+                decision = decide(self.congested(team), 0)
+                self.assertEqual(decision.command["commandType"], "GK_DISTRIBUTE")
+                self.assertEqual(decision.command["parameters"]["method"], "KICK")
+                self.assertIn(decision.command["parameters"]["target_player_id"], (1, 2, 3, 4))
+                self.assertIn("contested", decision.reason)
+
+    def test_safe_outlet_is_preferred_and_receiver_tracks_geometry(self):
+        s = self.congested()
+        for receiver, position in ((1, (-40, 12)), (3, (-40, 12))):
+            opened = replace(
+                s,
+                players=tuple(
+                    replace(p, x=position[0], y=position[1], vx=0, vy=0)
+                    if p.team == 0 and p.id == receiver
+                    else replace(p, x=s.player(0).x, y=s.player(0).y, vx=0, vy=0)
+                    if p.team == 0 and p.id != 0
+                    else replace(p, x=20, y=-25, vx=0, vy=0)
+                    if p.team == 1
+                    else p
+                    for p in s.players
+                ),
+            )
+            decision = decide(opened, 0)
+            self.assertEqual(decision.command["commandType"], "GK_DISTRIBUTE")
+            self.assertEqual(decision.command["parameters"]["target_player_id"], receiver)
+            self.assertEqual(decision.command["parameters"]["method"], "THROW")
+            self.assertIn("safe", decision.reason)
+
+    def test_contested_outlet_changes_when_opponent_tracks_preferred_receiver(self):
+        for team in (0, 1):
+            s = self.congested(team)
+            original = decide(s, 0)
+            receiver_id = original.command["parameters"]["target_player_id"]
+            receiver = s.player(receiver_id)
+            pressed = replace(
+                s,
+                players=tuple(
+                    replace(p, x=receiver.x, y=receiver.y, vx=receiver.vx, vy=receiver.vy)
+                    if p.team != team and p.id == 2
+                    else p
+                    for p in s.players
+                ),
+            )
+            decision = decide(pressed, 0)
+            self.assertEqual(decision.command["commandType"], "GK_DISTRIBUTE")
+            self.assertNotEqual(decision.command["parameters"]["target_player_id"], receiver_id)
+            self.assertIn("contested", decision.reason)
+            self.assertEqual(decision, decide(pressed, 0))
+
+    def test_keeper_distributes_even_when_slow_tempo_would_prefer_holding(self):
+        s = snap(ball=(-51, 0), owner=(0, 0))
+        d = decide(s, 0, DEFAULT_SETTINGS, replace(DEFAULT_STYLE, tempo=0))
+        self.assertEqual(d.command["commandType"], "GK_DISTRIBUTE")
+        unknown = replace(s, owner=None, free=False)
+        self.assertNotEqual(decide(unknown, 0).command["commandType"], "GK_DISTRIBUTE")
+
+    def test_keeper_has_legal_outlet_when_every_teammate_is_close_or_distant(self):
+        for x in (-51, 30):
+            s = self.congested()
+            s = replace(
+                s,
+                players=tuple(
+                    replace(p, x=x, y=-4.5, vx=0, vy=0) if p.team == 0 and p.id != 0 else p
+                    for p in s.players
+                ),
+            )
+            with self.subTest(x=x):
+                decision = decide(s, 0)
+                self.assertEqual(decision.command["commandType"], "GK_DISTRIBUTE")
+                self.assertEqual(decision.command["parameters"]["method"], "KICK")
+
+    def test_opponents_pressing_nearest_receiver_force_a_different_safe_outlet(self):
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                ball=(-51, 0),
+                owner=(0, 0),
+                ours=[(-51, 0), (-40, 0), (-35, 20), (-50, 0), (-50, 0)],
+                theirs=[(51, 0), (-40, 0), (20, -20), (25, -25), (30, -20)],
+            )
+            decision = decide(s, 0)
+            self.assertEqual(decision.command["commandType"], "GK_DISTRIBUTE")
+            self.assertEqual(decision.command["parameters"]["target_player_id"], 2)
+            self.assertIn("safe", decision.reason)
