@@ -1,202 +1,164 @@
 # Coach policy, strategy archetypes and off-tick LLM advisor — design
 
-Date: 2026-10-22. Status: draft for review. Scope: `redesign_4/` and `local_simulator/`.
+Date: 2026-10-22. Status: approved design, revision 2 (amended while planning).
+Scope: `redesign_4/` and `local_simulator/`.
 
 ## 1. Goal
 
 Answer three questions with evidence, then ship the winner in `redesign_4`:
 
-1. Does a **coach policy** (mid-match preset selection) improve goal difference?
-   Formation is fixed during a match; it may change only between matches.
-2. Can a custom SDK (LangChain) add value? It runs **off the tick path** only.
+1. Does a **coach policy** (mid-match preset selection) improve results? Formation
+   is fixed during a match and changes only between matches.
+2. Can a custom SDK (LangChain) add value **off the tick path**?
 3. Which in-rules **strategy archetype** wins: aggressive press, park the bus,
    time-wasting, hard tackling, or balanced?
 
-"Dirty" means rough play using legal commands only. Exploiting simulator or
-infrastructure loopholes, or touching other teams' endpoints, is out of scope.
+"Dirty" = rough play through legal commands only. No simulator/infrastructure
+exploits, no interaction with other teams' endpoints.
 
 ### Success criteria
 
-- S1. Each archetype and coach variant has measured goal difference with a 95%
-  bootstrap CI against every opponent in the pool (§4), under rules v2.
-- S2. A winner is shipped only if `winner_claim` (`campaign_report.py:227`,
-  Bonferroni 99.5%) returns `clear_winner`. Otherwise the report says
-  "inconclusive", and we ship `balanced` plus the coach policy if, and only if,
-  the coach policy's CI on goal-difference delta excludes zero.
-- S3. No regression: every existing `redesign_4` test passes. The runtime never
-  imports the advisor package (enforced by test). The p99 decision latency in
-  `cli_match` stays under 50 ms per tick.
-- S4. With the platform coach field empty, all five players choose the identical
-  preset on every tick (enforced by test over recorded replays).
+- S1. For every archetype × coach variant, under rules v2, the report gives the
+  pooled goal difference per match vs the opponent pool with a 95% block-bootstrap
+  CI, plus pairwise points CIs among archetypes (existing `bootstrap_ci`).
+- S2. Ship decision rule: the shipped variant is the one with the highest pooled
+  goal-difference lower bound vs the pool, **provided** that lower bound is > 0 and
+  its ranking survives the foul-rate sensitivity runs (§8). Otherwise ship
+  `balanced` (+ coach policy only if its pooled-GD delta CI vs `balanced/none`
+  excludes zero). `winner_claim` on the archetype round robin is reported as
+  supporting evidence.
+- S3. No regression: all existing tests in both projects pass; the default profile
+  reproduces pre-change decisions exactly (golden test); `agent.runtime` imports
+  without LangChain (guard test); p99 `Runtime.handle` latency < 50 ms.
+- S4. With an empty platform coach field and `coach_policy="rules"`, all five
+  players choose the same preset for the same tick (test).
 
 ## 2. Findings that shape the design (verified 2026-10-22)
 
 | # | Finding | Evidence | Consequence |
 |---|---|---|---|
-| F1 | The simulator never sends a coach instruction | `local_simulator/src/football_lab/obs_encoder.py:42` hardcodes `""` | Need a per-team coach hook |
-| F2 | A carried ball can never be won; possession changes only when the ball is free | `physics.py:261` pickup only if `owner_team is None`; `TACKLE_RADIUS` (`physics.py:30`) unused | Pressing/tackling is meaningless today; need a dispossession model |
-| F3 | No foul, card or free-kick logic | no matches for foul/card in `engine.py`, `physics.py`; `FREE_KICK` exists only as a play-mode name (`rules-v1.md:359`) | The hard-tackle archetype would look free; need a foul model |
-| F4 | No AWS practice bots locally; the pool contains only our redesigns | `local_simulator/entrants/` | Add labelled stand-in bots |
-| F5 | `redesign_4` settings have four numeric knobs; none express block depth or tempo | `redesign_4/agent/model.py:49-53`, `profile.py:12-17` | Add a bounded `style` section to the tactical profile |
-| F6 | `redesign_4` already honours four presets | `protocol.py:128`, `tactics.py:57,59,71,108` | Coach policy reuses them; no new preset semantics |
-| F7 | The real coach channel reportedly has ~6 presets; only 4 are known by name | `initial_idea/docs/01-task.md` (second-hand) | Unknown presets are ignored, as today |
+| F1 | Simulator never sends a coach instruction | `local_simulator/src/football_lab/obs_encoder.py:42` | per-team coach hook |
+| F2 | Carried ball can never be won | `physics.py:261` pickup only when free; `TACKLE_RADIUS` unused | dispossession model |
+| F3 | No foul/card/free-kick logic; `play_mode` never changes | `physics.py`, `engine.py` | foul model without restart machinery |
+| F4 | Only `SLIDE_TACKLE` is valid in the sim; `TACKLE` is aliased to it | `actions.py:11-21`, `cmd_decoder.py:8` | one tackle type |
+| F5 | Player `vx/vy` are never updated | `physics.py` (no player velocity writes) | "from behind" uses position |
+| F6 | `redesign_4` never tackles and rejects `SLIDE_TACKLE` | `tactics.py:219-276`, `protocol.py:154-163` | add the command |
+| F7 | Four numeric settings cannot express block/tempo/formation | `model.py:49-53` | bounded `style` section |
+| F8 | No AWS practice bots locally | `local_simulator/entrants/` | labelled stand-ins |
+| F9 | Trainer rebuilds profiles from defaults | `trainer.py:446-567` | carry base style through training |
+| F10 | LangChain is at 1.x (core 1.6, aws 1.9) | PyPI, 2026-10-22 | pin `>=1,<2` |
 
 ## 3. Rules v2 (local simulator)
 
-v1 stays runnable and unchanged. Campaigns pin `rules_version`, and results from
-v1 and v2 are never mixed. Every v2 constant is documented in `docs/rules-v2.md`
-and labelled as a **local assumption**, not platform truth.
+v1 remains the default and byte-identical. Campaigns pin `rules_version`; v1 and
+v2 results are never mixed. Every constant is a **local assumption** documented in
+`local_simulator/docs/rules-v2.md`.
 
-- **Dispossession.** `TACKLE` or `SLIDE_TACKLE` against the carrier within
-  `TACKLE_RADIUS` succeeds with probability `p_win` (TACKLE 0.35,
-  SLIDE_TACKLE 0.55). `PRESS_BALL` within the radius succeeds with 0.10 per
-  step. On success the ball becomes free at the carrier's position, and normal
-  pickup applies.
-- **Fouls.** Each tackle attempt fouls with probability `p_foul` (TACKLE 0.10,
-  SLIDE_TACKLE 0.25). The probability is doubled when the tackle comes from
-  behind, defined as the angle between the tackler's approach and the carrier's
-  velocity being under 60°. A foul cancels the dispossession, sets `playMode`
-  to `FREE_KICK` and gives the fouled team the ball. A foul inside the penalty
-  area gives `PENALTY` (one shot, keeper only).
-- **Cards.** Each player keeps a foul count. Three fouls send the player off for
-  the rest of the match: that player is removed, and the team plays with four.
-- **RNG.** All draws use a per-match `random.Random(seed)`, so v2 matches are
-  reproducible.
-- **Coach hook.** `TeamRunner` takes an optional `coach: Callable[[EngineState,
-  team_id], str]`. Its value is written to `coachInstruction` in that team's
-  observation. The default is `""`, which keeps current behaviour.
-
-The constants are tuning targets for plausibility, not facts. The report must
-include a sensitivity run: re-rank the archetypes with `p_foul` ×0.5 and ×2. A
-ranking that flips under that range is reported as fragile.
+- **Slide tackle** (one-shot): resolves once, the first step the tackler is within
+  `TACKLE_RADIUS` (2.4) of the targeted carrier. Foul with `p_foul = 0.25 ×
+  foul_scale` (×2 if from behind); otherwise win with `p_win = 0.55`.
+- **Standing challenge**: a `PRESS_BALL` player within `TACKLE_RADIUS` of the
+  carrier wins the ball with 0.01 per step; never a foul.
+- **Win**: the tackler takes possession (prevents instant re-pickup by the carrier).
+- **From behind**: the angle between (carrier→tackler) and the carrier's backward
+  attack direction is < 60°.
+- **Foul outside the box** (simplified free kick): the carrier keeps the ball; the
+  fouler is inactive for 40 steps (one decision window).
+- **Foul inside the defender's penalty area** (16.5 deep, |y| ≤ 20): penalty
+  resolved instantly, goal with 0.75; ball restarts at centre.
+- **Send-off**: the 3rd foul moves the player to the touchline; inactive for the
+  rest of the match (still present in observations, so the team plays a man down).
+- **RNG**: `random.Random(seed)` per match; deterministic.
+- **Coach hook**: per-team `coach(state, team_id) -> str` written to
+  `coachInstruction`; default none ⇒ `""`.
 
 ## 4. Opponent pool
 
-- Existing entrants: `initial_idea`, `redesign_1`, `redesign_2`, `redesign_3`, `redesign_4`.
-- **Stand-in bots** `aws_like_balanced`, `aws_like_attacking`, `aws_like_defensive`.
-  These are `redesign_4` with fixed `style` presets, labelled "stand-in, not the
-  AWS bot" in every report.
-- Archetypes also play each other in a round robin.
+`initial_idea_v1`, `redesign_1_v1`, `redesign_2_v1`, `redesign_3_v1`, frozen
+`redesign_4_v1`, and three **stand-in** bots (`aws_like_balanced`,
+`aws_like_attacking`, `aws_like_defensive`), which are `redesign_4_v2` profiles
+labelled "stand-in, not the AWS bot".
 
 ## 5. Tactical profile `style` section (redesign_4)
 
-Profile schema v2 adds `style`, bounded and validated like `BOUNDS`. A v1
-profile loads with the default style, which reproduces today's behaviour
-exactly; this is regression-tested.
+Profile v2 adds `style` and `coach_policy`. A v1 profile (no such keys) loads with
+the defaults, which are **identity values**: decisions are byte-identical to the
+pre-change agent (golden test).
 
-| Field | Range | Meaning |
-|---|---|---|
-| `block_depth` | 0.0–1.0 | 0 = deep block at own box, 1 = high line |
-| `attackers_committed` | 1–3 | outfielders allowed beyond the halfway line in possession |
-| `tackle_aggression` | 0.0–1.0 | willingness to tackle and slide (including from behind) versus contain |
-| `tempo` | 0.0–1.0 | 0 = recycle and hold possession, 1 = forward pass and shoot early |
-| `formation` | enum `1-1-2` (default, today's anchors, `tactics.py:198-215`), `2-1-1`, `1-2-1` (outfield lines DEF-MID-FWD; GK implicit) | pinned role anchors; **immutable during a match** |
+| Field | Range | Default (identity) | Effect |
+|---|---|---|---|
+| `block_depth` | 0–1 | 1.0 | out of possession, outfield move targets capped at attack-x `-50 + 96·depth` |
+| `attackers_committed` | int 1–3 | 3 | in possession, only players `(4,3,2)[:n]` may move past halfway |
+| `tackle_aggression` | 0–1 | 0.0 | presser slides within `1 + 2.5·aggr` m; from behind only if ≥ 0.7 |
+| `tempo` | 0–1 | 0.5 | pass score `+ (tempo-0.5)·1.2·gain`; hold score `max(0,0.5-tempo)·80` when no opponent within 8 m |
+| `formation` | `1-1-2`, `2-1-1`, `1-2-1` | `1-1-2` | pinned anchors (outfield DEF-MID-FWD); **immutable in a match** |
 
-### Archetypes (pinned profiles)
+`coach_policy`: `none` (default) or `rules`.
 
-| Archetype | block_depth | attackers | tackle_aggr | tempo | other settings |
-|---|---|---|---|---|---|
-| `balanced` | 0.5 | 2 | 0.3 | 0.5 | defaults, formation `1-1-2` |
-| `press_aggressive` | 0.9 | 3 | 0.6 | 0.8 | press_radius 30, formation `1-1-2` |
-| `park_the_bus` | 0.1 | 1 | 0.4 | 0.2 | press_radius 12, formation `2-1-1` |
-| `time_waster` | 0.4 | 1 | 0.2 | 0.0 | pass_margin 4.5, shot_range 20, formation `1-2-1` |
-| `hard_tackle` | 0.6 | 2 | 1.0 | 0.5 | press_radius 26, formation `1-1-2` |
+### Archetypes
 
-Formation is a confound: the matrix runs the winning archetype in all three
-formations as a follow-up, so formation and style effects are not conflated.
+| Archetype | depth | attackers | tackle | tempo | formation | settings deltas |
+|---|---|---|---|---|---|---|
+| `balanced` | 1.0 | 3 | 0.0 | 0.5 | 1-1-2 | — |
+| `press_aggressive` | 1.0 | 3 | 0.6 | 0.8 | 1-1-2 | press_radius 30 |
+| `park_the_bus` | 0.1 | 1 | 0.4 | 0.3 | 2-1-1 | press_radius 12 |
+| `time_waster` | 0.5 | 1 | 0.2 | 0.0 | 1-2-1 | pass_margin 4.5, shot_range 20 |
+| `hard_tackle` | 0.7 | 2 | 1.0 | 0.5 | 1-1-2 | press_radius 26 |
 
-`time_waster` uses only legal commands: square passes, keeper distribution and
-holding the ball under low pressure. It does not stall restarts, because the
-simulator auto-restarts and the real platform's restart rules are unknown.
+Each archetype runs with `coach_policy` `none` and `rules`. Time-wasting uses legal
+holding/recycling only (no restart stalling).
 
 ## 6. Coach policy (redesign_4)
 
-New module `agent/coach.py`, a pure function:
+`agent/coach.py: choose_preset(s: Snapshot) -> str` — pure; it receives only the
+snapshot, so it cannot touch formation.
 
-```python
-def choose_preset(s: Snapshot, settings: Settings, style: Style,
-                  scout: dict | None) -> str  # "" or a known preset
-```
-
-- **Precedence:** if the platform sent a recognised `coachInstruction`, it wins
-  and the policy returns it unchanged. The policy runs only when the field is
-  empty.
-- **Rules** (tunable bounds live in the profile):
-  - trailing with ≤ 25% of the match left → `go_all_out_attack`
-  - leading with ≤ 30% left → `slow_the_tempo`
-  - level, and the opponent scout's long-pass rate is low → `press_high`
-  - otherwise `""`
-- **Stability without shared state:** the preset depends only on the score and
-  on match time quantised to 5 s buckets. Every player sees the same snapshot,
-  so every player computes the same preset. No per-player history is used,
-  which keeps decisions stateless per tick.
-- **Formation is never touched.** `choose_preset` has no access to `formation`;
-  this is enforced by its signature.
-
-Two policy variants are measured per archetype: `none` and `rules`. In the
-simulator the coach hook (§3) can also inject the same presets externally, to
-model a human coach shouting. This variant is reported separately as
-`external_coach`.
+- Platform-sent recognised preset wins (returned unchanged).
+- Otherwise, with `diff` = own − opponent goals and `r` = remaining fraction:
+  `diff<0 ∧ r≤0.35 → go_all_out_attack`; `diff<0 → press_high`;
+  `diff>0 ∧ r≤0.40 → slow_the_tempo`; `diff=0 ∧ r≤0.20 → shoot_on_sight`; else `""`.
+- It depends only on shared snapshot fields, so all five players agree (S4).
+- `Runtime` applies it only when `profile.coach_policy == "rules"`.
+- The simulator's scripted external coach uses the same table (variant
+  `r4v2_balanced_extcoach`), modelling a human coach shouting.
 
 ## 7. Off-tick advisor (LangChain)
 
-- **Package:** `agent/advisor/`, installed only through the optional extra
-  `llm = ["langchain-core>=0.3,<0.4", "langchain-aws>=0.2,<0.3"]`. The runtime
-  never imports it, enforced by a test that imports `agent.runtime` with
-  `langchain*` blocked.
-- **Pre-match analyst:** takes the opponent scout and the latest strategy-matrix
-  JSON. It outputs an archetype name plus a profile proposal, through structured
-  output (Pydantic) followed by `parse_profile` validation.
-- **Post-match coach:** takes `trainer.py` lessons and the telemetry summary,
-  and outputs parameter proposals. These enter the **existing** proposal and
-  approval flow; the advisor never approves anything itself.
-- **Failure:** on timeout, invalid schema, out-of-bounds values or an
-  unavailable model, the advisor logs the problem and returns no proposal. The
-  deterministic trainer is unaffected.
-- **Model:** Bedrock through `langchain-aws`, configurable. No live AWS calls
-  happen in tests; a fake chat model is used. Live use is an operator action.
-- **Value test:** the report compares the analyst's archetype pick against the
-  matrix's empirical best for each stand-in opponent. Accuracy is reported, and
-  no claim of improvement is made without it.
+- `agent/advisor/` behind the extra `llm = ["langchain-core>=1.0,<2",
+  "langchain-aws>=1.0,<2"]`; never imported by the runtime (guard test).
+- `Advisor(llm, archetype_profiles)`:
+  - `pick_archetype(matrix, opponent_id)` → `ArchetypeAdvice` + validated `Profile`
+  - `review_match(report, current)` → `SettingsAdvice` + validated `Profile`
+- Model output is parsed as JSON into Pydantic models, then through `parse_profile`.
+  Any model error, invalid JSON, or out-of-bounds value raises `AdvisorError`, and
+  the CLI writes no proposal.
+- Output is a **proposal file** (`status: "proposal"`). Deployment remains an
+  operator action (`AFC_PROFILE`), and trainer promotion is unchanged.
+- `Trainer.train(base=...)` carries the base profile's `style`/`coach_policy`, so
+  retraining doesn't revert a shipped archetype.
+- Tests use `FakeListChatModel`; no network.
 
-## 8. Experiment protocol
+## 8. Experiment protocol (rules v2, 20 blocks × 2 legs = 40 matches per pairing)
 
-1. Sanity check: rules v2 with `redesign_4` against itself gives a mean goal
-   difference CI that contains 0, which confirms no side bias.
-2. Matrix: 5 archetypes × 2 coach variants against the pool (§4), plus the
-   archetype round robin. N = 40 seeded matches per pairing, with legs swapped.
-3. Sensitivity: rerun the top 3 with `p_foul` ×0.5 and ×2.
-4. Report `redesign_4/docs/strategy_report.md` with goal-difference CIs, win,
-   draw and loss rates, fouls and send-offs per match, end stamina,
-   `winner_claim` output and a fragility note.
-5. Ship according to S2: update the default profile and record the decision.
-   The formation choice is part of the shipped profile.
+1. Sanity: `r4v2_balanced_none` vs `redesign_4_v1` — the pairwise CI contains 0.
+2. Campaign A (cross): 10 archetype variants + `r4v2_balanced_extcoach` vs the
+   8-team pool.
+3. Campaign B (round robin): the 10 archetype variants.
+4. Sensitivity: the top 3 by pooled-GD lower bound, Campaign A again with
+   `foul_scale` 0.5 and 2.0.
+5. Formation follow-up: the leader re-run in all three formations vs the pool.
+6. `redesign_4/docs/strategy_report.md`; ship per S2 as
+   `redesign_4/profiles/recommended.json` (deployed via `AFC_PROFILE`).
 
-## 9. Testing
+## 9. Out of scope
 
-- Simulator: deterministic dispossession and foul outcomes under a fixed seed;
-  a send-off after 3 fouls; the coach hook appears in the observation; v1
-  output stays byte-identical to the stored replay.
-- `redesign_4`:
-  - style bounds and v1-profile compatibility
-  - each archetype changes the intended behaviour (for example, `park_the_bus`
-    keeps ≥ 3 outfielders in the own half when out of possession)
-  - `choose_preset` table tests and the precedence rule
-  - S4 consistency across the 5 players
-  - the advisor import guard
-  - the advisor rejecting malformed LLM output (fake model)
+Live AWS; any LLM on the tick path; in-match formation change; exploits; claiming
+transfer of local results to the real platform.
 
-## 10. Out of scope
+## 10. Risks
 
-Live AWS deployment; any LLM call on the tick path; changing the formation
-during a match; simulator or infrastructure exploits; claims that local results
-transfer to the real platform (the report states this caveat).
-
-## 11. Risks
-
-- **R1.** The rules v2 constants are guesses, so rankings may not transfer.
-  Mitigations: the sensitivity run (§8.3) and the explicit caveat.
-- **R2.** The real coach channel may not reach player agents at all. The policy
-  is still useful, because it is self-generated.
-- **R3.** LangChain version churn. Mitigated by pinned ranges in the optional
-  extra, isolated from the runtime.
+- R1. v2 constants are guesses; mitigated by sensitivity runs and a caveat.
+- R2. The real `SLIDE_TACKLE` parameter names are unknown (we send
+  `target_player_id`). A server rejection only idles one player for one tick.
+- R3. The real coach channel may not reach players; the policy is self-generated
+  anyway.

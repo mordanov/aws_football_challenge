@@ -52,6 +52,7 @@ def test_profile_file_changes_behavior_and_bad_profile_fails(tmp_path):
     assert default != changed
     p.write_text("{}")
     import pytest
+
     from football_lab.team_runner import RunnerError
     with pytest.raises(RunnerError):
         _play("entrants/redesign_4/profile_shim.py", {"AFC_PROFILE": str(p)}, tmp_path)
