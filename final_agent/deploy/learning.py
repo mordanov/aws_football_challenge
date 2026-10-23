@@ -27,7 +27,9 @@ def checked_config(config: dict) -> None:
         "collection_enabled",
         "log_groups",
     }
-    if not isinstance(config, dict) or set(config) != required:
+    if not isinstance(config, dict) or not required <= set(config) <= required | {
+        "learning_enabled"
+    }:
         raise ValueError("learning config must supply exactly the documented fields")
     for key, pattern in {
         "account": r"[0-9]{12}",
@@ -40,8 +42,11 @@ def checked_config(config: dict) -> None:
         if not isinstance(config[key], str) or not re.fullmatch(pattern, config[key]):
             raise ValueError(f"invalid learning config {key}")
     topic_prefix = f"arn:aws:sns:{config['region']}:{config['account']}:"
-    if not isinstance(config["alarm_topic_arn"], str) or not re.fullmatch(
-        re.escape(topic_prefix) + r"[A-Za-z0-9_-]{1,256}", config["alarm_topic_arn"]
+    if config["alarm_topic_arn"] != "" and (
+        not isinstance(config["alarm_topic_arn"], str)
+        or not re.fullmatch(
+            re.escape(topic_prefix) + r"[A-Za-z0-9_-]{1,256}", config["alarm_topic_arn"]
+        )
     ):
         raise ValueError("alarm topic must belong to expected account and region")
     groups = config["log_groups"]
@@ -58,6 +63,8 @@ def checked_config(config: dict) -> None:
         raise ValueError("supply exactly five distinct runtime log groups in seat order")
     if type(config["collection_enabled"]) is not bool:
         raise ValueError("collection_enabled must be a boolean")
+    if type(config.get("learning_enabled", False)) is not bool:
+        raise ValueError("learning_enabled must be a boolean")
 
 
 def template(config: dict, code_key: str) -> dict:
@@ -87,6 +94,22 @@ def template(config: dict, code_key: str) -> dict:
                 "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": True},
             },
         }
+    resources["Outbox"]["Properties"]["AttributeDefinitions"].extend(
+        [
+            {"AttributeName": "team", "AttributeType": "S"},
+            {"AttributeName": "received", "AttributeType": "N"},
+        ]
+    )
+    resources["Outbox"]["Properties"]["GlobalSecondaryIndexes"] = [
+        {
+            "IndexName": "TeamReceived",
+            "KeySchema": [
+                {"AttributeName": "team", "KeyType": "HASH"},
+                {"AttributeName": "received", "KeyType": "RANGE"},
+            ],
+            "Projection": {"ProjectionType": "ALL"},
+        }
+    ]
     resources["Failures"] = {
         "Type": "AWS::SQS::Queue",
         "DeletionPolicy": "Retain",
@@ -178,6 +201,146 @@ def template(config: dict, code_key: str) -> dict:
             "DestinationConfig": {"OnFailure": {"Destination": arn("Failures")}},
         },
     }
+    resources["LearnerRole"] = {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"Service": "lambda.amazonaws.com"},
+                        "Action": "sts:AssumeRole",
+                    }
+                ],
+            },
+            "Policies": [
+                {
+                    "PolicyName": "BoundedLearning",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "logs:CreateLogStream",
+                                    "logs:PutLogEvents",
+                                ],
+                                "Resource": (
+                                    f"arn:aws:logs:{region}:{account}:log-group:/aws/lambda/"
+                                    + config["stack_name"]
+                                    + "-learner:*"
+                                ),
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": ["dynamodb:Query"],
+                                "Resource": {
+                                    "Fn::Join": ["", [arn("Outbox"), "/index/TeamReceived"]]
+                                },
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": [
+                                    "dynamodb:GetItem",
+                                    "dynamodb:PutItem",
+                                    "dynamodb:UpdateItem",
+                                    "dynamodb:ConditionCheckItem",
+                                ],
+                                "Resource": arn("Registry"),
+                                "Condition": {
+                                    "ForAllValues:StringLike": {
+                                        "dynamodb:LeadingKeys": [f"TEAM#{team}#*"]
+                                    }
+                                },
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": "bedrock-agentcore:ListEvents",
+                                "Resource": memory_arn,
+                            },
+                            {
+                                "Effect": "Allow",
+                                "Action": "sqs:SendMessage",
+                                "Resource": arn("Failures"),
+                            },
+                        ],
+                    },
+                }
+            ],
+        },
+    }
+    resources["LearnerLogs"] = {
+        "Type": "AWS::Logs::LogGroup",
+        "Properties": {
+            "LogGroupName": f"/aws/lambda/{config['stack_name']}-learner",
+            "RetentionInDays": 14,
+        },
+    }
+    resources["Learner"] = {
+        "Type": "AWS::Lambda::Function",
+        "DependsOn": "LearnerLogs",
+        "Properties": {
+            "FunctionName": config["stack_name"] + "-learner",
+            "Runtime": "python3.12",
+            "Handler": "agent.learning_worker.handler",
+            "Role": arn("LearnerRole"),
+            "Code": {"S3Bucket": config["artifact_bucket"], "S3Key": code_key},
+            "Timeout": 900,
+            "MemorySize": 1024,
+            "ReservedConcurrentExecutions": 1,
+            "Environment": {
+                "Variables": {
+                    "AFC_TEAM_ID": team,
+                    "AFC_MEMORY_ID": config["memory_id"],
+                    "AFC_OBSERVATION_TABLE": ref("Outbox"),
+                    "AFC_PROFILE_TABLE": ref("Registry"),
+                    "AFC_LEARNING_ENABLED": "1" if config.get("learning_enabled", False) else "0",
+                }
+            },
+        },
+    }
+    resources["LearningDelivery"] = {
+        "Type": "AWS::Lambda::EventInvokeConfig",
+        "Properties": {
+            "FunctionName": ref("Learner"),
+            "Qualifier": "$LATEST",
+            "MaximumRetryAttempts": 0,
+            "MaximumEventAgeInSeconds": 3600,
+            "DestinationConfig": {"OnFailure": {"Destination": arn("Failures")}},
+        },
+    }
+    resources["LearningSchedule"] = {
+        "Type": "AWS::Events::Rule",
+        "DependsOn": "LearningDelivery",
+        "Properties": {
+            "ScheduleExpression": "rate(15 minutes)",
+            "State": "ENABLED" if config.get("learning_enabled", False) else "DISABLED",
+            "Targets": [
+                {
+                    "Id": "BoundedLearner",
+                    "Arn": arn("Learner"),
+                    "RetryPolicy": {"MaximumRetryAttempts": 0, "MaximumEventAgeInSeconds": 3600},
+                }
+            ],
+        },
+    }
+    resources["LearningInvokePermission"] = {
+        "Type": "AWS::Lambda::Permission",
+        "Properties": {
+            "FunctionName": ref("Learner"),
+            "Action": "lambda:InvokeFunction",
+            "Principal": "events.amazonaws.com",
+            "SourceArn": arn("LearningSchedule"),
+        },
+    }
+    topic = config["alarm_topic_arn"]
+    if not topic:
+        resources["AlarmTopic"] = {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {"DisplayName": "final_agent learning alarms"},
+        }
+        topic = ref("AlarmTopic")
     for seat, group in enumerate(config["log_groups"]):
         permission = f"LogPermission{seat}"
         resources[permission] = {
@@ -284,9 +447,24 @@ def template(config: dict, code_key: str) -> dict:
                 "Threshold": 0,
                 "ComparisonOperator": "GreaterThanThreshold",
                 "TreatMissingData": "notBreaching",
-                "AlarmActions": [config["alarm_topic_arn"]],
+                "AlarmActions": [topic],
             },
         }
+    resources["LearnerErrors"] = {
+        "Type": "AWS::CloudWatch::Alarm",
+        "Properties": {
+            "Namespace": "AWS/Lambda",
+            "MetricName": "Errors",
+            "Dimensions": [{"Name": "FunctionName", "Value": ref("Learner")}],
+            "Statistic": "Sum",
+            "Period": 60,
+            "EvaluationPeriods": 1,
+            "Threshold": 0,
+            "ComparisonOperator": "GreaterThanThreshold",
+            "TreatMissingData": "notBreaching",
+            "AlarmActions": [topic],
+        },
+    }
     return {
         "AWSTemplateFormatVersion": "2010-09-09",
         "Description": "final_agent provisional shared Memory and immutable match profiles",
@@ -300,11 +478,19 @@ def template(config: dict, code_key: str) -> dict:
         "Conditions": {"Collect": {"Fn::Equals": [{"Ref": "CollectionEnabled"}, "true"]}},
         "Resources": resources,
         "Outputs": {
-            "RegistryTable": {"Value": ref("Registry")},
+            "RegistryTable": {
+                "Value": ref("Registry"),
+                "Export": {"Name": config["stack_name"] + "-RegistryTable"},
+            },
             "ObservationTable": {"Value": ref("Outbox")},
             "Collector": {"Value": ref("Worker")},
             "FailureQueue": {"Value": ref("Failures")},
-            "PlayerPolicyArn": {"Value": ref("PlayerPolicy")},
+            "PlayerPolicyArn": {
+                "Value": ref("PlayerPolicy"),
+                "Export": {"Name": config["stack_name"] + "-PlayerPolicyArn"},
+            },
+            "Learner": {"Value": ref("Learner")},
+            "AlarmTopicArn": {"Value": topic},
         },
     }
 
@@ -323,8 +509,20 @@ def package(output: Path) -> str:
         "model.py",
         "profile.py",
         "protocol.py",
+        "learning_source.py",
+        "learning_policy.py",
+        "learning_worker.py",
+        "learning_evaluation.py",
+        "tactics.py",
+        "coach.py",
+        "archetypes.py",
     ):
         files["agent/" + name] = ROOT / "agent" / name
+    simulator = ROOT.parent / "local_simulator" / "src" / "football_lab"
+    if not simulator.is_dir():
+        raise ValueError("offline worker packaging requires the repository local_simulator source")
+    for source in simulator.rglob("*.py"):
+        files["football_lab/" + source.relative_to(simulator).as_posix()] = source
     for dependency in (
         "boto3",
         "botocore",

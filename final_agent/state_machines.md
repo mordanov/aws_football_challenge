@@ -99,7 +99,8 @@ fallback. Bounded contention, missing/corrupt/incompatible content or unavailabl
 registry -> `profile_selection_error` and failed invocation. Cache recovery
 reuses the persistent pin; interleaved matches keep request-local settings.
 Synthetic fitness retains the static profile. Default startup has no selector.
-There is no automatic ACTIVE promotion transition in this stage.
+The separately gated automatic learner may advance ACTIVE for new pins only;
+running match bindings remain immutable.
 **Source:** `agent/profile_registry.py`, `agent/runtime.py`, `agent/main.py`.
 
 ## Provisional Memory delivery (opt-in)
@@ -116,6 +117,24 @@ No clock, score, idle period, Memory write or new UUID transitions a match to
 complete/aborted. All observations remain provisional, including overtime.
 **Source:** `agent/learning_observations.py`, `agent/learning_collector.py`,
 `deploy/learning.py`.
+
+## Automatic candidate acceptance (opt-in)
+
+**States:** insufficient_evidence, reserved_attempt, evaluated, rejected,
+promoted, stale_baseline; failed.
+**Transitions:** recent acknowledged outbox sessions after analysis delay ->
+exact Memory integrity check -> homogeneous current-profile observations ->
+three independently supporting matches -> bounded numeric proposal.
+Conditional generation reservation succeeds once -> fixed paired simulator
+evaluation -> rejected/failed receipt or conditional ACTIVE generation/digest
+update plus promotion receipt. Uncertain promotion response -> read receipt.
+Uncertain attempt write -> continue only if its invocation owner matches.
+Oversized raw evaluations -> immutable chunks with a digest/reference receipt.
+Concurrent baseline change -> stale_baseline, never overwrite. Repeating a
+reserved generation -> already_attempted, not another significance test.
+Neither analysis delay nor promotion confirms a match end or real efficacy.
+**Source:** `agent/learning_source.py`, `learning_policy.py`, `learning_worker.py`,
+`learning_evaluation.py`, `profile_registry.py`.
 
 ## Pass inference
 

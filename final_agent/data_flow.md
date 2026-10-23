@@ -142,11 +142,25 @@ All five players use one pin. Cached matches ignore later ACTIVE changes;
 cache recovery re-reads the same durable binding. Failed selection logs and
 raises, never independently chooses the packaged baseline. Default and synthetic
 fitness serving retain the startup profile.
-There is no candidate generator, comparative acceptance gate or automatic
-ACTIVE writer in this implementation.
+An explicitly enabled scheduled learner queries the bounded recent team outbox
+index -> retrieves/verifies exact acknowledged Memory events -> homogeneous
+distinct-clock central-exposure evidence -> one bounded numeric candidate ->
+per-generation durable attempt reservation -> paired fixed simulator fixtures ->
+immutable evaluation receipt. Rejected/failed/inconclusive results do not move
+ACTIVE. Accepted results update ACTIVE and persist the receipt transactionally,
+conditioned on the evaluated digest/generation. An active change invalidates
+stale evaluations; existing match pins never change. The offline worker vendors
+`football_lab`; serving code does not import the simulator. No model calls
+or generated executable code enter this path.
+Large evaluation payloads flow into immutable registry chunks before the
+terminal receipt references their ordered keys and content digest. The optional
+player CDK binding imports the learning stack's table/policy exports and wires
+the same table/team plus restricted managed policy to all five runtimes;
+it defaults off and never enables the learner as a side effect.
 **Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
 `agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
-`docs/automatic_learning.md`.
+`agent/learning_source.py`, `agent/learning_policy.py`, `agent/learning_worker.py`,
+`agent/learning_evaluation.py`, `docs/automatic_learning.md`.
 
 ## Offline coaching pipeline
 

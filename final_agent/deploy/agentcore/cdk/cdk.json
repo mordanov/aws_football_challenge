@@ -5,6 +5,11 @@
     "exclude": ["README.md", "cdk*.json", "tsconfig.json", "package*.json", "yarn.lock", "node_modules", "dist", "test"]
   },
   "context": {
+    "afcLearning": {
+      "enabled": false,
+      "stackName": "final-agent-learning",
+      "teamId": "aleksalotl"
+    },
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/aws-ecs-patterns:secGroupsDisablesImplicitOpenListener": true,
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,

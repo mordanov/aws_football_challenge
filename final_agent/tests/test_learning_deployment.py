@@ -111,7 +111,10 @@ def test_package_is_self_contained_including_current_memory_sdk(tmp_path):
             sys.executable,
             "-S",
             "-c",
-            "import agent.learning_collector, boto3, botocore.session; "
+            "import agent.learning_collector, agent.learning_worker, boto3, botocore.session; "
+            "from agent.learning_evaluation import play; from agent.model import Profile; "
+            "r=play(Profile(), Profile(), 1, 0); "
+            "assert r['status']=='complete' and r['illegal_actions']==0 and r['agent_crashes']==0; "
             "s=botocore.session.get_session().get_service_model('bedrock-agentcore'); "
             "assert 'extractionMode' in s.operation_model('CreateEvent').input_shape.members",
         ],
@@ -159,3 +162,36 @@ def test_apply_validates_config_before_touching_aws():
     with patch.object(deploy, "identity", side_effect=AssertionError("AWS accessed")):
         with pytest.raises(ValueError, match="collection_enabled"):
             deploy.apply(value)
+
+
+def test_learning_schedule_and_numeric_promoter_are_disabled_until_player_activation():
+    value = config()
+    value["learning_enabled"] = True
+    doc = deploy.template(value, "package.zip")
+    resources = doc["Resources"]
+    assert resources["LearningSchedule"]["Properties"]["State"] == "ENABLED"
+    learner = resources["Learner"]["Properties"]
+    assert learner["Handler"] == "agent.learning_worker.handler"
+    assert learner["Timeout"] == 900 and learner["ReservedConcurrentExecutions"] == 1
+    assert learner["Environment"]["Variables"]["AFC_LEARNING_ENABLED"] == "1"
+    assert (
+        resources["Outbox"]["Properties"]["GlobalSecondaryIndexes"][0]["IndexName"]
+        == "TeamReceived"
+    )
+    policy = json.dumps(resources["LearnerRole"]["Properties"]["Policies"])
+    assert "ListEvents" in policy and "Registry" in policy and "Outbox" in policy
+    assert "InvokeModel" not in policy and "UpdateAgentRuntime" not in policy
+    assert (
+        deploy.template(config(), "package.zip")["Resources"]["LearningSchedule"]["Properties"][
+            "State"
+        ]
+        == "DISABLED"
+    )
+
+
+def test_optional_owned_alarm_topic_requires_no_contact_information():
+    value = config()
+    value["alarm_topic_arn"] = ""
+    doc = deploy.template(value, "package.zip")
+    assert doc["Resources"]["AlarmTopic"]["Type"] == "AWS::SNS::Topic"
+    assert doc["Outputs"]["AlarmTopicArn"]

@@ -7,6 +7,26 @@ on:
     branches: ["main"]
 
 jobs:
+  final-agent-deployment:
+    name: Final agent deployment binding
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: final_agent/deploy/agentcore/cdk/package-lock.json
+      - name: Stage standalone serving code
+        working-directory: final_agent
+        run: python deploy/deploy.py --stage-only
+      - name: Verify five-player CDK bindings
+        working-directory: final_agent/deploy/agentcore/cdk
+        run: npm ci --no-fund --no-audit && npm test
+
   unit-tests:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

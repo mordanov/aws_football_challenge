@@ -9,7 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from .model import Profile
 from .profile import parse_profile
@@ -26,6 +26,12 @@ class SelectedProfile:
     profile: Profile
     digest: str
     code_generation: str
+
+
+@dataclass(frozen=True)
+class ActiveProfile:
+    selection: SelectedProfile
+    generation: int
 
 
 class ProfileSelector(Protocol):
@@ -120,6 +126,161 @@ class DynamoProfileRegistry:
                 "ACTIVE already selects another profile; bootstrap cannot rotate it"
             )
         return digest
+
+    def active(self) -> ActiveProfile:
+        item = self._read(self.prefix + "ACTIVE")
+        try:
+            generation = int(item["generation"]["N"])
+            if generation < 1:
+                raise ValueError("invalid generation")
+            return ActiveProfile(self._load(item["digest"]["S"]), generation)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RegistryError("ACTIVE is missing or invalid") from exc
+
+    def begin_attempt(
+        self, baseline: ActiveProfile, candidate: Profile, evidence_digest: str
+    ) -> bool:
+        """At most one automatic evaluation per active generation, even after failure."""
+        digest, _ = profile_document(candidate)
+        key = self.prefix + f"ATTEMPT#{baseline.generation}"
+        item = {
+            "pk": {"S": key},
+            "owner": {"S": uuid4().hex},
+            "document": {
+                "S": canonical(
+                    {
+                        "baseline_digest": baseline.selection.digest,
+                        "candidate_digest": digest,
+                        "evidence_digest": evidence_digest,
+                        "generation": baseline.generation,
+                    }
+                )
+            },
+        }
+        try:
+            self.client.put_item(
+                TableName=self.table, Item=item, ConditionExpression="attribute_not_exists(pk)"
+            )
+        except Exception as exc:
+            existing = self._read(key)
+            if existing:
+                return existing == item
+            raise RegistryError(f"attempt reservation failed: {error_code(exc)}") from exc
+        return True
+
+    def finish_attempt(
+        self, baseline: ActiveProfile, candidate: Profile, evidence_digest: str, evaluation: dict
+    ) -> dict:
+        digest, document = profile_document(candidate)
+        if (
+            candidate.style != baseline.selection.profile.style
+            or candidate.coach_policy != baseline.selection.profile.coach_policy
+            or candidate.opponents != baseline.selection.profile.opponents
+            or replace_settings_only(baseline.selection.profile, candidate) is False
+        ):
+            raise RegistryError("automatic profile change is outside numeric allowlist")
+        if (
+            evaluation.get("baseline_digest") != baseline.selection.digest
+            or evaluation.get("candidate_digest") != digest
+            or type(evaluation.get("accepted")) is not bool
+        ):
+            raise RegistryError("evaluation is not bound to exact candidate and baseline")
+        raw_evaluation = canonical(evaluation)
+        stored_evaluation = evaluation
+        if len(raw_evaluation.encode()) > 200_000:
+            evaluation_digest = hashlib.sha256(raw_evaluation.encode()).hexdigest()
+            keys = []
+            for offset in range(0, len(raw_evaluation), 100_000):
+                chunk_key = self.prefix + f"EVALUATION#{evaluation_digest}#{offset // 100_000}"
+                chunk = {
+                    "pk": {"S": chunk_key},
+                    "document": {"S": raw_evaluation[offset : offset + 100_000]},
+                }
+                if self._create(chunk) != chunk:
+                    raise RegistryError("immutable evaluation chunk conflicts")
+                keys.append(chunk_key)
+            stored_evaluation = {
+                "storage": "immutable_chunks_v1",
+                "accepted": evaluation["accepted"],
+                "sha256": evaluation_digest,
+                "chunk_keys": keys,
+            }
+        receipt = {
+            "baseline_digest": baseline.selection.digest,
+            "candidate_digest": digest,
+            "generation": baseline.generation,
+            "evidence_digest": evidence_digest,
+            "evaluation": stored_evaluation,
+            "status": "promoted" if evaluation["accepted"] else "rejected",
+        }
+        key = self.prefix + f"RESULT#{baseline.generation}"
+        receipt_item = {"pk": {"S": key}, "document": {"S": canonical(receipt)}}
+        if len(receipt_item["document"]["S"].encode()) > 300_000:
+            raise RegistryError("evaluation receipt exceeds durable byte limit")
+        attempt = self._read(self.prefix + f"ATTEMPT#{baseline.generation}")
+        expected = canonical(
+            {
+                "baseline_digest": baseline.selection.digest,
+                "candidate_digest": digest,
+                "evidence_digest": evidence_digest,
+                "generation": baseline.generation,
+            }
+        )
+        if attempt.get("document") != {"S": expected}:
+            raise RegistryError("evaluation does not match reserved attempt")
+        if not evaluation["accepted"]:
+            stored = self._create(receipt_item)
+            if stored != receipt_item:
+                raise RegistryError("evaluation receipt conflicts")
+            return receipt
+        stored = self._create(
+            {"pk": {"S": self.prefix + "PROFILE#" + digest}, "document": {"S": document}}
+        )
+        if stored.get("document") != {"S": document}:
+            raise RegistryError("candidate immutable document conflicts")
+        try:
+            self.client.transact_write_items(
+                TransactItems=[
+                    {
+                        "Update": {
+                            "TableName": self.table,
+                            "Key": {"pk": {"S": self.prefix + "ACTIVE"}},
+                            "UpdateExpression": "SET #digest = :new, #generation = :next",
+                            "ConditionExpression": "#digest = :old AND #generation = :generation",
+                            "ExpressionAttributeNames": {
+                                "#digest": "digest",
+                                "#generation": "generation",
+                            },
+                            "ExpressionAttributeValues": {
+                                ":new": {"S": digest},
+                                ":old": {"S": baseline.selection.digest},
+                                ":generation": {"N": str(baseline.generation)},
+                                ":next": {"N": str(baseline.generation + 1)},
+                            },
+                        }
+                    },
+                    {
+                        "Put": {
+                            "TableName": self.table,
+                            "Item": receipt_item,
+                            "ConditionExpression": "attribute_not_exists(pk)",
+                        }
+                    },
+                ]
+            )
+        except Exception as exc:
+            stored = self._read(key)
+            if stored == receipt_item:
+                return receipt
+            if error_code(exc) == "TransactionCanceledException" and (self.active() != baseline):
+                receipt["status"] = "stale_baseline"
+                receipt_item["document"] = {"S": canonical(receipt)}
+                stored = self._create(receipt_item)
+                if stored != receipt_item:
+                    raise RegistryError("stale-baseline receipt conflicts") from exc
+                return receipt
+            raise RegistryError(f"promotion failed: {error_code(exc)}") from exc
+        return receipt
 
     def _load(self, digest: str) -> SelectedProfile:
         if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
@@ -226,3 +387,13 @@ class DynamoProfileRegistry:
         return SelectedProfile(
             parse_profile(selected.profile.to_dict()), selected.digest, selected.code_generation
         )
+
+
+def replace_settings_only(baseline: Profile, candidate: Profile) -> bool:
+    """Initial automated remedy only decreases press radius by a bounded two-unit step."""
+    before, after = baseline.to_dict()["settings"], candidate.to_dict()["settings"]
+    return (
+        after["press_radius"] == max(12.0, before["press_radius"] - 2.0)
+        and after["press_radius"] < before["press_radius"]
+        and all(before[k] == after[k] for k in before if k != "press_radius")
+    )

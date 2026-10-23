@@ -7,6 +7,7 @@
   "artifact_bucket": "replace-with-private-artifact-bucket",
   "alarm_topic_arn": "arn:aws:sns:us-east-1:123456789012:monitored-alerts",
   "collection_enabled": false,
+  "learning_enabled": false,
   "log_groups": [
     "/aws/bedrock-agentcore/runtimes/our_gk-abcdefghij-DEFAULT",
     "/aws/bedrock-agentcore/runtimes/our_def-abcdefghij-DEFAULT",

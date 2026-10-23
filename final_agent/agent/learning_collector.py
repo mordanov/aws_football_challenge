@@ -54,7 +54,13 @@ class ObservationOutbox:
             }
         )
         key = f"TEAM#{self.team_id}#MEMORY#{self.memory_id}#OBS#{observation.observation_id}"
-        item = {"pk": {"S": key}, "document": {"S": document}, "status": {"S": "PENDING"}}
+        item = {
+            "pk": {"S": key},
+            "document": {"S": document},
+            "status": {"S": "PENDING"},
+            "team": {"S": self.team_id},
+            "received": {"N": str(observation.source["timestamp_ms"])},
+        }
         try:
             self.dynamo.put_item(
                 TableName=self.table, Item=item, ConditionExpression="attribute_not_exists(pk)"

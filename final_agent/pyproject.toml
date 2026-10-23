@@ -44,6 +44,10 @@ module = ["bedrock_agentcore.*", "langchain_core.*", "langchain_aws.*", "boto3.*
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = ["football_lab.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # The llm extra pulls numpy stubs that need Python 3.12 syntax; do not type-check its internals.
 module = ["langchain_core.*", "langchain_aws.*"]
 follow_imports = "skip"

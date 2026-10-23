@@ -120,8 +120,10 @@ shape is **not** evidence that a server accepted or executed it.
 
 For opt-in automatic provisional Memory collection and match-wide profile
 pinning, see [automatic learning foundations](docs/automatic_learning.md).
-The infrastructure has an explicit collection switch; default player startup
-is unchanged. Candidate generation/evaluation/promotion is not automated yet.
+The infrastructure has explicit collection and learning switches; default player
+startup is unchanged. A scheduled deterministic learner can propose one bounded
+numeric remedy, evaluate it against fixed paired simulator fixtures and
+conditionally promote it for new match pins only.
 
 For opponent-specific AgentCore Memory scouting, see
 [CloudWatch scouting and pre-match briefs](docs/offline_coaching.md#cloudwatch-scouting-and-pre-match-briefs).

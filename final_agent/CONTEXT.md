@@ -112,6 +112,16 @@ An explicit persisted operator decision to accept a candidate for evaluation.
 It records intent, not proof of successful runtime deployment.
 _Avoid_: export, proven improvement.
 
+**Automatic profile promotion**:
+A conditional active-generation update backed by a recorded paired evaluation
+of an allowlisted numeric candidate. It affects new match pins, not running
+matches, and is not proof of improvement on the real platform.
+
+**Automatic learning attempt**:
+One durable evaluation reservation per active profile generation. Additional
+evidence or process retries cannot repeatedly test the same baseline until it
+passes; failure and inconclusive results leave the active profile unchanged.
+
 **Match manifest**:
 Operator-supplied match identity, opponent identity and final-result availability.
 Completeness describes result availability, not full replay coverage.
