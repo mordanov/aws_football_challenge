@@ -11,6 +11,7 @@ from .model import Profile
 from .profile import effective_settings, parse_profile
 from .protocol import (
     MATCH_COORDINATE_SCALE,
+    MATCH_X_LIMIT,
     decode,
     envelope,
     match_command,
@@ -82,7 +83,13 @@ class Runtime:
             )
             if self.profile.coach_policy == "rules":
                 snapshot = replace(snapshot, coach=choose_preset(snapshot))
-            decision = decide(snapshot, pid, self.settings, self.profile.style)
+            decision = decide(
+                snapshot,
+                pid,
+                self.settings,
+                self.profile.style,
+                max_move_x=MATCH_X_LIMIT * MATCH_COORDINATE_SCALE if compact else 54.0,
+            )
             selected = decision.command
             if compact:
                 selected = match_command(selected)

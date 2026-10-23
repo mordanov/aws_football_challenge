@@ -17,10 +17,15 @@ _Avoid_: confirmed match event, complete replay.
 Session-selected conversion between compact live-match observations/commands
 and canonical tactical coordinates, separate from the synthetic Fitness Check.
 Its geometry calibration is provisional, not a guaranteed platform contract.
+The adapter supplies the canonical movement x-limit to planning so goalkeeper
+trajectory projection uses the same reachable plane as the wire command.
 _Avoid_: automatic per-player unit guessing, proof of improved match results.
 
 **Decision**:
 A selected attempted command, not evidence the server executed it.
+Carrying shares movement's stamina/distance sprint guard. A clearly stranded
+opposing keeper permits bounded longer shots, subject to normal angle and
+lane checks; it does not establish an empty net or a guaranteed goal.
 _Avoid_: outcome, accepted action.
 
 **Lesson**:

@@ -69,6 +69,8 @@ def _xy(value: object, name: str, *, scale: float = 1.0, lateral: str = "y") -> 
 HOLD_RADIUS = 3.0
 HOLD_MARGIN = 1.0
 MATCH_COORDINATE_SCALE = 8.0
+MATCH_X_LIMIT = 6.4
+MATCH_Y_LIMIT = 3.5
 
 
 def match_command(command: dict) -> dict:
@@ -80,8 +82,18 @@ def match_command(command: dict) -> dict:
         **command,
         "parameters": {
             **params,
-            "target_x": round(max(-6.4, min(6.4, params["target_x"] / MATCH_COORDINATE_SCALE)), 3),
-            "target_y": round(max(-3.5, min(3.5, params["target_y"] / MATCH_COORDINATE_SCALE)), 3),
+            "target_x": round(
+                max(
+                    -MATCH_X_LIMIT, min(MATCH_X_LIMIT, params["target_x"] / MATCH_COORDINATE_SCALE)
+                ),
+                3,
+            ),
+            "target_y": round(
+                max(
+                    -MATCH_Y_LIMIT, min(MATCH_Y_LIMIT, params["target_y"] / MATCH_COORDINATE_SCALE)
+                ),
+                3,
+            ),
         },
     }
 

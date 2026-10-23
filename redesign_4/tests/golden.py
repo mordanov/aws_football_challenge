@@ -1,7 +1,9 @@
-"""Golden decisions: the default profile must reproduce pre-change commands exactly.
+"""Golden decisions: preserve behavior outside explicitly reviewed tactical corrections.
 
-Regenerate ONLY on the pre-change agent: `.venv/bin/python tests/golden.py`.
+Regenerate after inspecting each intended difference: `.venv/bin/python tests/golden.py`.
+Report-2 corrections change only rows 52/99: clear shots against a stranded keeper.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,14 +33,21 @@ def payloads(n: int = 150) -> list[dict]:
     for _ in range(n):
         team = rng.randrange(2)
         players = [
-            {"playerId": pid, "teamId": side, "position": _xy(rng, 54, 34),
-             "velocity": _xy(rng, 1, 1), "stamina": round(rng.uniform(0.1, 1.0), 3)}
+            {
+                "playerId": pid,
+                "teamId": side,
+                "position": _xy(rng, 54, 34),
+                "velocity": _xy(rng, 1, 1),
+                "stamina": round(rng.uniform(0.1, 1.0), 3),
+            }
             for side in (0, 1)
             for pid in range(5)
         ]
         u = rng.random()
-        owner = (team, rng.randrange(5)) if u < 0.4 else (
-            (1 - team, rng.randrange(1, 5)) if u < 0.8 else None
+        owner = (
+            (team, rng.randrange(5))
+            if u < 0.4
+            else ((1 - team, rng.randrange(1, 5)) if u < 0.8 else None)
         )
         position = players[owner[0] * 5 + owner[1]]["position"] if owner else _xy(rng, 50, 30)
         tick = rng.randrange(2400)

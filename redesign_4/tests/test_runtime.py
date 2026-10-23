@@ -182,6 +182,41 @@ class TacticalTests(unittest.TestCase):
         self.assertNotEqual(assignments(snapshot)["interceptor"], 0)
         self.assertNotEqual(decide(snapshot, 0).command["commandType"], "INTERCEPT")
 
+    def test_keeper_projects_free_shot_at_its_movement_plane(self):
+        for team, d in ((0, 1), (1, -1)):
+            raw = edit(
+                payload(owner=None, ball=(-30 * d, 4), team=team, pid=0),
+                lambda s: s["ball"].update(velocity={"x": -10 * d, "y": -1}),
+            )
+            snapshot, _ = decode(raw)
+            action = decide(snapshot, 0).command
+            self.assertEqual(action["commandType"], "MOVE_TO")
+            params = action["parameters"]
+            t = (params["target_x"] - snapshot.ball[0]) / snapshot.velocity[0]
+            self.assertAlmostEqual(params["target_y"], 4 - t)
+
+    def test_keeper_sprints_to_cover_a_threat_but_not_a_dribblers_velocity(self):
+        raw = edit(
+            payload(owner=None, ball=(-30, -10), pid=0),
+            lambda s: (
+                position(s, 0, 0, -52, -8),
+                s["ball"].update(velocity={"x": -10, "y": 5}),
+            ),
+        )
+        snapshot, _ = decode(raw)
+        self.assertTrue(decide(snapshot, 0).command["parameters"]["sprint"])
+        carried, _ = decode(
+            edit(
+                raw,
+                lambda s: s["ball"].update(
+                    isFree=False, possessionTeamId=1, possessionAgentId="agentId_4"
+                ),
+            )
+        )
+        params = decide(carried, 0).command["parameters"]
+        self.assertFalse(params["sprint"])
+        self.assertLess(params["target_y"], 0)
+
     def test_prediction_selects_interceptor_running_toward_ball(self):
         raw = payload(owner=None, ball=(0, 0))
 
@@ -281,8 +316,13 @@ class RuntimeTests(unittest.TestCase):
 
 class SlideTackleSchemaTest(unittest.TestCase):
     def command(self, **params):
-        return {"commandType": "SLIDE_TACKLE", "teamId": 0, "playerId": 2,
-                "parameters": params, "duration": 0}
+        return {
+            "commandType": "SLIDE_TACKLE",
+            "teamId": 0,
+            "playerId": 2,
+            "parameters": params,
+            "duration": 0,
+        }
 
     def test_slide_tackle_requires_only_a_valid_target(self):
         validate_command(self.command(target_player_id=3))

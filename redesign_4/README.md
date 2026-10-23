@@ -359,6 +359,79 @@ runtime ARNs were retained. The five known portal Fitness Check session IDs
 were also refreshed and invoked successfully. These synthetic checks do not
 establish the next portal verdict or a competitive improvement.
 
+### Second real match: implemented tactical corrections
+
+`report2.pdf` records another 1-2 loss, this time to Total Attack United.
+The 399 available CloudWatch records for
+`64c91b0b-c1b1-4e93-ae1c-5e79bb06f6a9` contain 394 decisions and five
+tick-0 invalid-roster fallbacks. All decisions used the compact adapter.
+Actual decisions include 302 MOVE_TO, 25 PASS, 4 SHOOT, 30 MARK, 16 PRESS_BALL,
+16 INTERCEPT and 1 GK_DISTRIBUTE. The PDF attributes 0 PASS and 64 SHOOT to us;
+its columns resemble reversed attribution but do not exactly match our capture.
+Its possession, latency and scorer attribution remain report claims, not
+independently established team metrics.
+
+The implemented corrections are:
+
+- Carrying now reuses the movement sprint guard: stamina at least 0.35 and a
+  target over 5 canonical units away. Tick 7328 previously requested sprint
+  with stamina 0.11782325. A tired carrier still has a non-sprint carry option.
+- Keeper trajectory projection now intersects its actual reachable movement
+  plane, including the compact x-limit, rather than projecting at -54 and
+  commanding -52 (then clipping to -51.2). Only explicit free-ball flight is
+  projected; a dribbler's velocity is not treated as a shot. Reachable incoming
+  threats can request sprint through the same stamina guard.
+- A keeper projected 0.8 seconds ahead and still over 8 units behind the carrier
+  permits a longer shot: ordinary range plus 18, capped at 50. Angle and lane
+  checks remain mandatory. Captured tick 4927 had a clear 35.7-unit opportunity
+  against an advanced keeper but previously selected another carry.
+
+With the original profile, counterfactual replay of the 394 canonical snapshots
+produces 7 shooting attempts instead of 4 and 24 passes instead of 25.
+This is decision replay, not a new match outcome. Frozen post-goal clocks account
+for 12 of the 25 recorded passes; they do not establish an active-play passing
+loop. The incoming frame for the second concession is absent.
+
+Exact live goal width and save mechanics remain unverified. Goal-mouth width,
+coordinate calibration and strict active-play roster validation are unchanged.
+The five initial roster errors remain explicit; they are not hidden as successes.
+The two reviewed golden-command changes are longer shots against stranded
+keepers; the other 748 default-profile commands remain unchanged.
+
+Offline profile tuning compared the corrected team against frozen attacking
+and balanced stand-ins, alternating sides with paired seeds. Development used
+48 matches per candidate; disjoint held-out seeds used 320 matches per profile:
+
+| Profile | Held-out W-D-L | Goals for-against |
+|---|---|---|
+| Existing settings, corrected code | 151-97-72 | 476-337 |
+| Shot range 33, support width 18 | 163-80-77 | 501-351 |
+| Press radius 30, tempo 0.8 | 138-91-91 | 468-348 |
+| Rules coach | 149-100-71 | 450-330 |
+
+Keep the existing tactical weights, coach policy and formation. The shot/width
+candidate gained 0.059 points/game, but its paired 95% interval was
+[-0.094, 0.206] and it regressed against the attacking stand-in. Neither it nor
+the other candidates justified promotion. `profiles/recommended.json` is tagged
+`r4v3_match2_corrections` to distinguish the code corrections, not to claim a
+newly proven winning archetype.
+
+The frozen pre-correction baseline had the same held-out W-D-L and one more
+goal than the corrected code. The simulator ignores sprint's effect on speed
+and stamina, does not exercise compact keeper geometry, and does not reproduce
+the captured advanced opposing keeper. These campaigns therefore neither prove
+AWS improvement nor measure the stamina fix's benefit.
+Reproducible commands, candidate JSON, frozen-source hash and paired intervals
+are retained in `local_simulator/local/r4_tuning/conclusion.json` (ignored local
+artifacts). Its evaluated tactics hash matches the corrected source.
+
+The corrected source is staged offline for all five seats. Deployment is not
+complete: the supplied AWS credentials returned `ExpiredToken` on 2026-10-23.
+The last verified deployed runtime version remains 3. Refresh the credentials
+and run the existing deploy command above to update all five runtimes; then
+rerun the Fitness Check and a real practice match. Local tuning or replay alone
+does not update the deployed team or prove a higher win rate.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued

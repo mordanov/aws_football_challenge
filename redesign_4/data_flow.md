@@ -29,6 +29,10 @@ is multiplied by 8 into canonical coordinates. A 3D live ball uses x/z (y is
 height); 2D balls retain x/y. MOVE_TO output is divided by 8 and bounded to the
 observed player pitch limits, x +/-6.4 and y +/-3.5. Scale 8 is a provisional
 first-match calibration, not a verified exact field dimension.
+The same x-limit is passed to `decide(max_move_x=...)` in canonical units:
+51.2 for compact matches, 54 for sample inputs. Keeper projection intersects
+that bounded command plane; recorded canonical snapshot replay must supply
+the original input-format limit explicitly rather than applying scale twice.
 Telemetry includes `input_format`/`input_contract`, canonical snapshots and
 wire-format commands/alternatives. A recognized match session supplies its UUID
 as `match_id` when no operator binding is configured; opponent identity remains

@@ -16,6 +16,27 @@ from agent.runtime import Runtime
     importlib.util.find_spec("bedrock_agentcore"), "optional deployment SDK absent"
 )
 class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
+    def test_compact_keeper_projection_uses_the_clipped_wire_plane(self):
+        runtime = Runtime(stamina_scale=100, competition_adapter=True, emit=lambda _: None)
+        self.addCleanup(runtime.close)
+        for team, d in ((0, 1), (1, -1)):
+            data = json.loads(payload(owner=None, team=team, pid=0)["prompt"])
+            for player in data["gameState"]["players"]:
+                player["position"] = {k: v / 8 for k, v in player["position"].items()}
+            data["gameState"]["ball"].update(
+                position={"x": -30 * d / 8, "y": 0.14, "z": 4 / 8},
+                velocity={"x": -10 * d / 8, "y": 0, "z": -1 / 8},
+            )
+            action = json.loads(
+                runtime.handle(
+                    data, session_id=f"64c91b0b-c1b1-4e93-ae1c-5e79bb06f6a9-team{team}-pos0"
+                )
+            )[0]
+            params = action["parameters"]
+            self.assertEqual(params["target_x"], -6.4 * d)
+            t = (params["target_x"] + 30 * d / 8) / (-10 * d / 8)
+            self.assertAlmostEqual(params["target_y"], (4 - t) / 8, places=3)
+
     def test_captured_forward_at_boundary_shoots_instead_of_carrying(self):
         # Tick 7175: reconstructed from normalized telemetry; original ball z was not logged.
         positions = (

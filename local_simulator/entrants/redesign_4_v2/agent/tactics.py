@@ -145,12 +145,15 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     limit = settings.shot_range + (3 if posture(s) == "chase" else 0)
     if s.coach == "shoot_on_sight":
         limit = min(34, limit + 3)
+    keeper = next(o for o in s.opponents if o.id == 0)
+    stranded = s.direction * (p.x - point(keeper, 0.8)[0]) > 8
+    if stranded:
+        limit = min(50, limit + 18)
     if gap <= 0 or distance(point(p), goal) > limit:
         return None
     angle = abs(math.atan2(3 - p.y, gap) - math.atan2(-3 - p.y, gap))
     if angle < 0.12:
         return None
-    keeper = next(o for o in s.opponents if o.id == 0)
     choices = []
     for y, aim in ((-2.6, "BL"), (2.6, "BR")):
         target = (goal[0], y)
@@ -162,7 +165,8 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
                 (
                     quality,
                     command(s, p.id, "SHOOT", aim_location=aim, power=0.9),
-                    f"open shot; angle={angle:.2f}, lane={lane:.1f}",
+                    f"open shot; angle={angle:.2f}, lane={lane:.1f}"
+                    + ("; stranded keeper" if stranded else ""),
                 )
             )
     return (
@@ -178,10 +182,7 @@ def carry_option(s: Snapshot, p: Player, style: Style) -> tuple[float, dict, str
     space = min([12.0, *ahead])
     return (
         style.carry * (30 + space),
-        command(
-            s, p.id, "MOVE_TO",
-            target_x=s.direction * 50.0, target_y=max(-10.0, min(10.0, p.y * 0.6)), sprint=True,
-        ),
+        movement(s, p, s.direction * 50.0, max(-10.0, min(10.0, p.y * 0.6)), urgent=True),
         f"carry: {space:.1f} m free ahead",
     )
 
@@ -287,6 +288,8 @@ def decide(
     player_id: int,
     settings: Settings = DEFAULT_SETTINGS,
     style: Style = DEFAULT_STYLE,
+    *,
+    max_move_x: float = 54.0,
 ) -> Decision:
     s, p = snapshot, snapshot.player(player_id)
     plan = assignments(s, settings)
@@ -305,15 +308,20 @@ def decide(
                 assignments=plan,
             )
         d = s.direction
-        x = d * -52.0
-        y = s.ball[1] * 3 / max(3, s.direction * s.ball[0] + 55)
-        if d * s.velocity[0] < -0.5:
-            t = (d * -54 - s.ball[0]) / s.velocity[0]
+        x = -d * min(52.0, max_move_x)
+        depth = 55 + d * x
+        y = s.ball[1] * depth / max(depth, d * s.ball[0] + 55)
+        incoming = False
+        if s.free and d * s.velocity[0] < -0.5:
+            t = (x - s.ball[0]) / s.velocity[0]
             if 0 < t < 3:
                 y = s.ball[1] + s.velocity[1] * t
+                incoming = abs(y) <= 2.8
         y = max(-2.8, min(2.8, y))
         return Decision(
-            movement(s, p, x, y), "keeper covers goal angle / projected shot", assignments=plan
+            movement(s, p, x, y, urgent=incoming),
+            "keeper covers goal angle / projected shot",
+            assignments=plan,
         )
     if s.free and plan["interceptor"] == player_id:
         return Decision(
