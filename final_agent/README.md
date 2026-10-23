@@ -118,6 +118,13 @@ shape is **not** evidence that a server accepted or executed it.
 
 ## Offline coaching
 
+For opponent-specific AgentCore Memory scouting, see
+[CloudWatch scouting and pre-match briefs](docs/offline_coaching.md#cloudwatch-scouting-and-pre-match-briefs).
+`scout` prepares source-bound observations locally; explicit `publish` stores
+them, and `prematch` reads historical opponent notes into a review-only brief
+and advisor evidence. No live player Memory calls or automatic profile changes
+are introduced.
+
 ```sh
 .venv/bin/python -m agent learn \
   --db local/coach.db --manifest examples/match.json \

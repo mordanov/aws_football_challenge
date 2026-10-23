@@ -137,6 +137,28 @@ No transition proves the result transfers to the AWS platform.
 
 ## Offline run
 
+### Scouting review
+
+**States:** telemetry_saved, locally_prepared, published, insufficient_evidence,
+review_required, advisor_proposal.
+**Transitions:** validated complete manifest plus nonempty canonical decisions ->
+locally_prepared; explicit `publish` with matching note/packet -> published.
+Invalid/conflicting identity, geometry, clocks or expiry -> explicit failure,
+not a default scouting observation. Publication is not implied by preparation.
+
+`prematch` with confirmed opponent and timezone-aware kickoff -> read only exact,
+unexpired notes played before kickoff, excluding the upcoming match itself.
+Duplicate notes do not add independent matches; conflicting versions for the
+same match fail. For each pattern: positives in >=2 distinct matches, >=3
+distinct-clock positive samples and sample fraction >=0.2 -> review_required;
+otherwise -> insufficient_evidence. This threshold is only a review heuristic,
+not tactical validation, approval or an automatic profile transition.
+
+Explicit existing `run` using the pre-match evidence -> evaluated proposal or
+rejection/failure under existing guards. No scouting command transitions to
+approved or deployed, and no live decision depends on Memory availability.
+**Source:** `agent/advisor/offline/scouting.py`, `memory.py`, `__main__.py`.
+
 **States:** evidence_prepared, advice_retrieved, advice_evaluated, proposal, rejected, failed; published.
 **Initial:** evidence_prepared (local `prepare` command; no AWS calls).
 **Transitions:**

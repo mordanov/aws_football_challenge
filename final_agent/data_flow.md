@@ -114,6 +114,40 @@ remain unverified integration responsibilities.
 
 ## Offline coaching pipeline
 
+### CloudWatch scouting and pre-match review
+
+Saved standalone application JSON/JSONL + six-field confirmed match manifest +
+the exact historical profile -> `scout` -> `EvidencePacket` and `ScoutingNote`.
+Snapshots are already canonical: no second compact-coordinate conversion.
+Match/team/profile conflicts, unknown coordinate formats, decreasing clocks,
+invalid geometry and disagreeing snapshots at one tick fail explicitly.
+Equal ticks and repeated game clocks count once, choosing the earliest tick.
+Error rows are not observations. The manifest's opponent ID explicitly binds
+missing opponent IDs; it cannot override a contradictory one.
+
+Each observed claim contains a versioned typed count and supporting tick IDs.
+Source digests cover the validated manifest and every sampled normalized snapshot.
+Only keeper position and all-five-player attack patterns are extracted; our
+issued commands cannot establish opponent shot attempts or shot accuracy.
+Local preparation makes no AWS/model calls. Explicit existing `publish` sends
+the source-bound note and packet to the team's exact opponent Memory session.
+
+`prematch` -> bounded exact Memory events before the exclusive kickoff cutoff ->
+integrity/identity/expiry checks -> one unambiguous note per historical match ->
+brief JSON + an incomplete (upcoming-match) `EvidencePacket` of hypotheses.
+Sources retain note/packet digests, ticks, played/expiry dates and historical
+profile versions. A hypothesis needs positive samples in at least two matches,
+at least three distinct-clock positives and >=20% of sampled observations.
+These are review heuristics, not statistical significance or deployment gates.
+Insufficient history writes an explicit `insufficient_evidence` brief.
+
+The evidence file is accepted by existing `run --evidence`; Memory retrieval for
+incomplete packets applies the same exclusive historical cutoff. That optional
+next step invokes advisor/evaluator and still only produces a proposal. No
+command here writes the recommended profile, changes formation, deploys a
+runtime, or adds Memory calls to live decisions.
+**Source:** `agent/advisor/offline/scouting.py`, `memory.py`, `__main__.py`.
+
 **Source:** local evidence packet (`EvidencePacket`: team/opponent/match IDs, played_at,
 coach claims, source digests, expiry).
 **Sink:** `RunArtifact` JSON file (status: proposal/rejected/failed, advice, candidate_profile,

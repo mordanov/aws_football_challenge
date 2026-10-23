@@ -37,6 +37,126 @@ for full rationale.
 
 ---
 
+## CloudWatch scouting and pre-match briefs
+
+Run these commands from `final_agent/` with the `offline` extra installed.
+This tooling does **not** require redeploying the five players. It uses the
+existing Memory resource through the runtime configuration, not a new store.
+
+### Prepare one historical match locally
+
+Save exact-match standalone application records from our five CloudWatch groups
+as a JSON array or JSONL. Do not supply `filter-log-events` wrappers, framework
+copies, PDF statistics or records from multiple matches. Every decision snapshot
+must already use the canonical coordinates logged by the runtime.
+
+Provide a six-field manifest with a separately confirmed opponent identity:
+
+```json
+{
+  "match_id": "confirmed-match-uuid",
+  "opponent_id": "confirmed-stable-opponent-id",
+  "team_id": 0,
+  "played_at": "2026-10-23T18:00:00Z",
+  "complete": true,
+  "result": [1, 1]
+}
+```
+
+This is a format example, **not** evidence of a played match. `team_id` here is
+our numeric side (0/1); `--team` below is the durable team identity used to scope
+Memory. Result is `[our_goals, opponent_goals]`. A final score must be verified
+independently; the last sparse snapshot need not be the final result. A missing
+telemetry opponent ID is explicitly bound by this manifest, never guessed from
+positions or the score. Use the actual pinned profile from that match, not
+necessarily today's `profiles/recommended.json`.
+
+```sh
+python -m agent.advisor.offline scout \
+  --manifest local/match.json --records local/telemetry.json \
+  --profile local/played-profile.json --team aleksalotl \
+  --expires-at 2026-10-30T18:00:00Z \
+  --output local/scout-evidence.json --note-output local/scout-note.json
+```
+
+Expiry must be timezone-aware, after the match and still in the future.
+Input is bounded to16 MiB /20000 rows /256 distinct game clocks; larger or
+malformed input fails rather than silently truncating. Multiple player records
+at the same tick must agree. Repeated game clocks count once at their earliest
+tick, even if later restart ticks advance. Errors are not samples.
+
+The two versioned observations are deliberately narrow:
+
+| Pattern | Positive observation | Denominator |
+|---|---|---|
+| `keeper_advanced` | Opposing keeper canonical x projected along our attack direction is <=30 | All distinct sampled game clocks |
+| `all_players_attacking` | All five opponents are strictly in our half while opponent ownership is known | Distinct sampled clocks with known opponent possession |
+
+Keeper threshold30 is a scouting heuristic in canonical units, not an official
+keeper-zone rule. Snapshots do not prove intent, elapsed possession percentage,
+opponent shots or successful execution. Source digests cover each normalized
+snapshot and the validated manifest; keep the original export to inspect them.
+The note ID derives from the packet digest for repeatable publication.
+
+### Explicit publication to existing Memory
+
+Review the packet/note and confirm the opponent before this AWS write:
+
+```sh
+python -m agent.advisor.offline publish \
+  --config local/offline_runtime.json \
+  --evidence local/scout-evidence.json --note local/scout-note.json
+```
+
+This reuses validated exact-event publication and deterministic team/opponent
+sessions. IAM must restrict writers; hashes do not authenticate a source.
+No semantic model extraction or paid model inference is requested by `scout`,
+`publish` or `prematch`. Existing Memory retention can remove events earlier than
+their note expiry; absence of retrieved notes is not negative tactical evidence.
+
+### Before another match against the same confirmed opponent
+
+```sh
+python -m agent.advisor.offline prematch \
+  --config local/offline_runtime.json --team aleksalotl \
+  --opponent confirmed-stable-opponent-id --match-id next-confirmed-match-uuid \
+  --kickoff 2026-10-24T18:00:00Z --profile profiles/recommended.json \
+  --output local/prematch-brief.json --evidence-output local/prematch-evidence.json
+```
+
+The cutoff is exclusive. Future/same-match, wrong-identity and expired notes
+cannot support the brief. Duplicate notes count once; conflicting notes for
+one match require operator resolution, not selective merging. Sources keep
+historical profile versions and dates; a changed profile is context, not proof
+of improvement. Only typed scouting claims are aggregated; narrative notes and
+semantic text are not converted into counts.
+
+`review_required` needs a positive observation in at least two distinct matches,
+at least three distinct-clock positives, and >=20% positive sampled observations
+for a pattern. These are conservative **review heuristics**, not calibrated
+confidence or proof of an effective counter-strategy. Otherwise the brief is
+`insufficient_evidence` with no invented actionable evidence. Retrieval
+exclusions and page/note limits are visible in the brief.
+
+The brief suggests testing safe counterattacks/outlets while preserving shot and
+cover guards. It does not modify any settings or change formation. If the brief
+has eligible hypotheses, the existing optional advisor/evaluator can produce a
+candidate:
+
+```sh
+python -m agent.advisor.offline run \
+  --config local/offline_runtime.json --evidence local/prematch-evidence.json \
+  --profile profiles/recommended.json --output local/prematch-proposal.json
+```
+
+This final command **does** invoke configured models and incurs inference cost.
+The upcoming-match evidence is intentionally incomplete with no result; it
+cannot be published as a completed-match scouting note. Review, offline checks,
+profile approval and deployment to all five players remain separate operations.
+Nothing automatically polls CloudWatch or changes a live match.
+
+---
+
 ## Glossary
 
 | Term | Meaning |

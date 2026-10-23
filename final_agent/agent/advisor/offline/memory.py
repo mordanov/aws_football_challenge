@@ -85,17 +85,21 @@ class AgentCoreMemory:
         try:
             _validate_note(note, packet)
             digest = _note_digest(note)
-            payload = _canonical({
-                "note": note.model_dump(mode="json"),
-                "note_digest": digest,
-                "packet": packet.model_dump(mode="json"),
-            })
+            payload = _canonical(
+                {
+                    "note": note.model_dump(mode="json"),
+                    "note_digest": digest,
+                    "packet": packet.model_dump(mode="json"),
+                }
+            )
             if len(payload.encode()) > _MAX_EVENT_BYTES:
                 raise ValueError("note envelope exceeds event byte limit")
         except ValueError as exc:
             raise OfflineServiceError(
-                "Invalid scouting note or packet", service="memory",
-                stage="publish_validate", error_code="INVALID_NOTE",
+                "Invalid scouting note or packet",
+                service="memory",
+                stage="publish_validate",
+                error_code="INVALID_NOTE",
             ) from exc
 
         try:
@@ -110,14 +114,37 @@ class AgentCoreMemory:
         except Exception as exc:
             raise OfflineServiceError(
                 f"Memory publish failed: {type(exc).__name__}",
-                service="memory", stage="publish", outcome="unknown",
+                service="memory",
+                stage="publish",
+                outcome="unknown",
             ) from exc
         return note.note_id
 
     def retrieve(self, packet: EvidencePacket) -> ScoutingContext:
         """List payloads for this team's opponent session, checking every envelope."""
-        actor_id = _safe_component(packet.team_id)
-        session_id = _safe_component(packet.opponent_id)
+        return self._retrieve(
+            packet.team_id,
+            packet.opponent_id,
+            before=packet.played_at if not packet.complete else None,
+            excluded_match_id=packet.match_id if not packet.complete else None,
+        )
+
+    def retrieve_before(self, team_id: str, opponent_id: str, before: datetime) -> ScoutingContext:
+        """Retrieve past scouting only; the cutoff is exclusive."""
+        if before.tzinfo is None:
+            raise ValueError("Memory cutoff requires a timezone")
+        return self._retrieve(team_id, opponent_id, before=before)
+
+    def _retrieve(
+        self,
+        team_id: str,
+        opponent_id: str,
+        *,
+        before: datetime | None = None,
+        excluded_match_id: str | None = None,
+    ) -> ScoutingContext:
+        actor_id = _safe_component(team_id)
+        session_id = _safe_component(opponent_id)
         now = datetime.now(timezone.utc)
         notes: dict[str, ScoutingNote] = {}
         excluded = ["semantic_retrieval_disabled:no_trusted_record_link"]
@@ -138,20 +165,30 @@ class AgentCoreMemory:
             except Exception as exc:
                 raise OfflineServiceError(
                     f"Memory list_events failed: {type(exc).__name__}",
-                    service="memory", stage="retrieve_list", outcome="unknown",
+                    service="memory",
+                    stage="retrieve_list",
+                    outcome="unknown",
                 ) from exc
             events = response.get("events")
             if not isinstance(events, list) or len(events) > self._max_records:
                 raise OfflineServiceError(
-                    "Malformed Memory event page", service="memory", stage="retrieve_list",
+                    "Malformed Memory event page",
+                    service="memory",
+                    stage="retrieve_list",
                 )
             for event in events:
                 try:
                     note, digest = self._read_event(event, actor_id, session_id)
-                    if note.team_id != packet.team_id or note.opponent_id != packet.opponent_id:
+                    if note.team_id != team_id or note.opponent_id != opponent_id:
                         raise ValueError("event does not match requested identity")
-                    if note.expires_at <= now:
+                    if note.expires_at <= max(now, before or now):
                         raise ValueError("event expired")
+                    if note.match_id == excluded_match_id:
+                        excluded.append("upcoming_match_excluded")
+                        continue
+                    if before is not None and note.played_at >= before:
+                        excluded.append("not_before_cutoff")
+                        continue
                     notes[digest] = note
                 except (ValueError, KeyError, TypeError, ValidationError, RecursionError):
                     excluded.append("invalid_or_expired_event")
@@ -160,7 +197,9 @@ class AgentCoreMemory:
                 break
             if not isinstance(token, str) or token in seen_tokens:
                 raise OfflineServiceError(
-                    "Invalid Memory pagination token", service="memory", stage="retrieve_list",
+                    "Invalid Memory pagination token",
+                    service="memory",
+                    stage="retrieve_list",
                 )
             seen_tokens.add(token)
         else:
@@ -170,17 +209,18 @@ class AgentCoreMemory:
         if len(ordered) > self._max_records:
             excluded.append("note_limit")
         return ScoutingContext(
-            notes=tuple(ordered[:self._max_records]), extracted_text=(), excluded=tuple(excluded),
+            notes=tuple(ordered[: self._max_records]),
+            extracted_text=(),
+            excluded=tuple(excluded),
         )
 
-    def _read_event(
-        self, event: Any, actor_id: str, session_id: str
-    ) -> tuple[ScoutingNote, str]:
+    def _read_event(self, event: Any, actor_id: str, session_id: str) -> tuple[ScoutingNote, str]:
         if not isinstance(event, dict):
             raise ValueError("event is not an object")
         if (
             event.get("memoryId") != self._config.memory_store_id
-            or event.get("actorId") != actor_id or event.get("sessionId") != session_id
+            or event.get("actorId") != actor_id
+            or event.get("sessionId") != session_id
         ):
             raise ValueError("event service identity mismatch")
         payload = event["payload"]
