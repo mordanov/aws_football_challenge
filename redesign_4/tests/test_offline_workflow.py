@@ -4,14 +4,8 @@ from __future__ import annotations
 
 import unittest
 
-from tests.offline_support import (
-    FakeEvaluator,
-    FakeInterpreter,
-    FakeMemory,
-    make_config,
-    make_packet,
-    make_workflow_case,
-)
+from agent.advisor.offline.__main__ import Services
+from tests.offline_support import make_workflow_case
 
 
 class StageFailureTest(unittest.TestCase):
@@ -148,7 +142,8 @@ class CliArgparseTest(unittest.TestCase):
     def _run(self, *argv: str) -> tuple[int, str]:
         """Run CLI, return (exit_code, stderr)."""
         import io
-        from agent.advisor.offline.__main__ import main, Services
+
+        from agent.advisor.offline.__main__ import Services, main
         err = io.StringIO()
         import sys as _sys
         old_stderr = _sys.stderr
@@ -183,10 +178,10 @@ class CliArgparseTest(unittest.TestCase):
 
     def test_analyze_missing_execute_flag_exits_2(self):
         # --execute-generated-code is required for sandbox execution
-        import tempfile, json
+        import json
+        import tempfile
+
         from tests.offline_support import make_config, make_packet
-        from agent.advisor.offline.__main__ import Services
-        from agent.advisor.offline.contracts import OfflineConfig
 
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = f"{tmp}/cfg.json"
@@ -214,8 +209,9 @@ class CliRunTest(unittest.TestCase):
 
     def _run_cli(self, argv: list[str], services: "Services") -> tuple[int, str, str]:
         import io
-        from agent.advisor.offline.__main__ import main
         import sys as _sys
+
+        from agent.advisor.offline.__main__ import main
         out, err = io.StringIO(), io.StringIO()
         old_out, old_err = _sys.stdout, _sys.stderr
         _sys.stdout, _sys.stderr = out, err
@@ -228,9 +224,17 @@ class CliRunTest(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_run_proposal_exits_0(self):
-        import tempfile, pathlib
+        import pathlib
+        import tempfile
+
         from agent.advisor.offline.__main__ import Services
-        from tests.offline_support import FakeEvaluator, FakeAdvisor, FakeMemory, make_config, make_packet
+        from tests.offline_support import (
+            FakeAdvisor,
+            FakeEvaluator,
+            FakeMemory,
+            make_config,
+            make_packet,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = f"{tmp}/cfg.json"
@@ -241,8 +245,9 @@ class CliRunTest(unittest.TestCase):
             cfg = make_config()
             pathlib.Path(cfg_path).write_text(cfg.model_dump_json())
             pkt = make_packet()
-            from agent.model import Profile
             import json
+
+            from agent.model import Profile
             pathlib.Path(ev_path).write_text(json.dumps(pkt.model_dump(mode="json")))
             pathlib.Path(prof_path).write_text(json.dumps(Profile().to_dict()))
 
@@ -261,10 +266,19 @@ class CliRunTest(unittest.TestCase):
             self.assertEqual(result["status"], "proposal")
 
     def test_run_rejected_exits_3(self):
-        import tempfile, pathlib, json
+        import json
+        import pathlib
+        import tempfile
+
         from agent.advisor.offline.__main__ import Services
-        from tests.offline_support import FakeEvaluator, FakeAdvisor, FakeMemory, make_config, make_packet
         from agent.model import Profile
+        from tests.offline_support import (
+            FakeAdvisor,
+            FakeEvaluator,
+            FakeMemory,
+            make_config,
+            make_packet,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = f"{tmp}/cfg.json"
@@ -289,11 +303,20 @@ class CliRunTest(unittest.TestCase):
             self.assertEqual(code, 3)
 
     def test_run_service_failure_exits_2(self):
-        import tempfile, pathlib, json
+        import json
+        import pathlib
+        import tempfile
+
         from agent.advisor.offline.__main__ import Services
         from agent.advisor.offline.contracts import OfflineServiceError
-        from tests.offline_support import FakeAdvisor, FakeMemory, FakeEvaluator, make_config, make_packet
         from agent.model import Profile
+        from tests.offline_support import (
+            FakeAdvisor,
+            FakeEvaluator,
+            FakeMemory,
+            make_config,
+            make_packet,
+        )
 
         with tempfile.TemporaryDirectory() as tmp:
             cfg_path = f"{tmp}/cfg.json"
@@ -320,7 +343,9 @@ class CliRunTest(unittest.TestCase):
             self.assertEqual(code, 2)
 
     def test_doctor_valid_config_exits_0(self):
-        import tempfile, pathlib
+        import pathlib
+        import tempfile
+
         from agent.advisor.offline.__main__ import Services
         from tests.offline_support import make_config
 

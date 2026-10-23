@@ -127,5 +127,89 @@ class AdvisorTest(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["m.json", out.name])
 
 
+class OfflineRuntimeGuardTest(unittest.TestCase):
+    """Prove that agent.runtime and trainer never import offline clients."""
+
+    def test_runtime_never_imports_offline_or_boto3(self):
+        code = (
+            "import sys, agent.runtime, agent.__main__, agent.trainer; "
+            "bad = sorted(m for m in sys.modules "
+            "if m.startswith(("
+            "'boto3', 'botocore', 'bedrock_agentcore', "
+            "'agent.advisor.offline', 'opentelemetry'"
+            "))); "
+            "print(bad); sys.exit(1 if bad else 0)"
+        )
+        done = subprocess.run(
+            [sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+
+
+class OfflineEndToEndTest(unittest.TestCase):
+    """Full workflow through fake services; no AWS calls."""
+
+    def test_happy_path_produces_proposal(self):
+        from tests.offline_support import make_workflow_case
+
+        case = make_workflow_case(score=3.0)
+        result = case.run()
+        self.assertEqual(result.status, "proposal")
+        self.assertIsNotNone(result.candidate_profile)
+        self.assertIsNotNone(result.evaluation)
+        self.assertEqual(case.memory.publish_calls, [])
+        self.assertEqual(case.deployment_calls, [])
+
+    def test_low_score_produces_rejected(self):
+        from tests.offline_support import make_workflow_case
+
+        case = make_workflow_case(score=1.0)
+        result = case.run()
+        self.assertEqual(result.status, "rejected")
+        self.assertIsNone(result.candidate_profile)
+
+    def test_retrieve_failure_produces_failed(self):
+        from tests.offline_support import make_workflow_case
+
+        case = make_workflow_case(fail_stage="retrieve")
+        result = case.run()
+        self.assertEqual(result.status, "failed")
+        self.assertIn("retrieve", result.failure)  # type: ignore[operator]
+
+    def test_advise_failure_produces_failed(self):
+        from tests.offline_support import make_workflow_case
+
+        case = make_workflow_case(fail_stage="advise")
+        result = case.run()
+        self.assertEqual(result.status, "failed")
+
+    def test_evaluate_failure_produces_failed(self):
+        from tests.offline_support import make_workflow_case
+
+        case = make_workflow_case(fail_stage="evaluate")
+        result = case.run()
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(case.memory.publish_calls, [])
+
+    def test_sandbox_analysis_exercised_when_provided(self):
+        from tests.offline_support import make_workflow_case
+
+        case = make_workflow_case(with_sandbox=True, score=3.0)
+        result = case.run()
+        self.assertEqual(result.status, "proposal")
+        self.assertEqual(len(case.sandbox.requests), 1)  # type: ignore[union-attr]
+
+    def test_span_built_from_advice_has_required_gen_ai_attrs(self):
+        from agent.advisor.offline.evaluation import _REQUIRED_ATTRS
+        from agent.advisor.offline.workflow import _build_advisor_span
+        from tests.offline_support import _default_advice, make_packet
+
+        pkt = make_packet()
+        spans = _build_advisor_span("run-abc", pkt, _default_advice())
+        self.assertEqual(len(spans), 1)
+        attrs = spans[0]["attributes"]
+        self.assertTrue(_REQUIRED_ATTRS.issubset(set(attrs.keys())))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -86,3 +86,23 @@ There is no live database, LLM or network dependency in decision logic; the
 advisor runs only off-tick.
 Actual platform result/report delivery and trusted match-boundary collection
 remain unverified integration responsibilities.
+
+## Offline coaching pipeline
+
+**Source:** local evidence packet (`EvidencePacket`: team/opponent/match IDs, played_at,
+coach claims, source digests, expiry).
+**Sink:** `RunArtifact` JSON file (status: proposal/rejected/failed, advice, candidate_profile,
+evaluation scores, stage receipts). No write to live player profile or AgentCore runtime.
+**AWS boundaries:**
+- Memory (retrieve): `agent/advisor/offline/memory.py` → `AgentCoreMemory.retrieve(packet)` → `Scouting note list`.
+- Bedrock (advise): `agent/advisor/offline/bedrock.py` → `GroundedAdvisor.review_evidence(...)` → `OfflineAdvice + Profile`.
+- CodeInterpreter (analyze, optional): `agent/advisor/offline/interpreter.py` → `AgentCoreInterpreter.execute(request)` → `AnalysisResult`.
+- Evaluator (evaluate): `agent/advisor/offline/evaluation.py` → `AgentCoreEvaluator.evaluate(spans)` → `EvaluationReport`.
+**Shape at each step:**
+  evidence_packet → scouting_notes (Memory) → [analysis_result (CodeInterpreter)] → advice + candidate_profile (Bedrock)
+  → GenAI spans → EvaluationReport{status, scores} → RunArtifact{status, advice, candidate_profile, evaluation}.
+**Constraints:** `run_offline()` never calls Memory.publish or modifies any live player state.
+publish() is a separate explicit CLI step. Evaluation score is evidence, not approval.
+`candidate_profile` in the artifact becomes the live profile only after an explicit operator
+`AFC_PROFILE` change and redeployment — separate steps not included in this pipeline.
+**Source:** `agent/advisor/offline/`, `deploy/offline_coach.py`, `docs/offline_coaching.md`.

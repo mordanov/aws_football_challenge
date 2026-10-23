@@ -179,6 +179,31 @@ AFC_PROFILE=profiles/recommended.json .venv/bin/python -m agent.main
 To keep the chosen style when retraining, pass it as the base:
 `agent train|learn ... --base-profile profiles/recommended.json`.
 
+## Offline AgentCore coaching
+
+An explicit, operator-driven pipeline that uses three AgentCore services
+(Memory, CodeInterpreter, Evaluator) to produce a **proposal** for a strategy
+update. A proposal is never approved or deployed automatically. Full guide:
+`docs/offline_coaching.md`.
+
+```sh
+# Provision offline resources (separate from player runtimes)
+python deploy/offline_coach.py --config offline_coach.json plan
+python deploy/offline_coach.py --config offline_coach.json apply --approve
+
+# Prepare evidence and run the full coaching workflow
+python -m agent.advisor.offline prepare \
+  --manifest examples/match_manifest.json --report examples/match_report.json \
+  --coach-claims examples/coach_claims.json --profile profiles/recommended.json \
+  --team r4 --expires-at 2026-11-01T00:00:00Z --output local/evidence.json
+python -m agent.advisor.offline run \
+  --config offline_coach.json --evidence local/evidence.json \
+  --profile profiles/recommended.json --output local/run.json
+```
+
+Exit codes: 0 = proposal, 2 = service/validation failure, 3 = rejected by evaluator.
+Player runtimes (`r4_gk`/`r4_def`/`r4_mid`/`r4_fwd1`/`r4_fwd2`) are never touched.
+
 ## Advisor (optional)
 
 An off-tick LangChain helper. It is never imported by the live runtime.

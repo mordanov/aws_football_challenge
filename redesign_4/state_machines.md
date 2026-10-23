@@ -98,3 +98,19 @@ operator deployment via `AFC_PROFILE` to all five runtimes. Advisor `pick`/`revi
 style are fixed for the duration of a match; they change only between matches.
 No transition proves the result transfers to the AWS platform.
 **Source:** `agent/archetypes.py`, `agent/advisor/`, `docs/strategy_report.md`.
+
+## Offline run
+
+**States:** evidence_prepared, advice_retrieved, advice_evaluated, proposal, rejected, failed; published.
+**Initial:** evidence_prepared (local `prepare` command; no AWS calls).
+**Transitions:**
+- evidence_prepared → advice_retrieved: `run_offline()` calls Memory.retrieve; `OfflineServiceError` → failed.
+- advice_retrieved → advice_evaluated: advisor calls Bedrock model; partial evaluation → failed; `OfflineServiceError` → failed.
+- advice_evaluated → proposal: faithfulness ≥ `judge_min_score`.
+- advice_evaluated → rejected: faithfulness < `judge_min_score` (successful evaluation, not a service error).
+- proposal → published: operator calls `publish` explicitly (separate step; `run_offline()` never publishes).
+- Any required-stage `OfflineServiceError` → failed.
+**Constraints:** proposal is never approved, deployed or promoted automatically. A separate operator
+decision and `AFC_PROFILE` change are required. Evaluation score 0..4 is advisory; no score
+gates deployment. `candidate_profile` in the artifact is a proposal, not the live profile.
+**Source:** `agent/advisor/offline/workflow.py`, `agent/advisor/offline/__main__.py`, `docs/offline_coaching.md`.
