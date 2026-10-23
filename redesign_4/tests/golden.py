@@ -1,7 +1,9 @@
 """Golden decisions: preserve behavior outside explicitly reviewed tactical corrections.
 
 Regenerate after inspecting each intended difference: `.venv/bin/python tests/golden.py`.
-Report-2 corrections change only rows 52/99: clear shots against a stranded keeper.
+Three-match feedback additionally changes 36/750 commands: center shots against
+stranded keepers, progressive safe keeper outlets, midfield support and pressing.
+Carrying is separately covered with carry-enabled profiles in test_style_tactics.
 """
 
 from __future__ import annotations

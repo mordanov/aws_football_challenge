@@ -3,10 +3,10 @@
  "responses": [
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 0.61, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": 5.53, \"sprint\": true}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": 8, \"target_y\": 5.53, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 3, \"tightness\": \"TIGHT\"}, \"duration\": 0}]"
+   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"TIGHT\"}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": 0.29, \"sprint\": false}, \"duration\": 0}]",
@@ -39,9 +39,9 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.1, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -0.8, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -34.55, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]"
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -2.8, \"sprint\": false}, \"duration\": 0}]",
@@ -81,15 +81,15 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.83, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -6.51, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -29.69, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"PASS\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 2, \"type\": \"GROUND\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 0.23, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": 1.86, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -34.64, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
   [
@@ -100,7 +100,7 @@
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"TIGHT\"}, \"duration\": 0}]"
   ],
   [
-   "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_player_id\": 3, \"method\": \"KICK\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_player_id\": 1, \"method\": \"KICK\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 37.32, \"target_y\": -3.14, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": 30, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": 20, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
@@ -109,7 +109,7 @@
   [
    "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_player_id\": 3, \"method\": \"THROW\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": 2.7, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 40, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_x\": 46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -158,8 +158,8 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 0.15, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": 1.2, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -40, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
   [
@@ -284,7 +284,7 @@
   [
    "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_player_id\": 2, \"method\": \"KICK\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": -5.93, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 35.99, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_x\": 46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -305,9 +305,9 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.33, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -2.76, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -40, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"aim_location\": \"BL\", \"power\": 0.9}, \"duration\": 0}]"
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -1.33, \"sprint\": false}, \"duration\": 0}]",
@@ -368,7 +368,7 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 0.28, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": 1.64, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]",
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -26.5, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -38.5, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -416,9 +416,9 @@
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.81, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -6.77, \"sprint\": true}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": 8, \"target_y\": -6.77, \"sprint\": true}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"TIGHT\"}, \"duration\": 0}]"
   ],
   [
@@ -437,8 +437,8 @@
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": 0.09, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 40, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_x\": 46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -466,7 +466,7 @@
   [
    "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_player_id\": 1, \"method\": \"KICK\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": -8.39, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 36.4, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_x\": 46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -564,7 +564,7 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -0.74, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": -6.66, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 38.53, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"SET_STANCE\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"stance\": 0}, \"duration\": 0}]"
   ],
@@ -634,14 +634,14 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 0.35, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": 2.6, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -24.39, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_player_id\": 1, \"method\": \"KICK\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -4.25, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -40, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -746,7 +746,7 @@
   [
    "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_player_id\": 3, \"method\": \"THROW\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": -2.48, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 35.4, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_x\": 46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -788,9 +788,9 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -0.57, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": -4.43, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 33.45, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_x\": 46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]"
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -2.08, \"sprint\": false}, \"duration\": 0}]",
@@ -808,9 +808,9 @@
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 0.32, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": 2.18, \"sprint\": true}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": 8, \"target_y\": 2.18, \"sprint\": true}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 3, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
   ],
   [
@@ -837,7 +837,7 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": 0.86, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -8, \"target_y\": 7.61, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 23, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_x\": 40, \"target_y\": -9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"PASS\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 1, \"type\": \"AERIAL\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_x\": 46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -919,7 +919,7 @@
    "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]"
   ],
   [
-   "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_player_id\": 2, \"method\": \"THROW\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"GK_DISTRIBUTE\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_player_id\": 1, \"method\": \"KICK\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -6.02, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": 10.21, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -3.79, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
@@ -991,7 +991,7 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.48, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -3.58, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"aim_location\": \"BR\", \"power\": 0.9}, \"duration\": 0}]",
+   "[{\"commandType\": \"SHOOT\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"aim_location\": \"CENTER\", \"power\": 0.9}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -45.15, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_x\": -46, \"target_y\": 15.0, \"sprint\": false}, \"duration\": 0}]"
   ],
@@ -1012,7 +1012,7 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.7, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 8, \"target_y\": -6.02, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -23, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": -39.27, \"target_y\": 9.75, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_x\": -46, \"target_y\": -15.0, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"PASS\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 2, \"type\": \"AERIAL\"}, \"duration\": 0}]"
   ],

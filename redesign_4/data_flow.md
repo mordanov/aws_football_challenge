@@ -21,6 +21,12 @@ filters. Rejected non-self candidates are separately ranked for an emergency
 KICK only if the keeper has no normally safe outlet. Telemetry labels these
 attempts contested; keeper holds are not candidates. This does not bypass
 ownership resolution or alter outfield possession filters.
+The three-match feedback revision (`r4v6_three_match_feedback`) keeps numeric
+profile settings, formation and coach policy unchanged. It changes deterministic
+option selection: clear forward carries, center aim against a stranded keeper,
+forward-progress ranking of safe keeper outlets, goal-line keeper positioning
+and less rigid midfield support/pressing. Telemetry reasons retain lane/clear-run
+information. No external service or shared runtime state enters these decisions.
 The actual pinned AgentCore adapter wraps the array string in one SSE data event.
 On AgentCore each of the five runtimes runs the same staged code and profile;
 its `AFC_PLAYER_ID` seat only fills a missing `myPlayers` (explicit routing wins).

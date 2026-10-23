@@ -563,6 +563,50 @@ match; ARNs need no replacement. Verification UUID
 match research. Detailed evidence is persisted in the session files directory
 as `report4-deployment-verification.json`; implementation commit `4799bb0`.
 
+### Three-match feedback: targeted player corrections
+
+Reports 5-7 describe results of 0-0, 1-2 and 0-1. User observations motivate
+the following deterministic changes in `r4v6_three_match_feedback`, without
+changing numeric profile settings, formation or coach policy:
+
+- An unpressured clear forward corridor boosts carrying over sideways recycling;
+  blocked runs, protecting a lead and slow tempo retain their existing scoring.
+  A good shot or progressive pass can still win.
+- A keeper projected well behind the carrier permits CENTER aim if its lane is
+  clear; corner alternatives remain when the center is blocked. This reduces
+  unnecessary corner targeting, not a demonstrated server-side accuracy fix.
+- The keeper selects the furthest-forward outlet passing the existing distance,
+  lane and pressure filters. Unsafe long options do not displace safe short ones;
+  the existing contested fallback remains when all safe options fail.
+- The keeper no longer sweeps free balls with INTERCEPT; it retains the existing
+  bounded goal-line movement and incoming-shot reaction.
+- The nearest active defender can press in midfield with the midfielder covering.
+  A midfielder committed to an attack can support up to canonical x=40 rather
+  than stopping at x=23; committed-attacker caps still apply.
+
+These are observation-driven scenario corrections, not causal findings from
+the reports: candidate CloudWatch match/team attribution is unresolved, and PDF
+statistics conflict internally. The Bedrock profile proposal was not applied.
+The new scenarios are mirrored for both teams; the default golden audit changes
+36 of 750 commands for the documented shot/outlet/support/pressing policies.
+The carry-enabled scenarios are checked separately. A replay of the three
+provisional telemetry bundles validates 1,291 decisions and changes 31 commands;
+neither the replay nor these scenarios demonstrate improved match results.
+The generated `local_simulator/entrants/redesign_4_v2` copy is rebuilt from the
+same agent source, with entrant hash prefix `722443191b26`.
+
+Implementation commit `781fcfc` was deployed to all five existing runtimes:
+each is READY, and each DEFAULT endpoint now selects runtime version **7** with
+profile `r4v6_three_match_feedback`. Runtime ARNs are unchanged. Direct AWS
+verification matched 44 responses against the local runtime, covering all
+five seats, both teams, sample/compact inputs and all six feedback scenarios.
+All 44 corresponding CloudWatch decisions contain the new profile version
+and report zero dropped/failed telemetry records. Verification UUID:
+`db73581e-dda4-4405-a717-a985421f2b3a`; detailed receipt:
+`three-match-series/feedback-deployment-verification.json` in session files.
+Exclude its synthetic ticks 990010-990053 from match analysis. Existing match
+sessions can remain pinned to older versions; use a new match for this revision.
+
 ## Telemetry and deadline limits
 
 Application telemetry is best-effort: one background writer, at most 128 queued
