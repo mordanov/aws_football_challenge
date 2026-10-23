@@ -425,12 +425,16 @@ Reproducible commands, candidate JSON, frozen-source hash and paired intervals
 are retained in `local_simulator/local/r4_tuning/conclusion.json` (ignored local
 artifacts). Its evaluated tactics hash matches the corrected source.
 
-The corrected source is staged offline for all five seats. Deployment is not
-complete: the supplied AWS credentials returned `ExpiredToken` on 2026-10-23.
-The last verified deployed runtime version remains 3. Refresh the credentials
-and run the existing deploy command above to update all five runtimes; then
-rerun the Fitness Check and a real practice match. Local tuning or replay alone
-does not update the deployed team or prove a higher win rate.
+After refreshing the expired credentials on 2026-10-23, the corrected source
+and `r4v3_match2_corrections` profile were deployed to all five runtimes.
+Each runtime is READY and its `DEFAULT` endpoint points to version 4; runtime
+ARNs are unchanged. Direct AWS verification exercised 47 invocations: both
+teams and both input formats at full/depleted stamina, the five refreshed
+known portal Fitness Check session IDs, and the captured longer-shot and
+tired-carrier regressions. Responses matched local decisions; the captured
+carrier stopped requesting sprint and the stranded-keeper opportunity selected
+SHOOT. These are synthetic checks, not a portal Fitness Check verdict or proof
+of improved competitive results. Run the portal check and another real match.
 
 ## Telemetry and deadline limits
 
