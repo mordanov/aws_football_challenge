@@ -1,0 +1,53 @@
+{
+  "_comment": "Synthetic fixture: observed SHOOT=3, report_claim SHOOT=0, no causal scorer attribution. Both teams coach advice included. No raw PDFs, credentials or PII.",
+  "match_id": "match-2026-10-23-r4-vs-redesign3",
+  "opponent_id": "redesign_3_v1",
+  "team_id": "aleksalotl",
+  "profile_version": "baseline",
+  "played_at": "2026-10-23T14:00:00+00:00",
+  "complete": true,
+  "result": [0, 1],
+  "manifest": {
+    "match_id": "match-2026-10-23-r4-vs-redesign3",
+    "opponent_id": "redesign_3_v1",
+    "complete": true,
+    "result": [0, 1],
+    "observations": 312,
+    "decisions": 890,
+    "errors": 0,
+    "outcomes": {
+      "SHOOT": 3,
+      "PASS": 41,
+      "PRESS": 22,
+      "HOLD": 228
+    },
+    "limitations": [
+      "snapshot transitions infer, not confirm, action outcomes",
+      "no server acknowledgement, shot events, timeout evidence or report API",
+      "manifest completeness describes result availability, not full replay coverage"
+    ]
+  },
+  "report": {
+    "source_id": "report-2026-10-23-r4-vs-redesign3",
+    "outcomes": {
+      "SHOOT": 0,
+      "PASS": 38,
+      "PRESS": 19,
+      "HOLD": 255
+    },
+    "score": [0, 1],
+    "coach_notes": "No shooting attempts recorded. Opponent pressed high — our build-up was disrupted.",
+    "own_coach_advice": "Reduce press_radius to limit over-commitment; increase support_width for wider outlets.",
+    "opponent_coach_advice": "Opponent used tight press radius ~12, aggressive tackling, high tempo. Counter: slower tempo, wider support to find space."
+  },
+  "sources": {
+    "manifest-001": {
+      "kind": "manifest",
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "report-2026-10-23-r4-vs-redesign3": {
+      "kind": "report",
+      "digest": "2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3"
+    }
+  }
+}
