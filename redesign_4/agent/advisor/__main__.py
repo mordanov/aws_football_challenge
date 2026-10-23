@@ -6,12 +6,12 @@ import argparse
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from ..archetypes import ARCHETYPES
 from ..profile import load_profile
+from . import write_atomic
 from .core import Advisor, AdvisorError, ArchetypeAdvice, SettingsAdvice
 
 
@@ -22,22 +22,6 @@ def bedrock_llm() -> Any:
     if not model:
         raise AdvisorError("set AFC_ADVISOR_MODEL to a Bedrock model id")
     return ChatBedrockConverse(model=model, temperature=0)
-
-
-def write_atomic(path: Path, text: str) -> None:
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", dir=path.parent, prefix=f".{path.name}.", delete=False
-        ) as stream:
-            temporary = Path(stream.name)
-            stream.write(text)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
 
 
 def main(argv: list[str] | None = None, llm: Any = None) -> int:

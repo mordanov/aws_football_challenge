@@ -142,5 +142,197 @@ class AbsentAnalysisTest(unittest.TestCase):
         self.assertEqual(len(case.sandbox.requests), 0)  # type: ignore[union-attr]
 
 
+class CliArgparseTest(unittest.TestCase):
+    """Argparse rejects missing required flags before any client is created."""
+
+    def _run(self, *argv: str) -> tuple[int, str]:
+        """Run CLI, return (exit_code, stderr)."""
+        import io
+        from agent.advisor.offline.__main__ import main, Services
+        err = io.StringIO()
+        import sys as _sys
+        old_stderr = _sys.stderr
+        _sys.stderr = err
+        try:
+            code = main(list(argv), services=Services())
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 2
+        finally:
+            _sys.stderr = old_stderr
+        return code, err.getvalue()
+
+    def test_run_missing_config_exits_nonzero(self):
+        code, _ = self._run("run", "--evidence", "e.json", "--profile", "p.json", "--output", "o.json")
+        self.assertNotEqual(code, 0)
+
+    def test_run_missing_evidence_exits_nonzero(self):
+        code, _ = self._run("run", "--config", "k.json", "--profile", "p.json", "--output", "o.json")
+        self.assertNotEqual(code, 0)
+
+    def test_run_missing_profile_exits_nonzero(self):
+        code, _ = self._run("run", "--config", "k.json", "--evidence", "e.json", "--output", "o.json")
+        self.assertNotEqual(code, 0)
+
+    def test_doctor_missing_config_exits_nonzero(self):
+        code, _ = self._run("doctor")
+        self.assertNotEqual(code, 0)
+
+    def test_publish_missing_config_exits_nonzero(self):
+        code, _ = self._run("publish", "--note", "n.json", "--evidence", "e.json")
+        self.assertNotEqual(code, 0)
+
+    def test_analyze_missing_execute_flag_exits_2(self):
+        # --execute-generated-code is required for sandbox execution
+        import tempfile, json
+        from tests.offline_support import make_config, make_packet
+        from agent.advisor.offline.__main__ import Services
+        from agent.advisor.offline.contracts import OfflineConfig
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = f"{tmp}/cfg.json"
+            ev_path = f"{tmp}/ev.json"
+            script_path = f"{tmp}/script.json"
+            cfg = make_config()
+            import pathlib
+            pathlib.Path(cfg_path).write_text(cfg.model_dump_json())
+            pkt = make_packet()
+            pathlib.Path(ev_path).write_text(json.dumps(pkt.model_dump(mode="json")))
+            pathlib.Path(script_path).write_text(json.dumps({"code": "print(1)", "evidence_digest": pkt.digest}))
+            code, _ = self._run(
+                "analyze",
+                "--config", cfg_path,
+                "--evidence", ev_path,
+                "--script", script_path,
+                # missing --execute-generated-code
+                "--output", f"{tmp}/out.json",
+            )
+            self.assertEqual(code, 2)
+
+
+class CliRunTest(unittest.TestCase):
+    """CLI run command: exit codes match artifact status."""
+
+    def _run_cli(self, argv: list[str], services: "Services") -> tuple[int, str, str]:
+        import io
+        from agent.advisor.offline.__main__ import main
+        import sys as _sys
+        out, err = io.StringIO(), io.StringIO()
+        old_out, old_err = _sys.stdout, _sys.stderr
+        _sys.stdout, _sys.stderr = out, err
+        try:
+            code = main(argv, services=services)
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 2
+        finally:
+            _sys.stdout, _sys.stderr = old_out, old_err
+        return code, out.getvalue(), err.getvalue()
+
+    def test_run_proposal_exits_0(self):
+        import tempfile, pathlib
+        from agent.advisor.offline.__main__ import Services
+        from tests.offline_support import FakeEvaluator, FakeAdvisor, FakeMemory, make_config, make_packet
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = f"{tmp}/cfg.json"
+            ev_path = f"{tmp}/ev.json"
+            prof_path = f"{tmp}/prof.json"
+            out_path = f"{tmp}/run.json"
+
+            cfg = make_config()
+            pathlib.Path(cfg_path).write_text(cfg.model_dump_json())
+            pkt = make_packet()
+            from agent.model import Profile
+            import json
+            pathlib.Path(ev_path).write_text(json.dumps(pkt.model_dump(mode="json")))
+            pathlib.Path(prof_path).write_text(json.dumps(Profile().to_dict()))
+
+            svc = Services(
+                scouts=FakeMemory(),
+                advisor=FakeAdvisor(),
+                evaluator=FakeEvaluator(score=3.0),
+            )
+            code, out, _ = self._run_cli(
+                ["run", "--config", cfg_path, "--evidence", ev_path,
+                 "--profile", prof_path, "--output", out_path],
+                svc,
+            )
+            self.assertEqual(code, 0)
+            result = json.loads(pathlib.Path(out_path).read_text())
+            self.assertEqual(result["status"], "proposal")
+
+    def test_run_rejected_exits_3(self):
+        import tempfile, pathlib, json
+        from agent.advisor.offline.__main__ import Services
+        from tests.offline_support import FakeEvaluator, FakeAdvisor, FakeMemory, make_config, make_packet
+        from agent.model import Profile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = f"{tmp}/cfg.json"
+            ev_path = f"{tmp}/ev.json"
+            prof_path = f"{tmp}/prof.json"
+            out_path = f"{tmp}/run.json"
+
+            pathlib.Path(cfg_path).write_text(make_config().model_dump_json())
+            pathlib.Path(ev_path).write_text(json.dumps(make_packet().model_dump(mode="json")))
+            pathlib.Path(prof_path).write_text(json.dumps(Profile().to_dict()))
+
+            svc = Services(
+                scouts=FakeMemory(),
+                advisor=FakeAdvisor(),
+                evaluator=FakeEvaluator(score=0.0),
+            )
+            code, _, _ = self._run_cli(
+                ["run", "--config", cfg_path, "--evidence", ev_path,
+                 "--profile", prof_path, "--output", out_path],
+                svc,
+            )
+            self.assertEqual(code, 3)
+
+    def test_run_service_failure_exits_2(self):
+        import tempfile, pathlib, json
+        from agent.advisor.offline.__main__ import Services
+        from agent.advisor.offline.contracts import OfflineServiceError
+        from tests.offline_support import FakeAdvisor, FakeMemory, FakeEvaluator, make_config, make_packet
+        from agent.model import Profile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = f"{tmp}/cfg.json"
+            ev_path = f"{tmp}/ev.json"
+            prof_path = f"{tmp}/prof.json"
+            out_path = f"{tmp}/run.json"
+
+            pathlib.Path(cfg_path).write_text(make_config().model_dump_json())
+            pathlib.Path(ev_path).write_text(json.dumps(make_packet().model_dump(mode="json")))
+            pathlib.Path(prof_path).write_text(json.dumps(Profile().to_dict()))
+
+            svc = Services(
+                scouts=FakeMemory(),
+                advisor=FakeAdvisor(
+                    side_effect=OfflineServiceError("fail", service="advise", stage="advise")
+                ),
+                evaluator=FakeEvaluator(),
+            )
+            code, _, _ = self._run_cli(
+                ["run", "--config", cfg_path, "--evidence", ev_path,
+                 "--profile", prof_path, "--output", out_path],
+                svc,
+            )
+            self.assertEqual(code, 2)
+
+    def test_doctor_valid_config_exits_0(self):
+        import tempfile, pathlib
+        from agent.advisor.offline.__main__ import Services
+        from tests.offline_support import make_config
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = f"{tmp}/cfg.json"
+            pathlib.Path(cfg_path).write_text(make_config().model_dump_json())
+            code, out, _ = self._run_cli(["doctor", "--config", cfg_path], Services())
+            self.assertEqual(code, 0)
+            import json
+            report = json.loads(out)
+            self.assertTrue(report["config_valid"])
+
+
 if __name__ == "__main__":
     unittest.main()
