@@ -480,20 +480,21 @@ this dedicated existing archive, not by broadening participant permissions.
 The failed intermediate S3 stack metadata was removed while preserving that
 archive. The earlier inactive DynamoDB stack remains historical rollback metadata.
 
-Fresh match sessions use version 9; already existing AgentCore sessions may
+At the initial S3 activation, fresh match sessions used version 9; existing AgentCore sessions may
 continue on their original runtime version. Keep the initial baseline unchanged
 through a rollout and disqualify mixed-code evidence. Registry cache misses add
 S3 network dependency/latency; small synthetic probes do not establish a
 production p95 latency guarantee.
 
-## Prepared tactics-v2 integration (not deployed)
+## Tactics-v2 integration and verified v11 deployment
 
 The source revision integrating the tactics-v2 PR has compatibility generation
 `match_profiles_tactics_v3`, player registry team `aleksalotl_tactics_v3` and
-stack `final-agent-s3-tactics-v3`. These are distinct from the deployed
+stack `final-agent-s3-tactics-v3`. These are distinct from the previous
 `match_profiles_rush_v2` / `aleksalotl_rush_v2` / `final-agent-s3-rush-v2`.
-This code review fix does not deploy players, change active profiles or disable
-the live learning stack.
+The code integration alone did not deploy players. The subsequent controlled
+rollout below replaced the five DEFAULT endpoints and retired the rush-v2
+collection/learning stack without modifying its registry or evidence.
 
 Dynamic link/runner anchors now apply the defensive BALLSIDE shift before
 the minimum separation correction and final movement guards. This preserves
@@ -505,7 +506,7 @@ Generate them separately with `python tests/golden.py` and
 before regeneration. The BALLSIDE correction changes only 39 forward MOVE_TO
 decisions in the 750-command tactics-v2 fixture.
 
-Before deploying this revision:
+For a new compatibility rollout, preserve this deployment order:
 
 1. Copy `deploy/s3_learning.example.json`, supply the actual account, bucket,
    existing Memory, failure archive and five log groups; keep learning disabled.
@@ -520,6 +521,44 @@ Before deploying this revision:
    new collector/learner and retire the old subscriptions. The deadline guards
    promotion until legacy sessions expire; do not reuse the previous rollout's
    timestamp. Until then keep the new numeric baseline identical to the old one.
+
+### Deployment receipt (2026-10-24)
+
+The rollout from merged commit `78e9b4d33d81f6d0d0768bc660d5cf5ad4f4541f`
+was verified at **07:44:20 UTC**:
+
+- All five existing runtimes and DEFAULT endpoints are **version 11, READY**.
+  Their ARNs are unchanged; deployment source is exclusively `final_agent`.
+  `redesign_4` was not modified. Existing sessions may remain on older versions.
+- Stack `final-agent-s3-tactics-v3` has collection and learning enabled for team
+  `aleksalotl_tactics_v3`, compatibility `match_profiles_tactics_v3`. All five
+  log subscriptions target its collector. The rush-v2 stack has collection and
+  learning disabled; its code artifacts, ACTIVE, observations and immutable pins
+  remain retained.
+- ACTIVE remains generation 1 with the unchanged `r4v7_route_stamina` numeric
+  profile and new compatibility-bound digest
+  `0b7f65bd7b1a60f253b3b52e8aa37ec9a3c25251665c4e7dbdfc85756b37c24e`.
+  All five players shared this diagnostic match pin. Fifteen live-shaped/fitness
+  invocations returned correctly routed commands; ten diagnostic observations
+  were verified exactly between S3 acknowledgements and AgentCore Memory.
+- Every packaged serving `agent/*.py` file matched the deployment source.
+  Both deployed worker archives matched their packaged agent sources, including
+  tactics and registry/evaluation code. No tactical environment overrides were
+  present. Tactical SHA-256:
+  `3d955a71e7c9113826c06c2ab511536b9b673004a72c3ec3933178cb30c06700`.
+- Fresh runtime log delivery automatically dispatched the learner. It verified
+  341 documents across two sessions, returned `insufficient_evidence`, and
+  settled its work latch. ACTIVE remained generation 1 and the new stack's
+  failure archive prefix was empty. This is a deployment-time receipt, not a
+  claim of sufficient tactical evidence, official match completion or improvement.
+
+The new `promotion_not_before_ms` is **1792856284078**, or
+**2026-10-24 15:38:04.078 UTC** (17:38:04.078 UTC+2). It was computed from the
+latest player update at 07:36:04.078 UTC plus the verified 28,800-second maximum
+legacy-session lifetime and 120-second margin. It supersedes the rush-v2
+rollout's earlier deadline. Collection and analysis remain enabled during this
+guard; only promotion is delayed. Eligible later activity can resume automatic
+evaluation after the deadline, without manual re-enabling or a perpetual timer.
 
 The registry and proposal guards reject previous-generation documents/evidence;
 changing only the generation label is not a substitute for this coordinated

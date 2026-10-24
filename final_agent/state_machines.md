@@ -169,10 +169,12 @@ old ACTIVE or pins -> deploy five players with learning disabled -> verify
 their artifacts, endpoints and common diagnostic pin -> enable learner.
 Older runtime sessions may continue unchanged, but their generation/digest
 cannot support a new-generation proposal. No formation changes occur.
-The prepared tactics-v2 rollout uses `match_profiles_tactics_v3` and an isolated
+The deployed v11 tactics-v2 rollout uses `match_profiles_tactics_v3` and an isolated
 `aleksalotl_tactics_v3` namespace. Existing rush-v2 evidence and pins cannot be
-reused or migrated in place; its serving endpoints remain unchanged until a
-separate controlled deployment.
+reused or migrated in place. The controlled deployment updated all five DEFAULT
+endpoints with unchanged ARNs; old runtime sessions may drain on their original
+versions. Collection and learning are enabled, with promotion guarded until
+2026-10-24 15:38:04.078 UTC. The rush-v2 collector/learner are disabled, not deleted.
 **Source:** `agent/profile_registry.py`, `agent/learning_policy.py`,
 `deploy/agentcore/cdk/cdk.json`, `deploy/s3_learning.py`.
 

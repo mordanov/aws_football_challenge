@@ -122,18 +122,22 @@ For opt-in automatic provisional Memory collection and match-wide profile
 pinning, see [automatic shared-memory learning](docs/automatic_learning.md).
 The deployed workshop variant uses S3 coordination, CloudWatch-triggered Lambda
 workers and AgentCore Memory, without DynamoDB/SNS/SQS/EventBridge. Collection
-and learning have explicit switches. The rush/desperate-attack rollout uses
-`match_profiles_rush_v2` and an isolated registry namespace, with identical
+and learning have explicit switches. The current tactics-v2 rollout uses
+`match_profiles_tactics_v3` and an isolated registry namespace, with identical
 serving/evaluation tactics; see the deployment status in that document.
 A deterministic learner can propose one bounded
 numeric remedy, evaluate it against fixed paired simulator fixtures and
 conditionally promote it for new match pins only.
 
-The prepared tactics-v2 code uses `match_profiles_tactics_v3` and separate
-namespace `aleksalotl_tactics_v3`; it has **not** replaced the deployed rush-v2
-players. Before deploying this revision, bootstrap `final-agent-s3-tactics-v3`
-with learning disabled and follow the controlled rollout in the learning guide.
-Never deploy only the new evaluator against the old players.
+The tactics-v2 revision was deployed on **2026-10-24** from merged commit
+`78e9b4d33d81f6d0d0768bc660d5cf5ad4f4541f`. All five runtimes and DEFAULT
+endpoints are **v11, READY**, with unchanged ARNs. Stack
+`final-agent-s3-tactics-v3` uses namespace `aleksalotl_tactics_v3`; collection
+and learning are enabled. The old rush-v2 stack is disabled, with its evidence
+and pins retained. Promotion is guarded until **2026-10-24 15:38:04.078 UTC**
+(17:38:04.078 UTC+2) while legacy sessions drain. Existing sessions may retain
+their original runtime version. See the learning guide for verification and
+baseline identity; never deploy only a new evaluator against old players.
 
 For opponent-specific AgentCore Memory scouting, see
 [CloudWatch scouting and pre-match briefs](docs/offline_coaching.md#cloudwatch-scouting-and-pre-match-briefs).
