@@ -110,22 +110,26 @@ def posture(s: Snapshot) -> str:
 def assignments(snapshot: Snapshot, settings: Settings = DEFAULT_SETTINGS) -> dict:
     s = snapshot
     outfield = tuple(p for p in s.ours if p.id != 0)
-    active = tuple(p for p in outfield if p.stamina >= 0.15) or outfield
+    stamina_rot = _int_env("STAMINA_ROT", 1)
+    min_stamina = 0.12 if stamina_rot else 0.15
+    active = tuple(p for p in outfield if p.stamina >= min_stamina) or outfield
     predicted = (s.ball[0] + 0.8 * s.velocity[0], s.ball[1] + 0.8 * s.velocity[1])
     presser = None
     if s.owner is not None and s.owner[0] != s.team:
-        best = min(active, key=lambda p: (arrival(p, s.ball), p.id))
         radius = min(30, settings.press_radius + (5 if s.coach == "press_high" else 0))
-        if s.direction * s.ball[0] > -30 and distance(point(best), s.ball) > 3:
-            fresh = tuple(
-                p
-                for p in active
-                if p.stamina >= best.stamina + 0.2
-                and arrival(p, s.ball) <= arrival(best, s.ball) + 0.35
-                and distance(point(p), s.ball) <= radius
-            )
-            if fresh:
-                best = min(fresh, key=lambda p: (-p.stamina, arrival(p, s.ball), p.id))
+        if stamina_rot:
+            best = min(active, key=lambda p: (distance(point(p), s.ball) + 15.0 * (1.0 - p.stamina), p.id))
+        else:
+            best = min(active, key=lambda p: (arrival(p, s.ball), p.id))
+            if s.direction * s.ball[0] > -30 and distance(point(best), s.ball) > 3:
+                fresh = tuple(
+                    p for p in active
+                    if p.stamina >= best.stamina + 0.2
+                    and arrival(p, s.ball) <= arrival(best, s.ball) + 0.35
+                    and distance(point(p), s.ball) <= radius
+                )
+                if fresh:
+                    best = min(fresh, key=lambda p: (-p.stamina, arrival(p, s.ball), p.id))
         if distance(point(best), s.ball) <= radius:
             presser = best.id
     cover = 2 if presser == 1 else 1
@@ -145,7 +149,57 @@ def assignments(snapshot: Snapshot, settings: Settings = DEFAULT_SETTINGS) -> di
             marker = min(available, key=lambda p: (distance(point(p), point(threat)), p.id))
             marks[marker.id] = threat.id
             available.remove(marker)
-    return {"presser": presser, "cover": cover, "interceptor": interceptor, "marks": marks}
+    # §6 COUNTER_PRESS: second presser when ball in opp half, closest non-presser within 10m, stamina >= 0.3
+    presser2 = None
+    if _int_env("COUNTER_PRESS", 1) and presser is not None and s.direction * s.ball[0] >= 0:
+        candidates = [
+            p for p in active
+            if p.id != presser
+            and p.stamina >= 0.3
+            and distance(point(p), s.ball) <= 10.0
+        ]
+        if candidates:
+            presser2 = min(candidates, key=lambda p: (distance(point(p), s.ball), p.id)).id
+    # §3 COVER: cover player 6m behind presser toward own goal when ball in own half (progress < -11)
+    cover_pos = None
+    if _int_env("COVER", 1) and presser is not None and s.direction * s.ball[0] < -11.0:
+        presser_p = next((p for p in s.ours if p.id == presser), None)
+        if presser_p is not None and distance(point(presser_p), s.ball) <= 12.0:
+            own_goal = (-s.direction * 55.0, 0.0)
+            dx = own_goal[0] - presser_p.x
+            dy = own_goal[1] - presser_p.y
+            dist_to_goal = math.hypot(dx, dy)
+            if dist_to_goal > 0.5:
+                ux, uy = dx / dist_to_goal, dy / dist_to_goal
+                cx = presser_p.x + 6.0 * ux
+                cy = presser_p.y + 6.0 * uy
+                cy = max(presser_p.y - 4.0, min(presser_p.y + 4.0, cy))
+                cover_pos = (cx, cy)
+    # §8 FWD_ROLES: assign link/runner to players 3 and 4; §9 fsep telemetry
+    fwd3_role = "none"
+    fwd4_role = "none"
+    p3 = next((p for p in s.ours if p.id == 3), None)
+    p4 = next((p for p in s.ours if p.id == 4), None)
+    fsep = round(distance(point(p3), point(p4)), 1) if (p3 and p4) else 0.0
+    if _int_env("FWD_ROLES", 1) and p3 is not None and p4 is not None:
+        carrier_id = s.owner[1] if s.owner is not None and s.owner[0] == s.team else None
+        if carrier_id == 3:
+            fwd3_role, fwd4_role = "carrier", "runner"
+        elif carrier_id == 4:
+            fwd3_role, fwd4_role = "runner", "carrier"
+        else:
+            # pid3 has 3m runner bias: subtract 3 from its effective distance
+            dist3_adj = distance(point(p3), s.ball) - 3.0
+            dist4_adj = distance(point(p4), s.ball)
+            if dist3_adj >= dist4_adj:
+                fwd3_role, fwd4_role = "link", "runner"
+            else:
+                fwd3_role, fwd4_role = "runner", "link"
+    return {
+        "presser": presser, "cover": cover, "interceptor": interceptor, "marks": marks,
+        "presser2": presser2, "cover_pos": cover_pos,
+        "fwd3_role": fwd3_role, "fwd4_role": fwd4_role, "fsep": fsep,
+    }
 
 
 def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict, str] | None:
@@ -350,22 +404,46 @@ def support(
     bp = d * s.ball[0]
     shift = -6 if posture(s) == "protect" else 5 if posture(s) == "chase" else 0
     defending = s.owner is None or s.owner[0] != s.team
+    ballside = _int_env("BALLSIDE", 1) and defending
     if p.id == plan["cover"]:
         return d * max(-54, min(-8, bp - 9)), max(-10, min(10, s.ball[1] * 0.25))
     kind, mirrored = role(p.id, formation)
     flip = -1 if mirrored else 1
     if kind == "DEF":
-        return d * max(-42, min(-10, bp - 18)), flip * (-8 if s.ball[1] > 0 else 8)
+        base_y: float = flip * (-8 if s.ball[1] > 0 else 8)
+        if ballside:
+            base_y += 0.50 * (s.ball[1] - base_y)
+        return d * max(-42, min(-10, bp - 18)), base_y
     if kind == "MID":
-        return d * max(-30, min(23 if defending else 40, bp - 9 + shift)), flip * (
-            -1 if s.ball[1] >= 0 else 1
-        ) * settings.support_width * 0.65
+        base_y = flip * (-1 if s.ball[1] >= 0 else 1) * settings.support_width * 0.65
+        if ballside:
+            base_y += 0.50 * (s.ball[1] - base_y)
+        return d * max(-30, min(23 if defending else 40, bp - 9 + shift)), base_y
     link = kind == "LINK"
     progress = bp + (5 if link else 17) + shift
     if defending:
         progress = min(progress, bp + 5)
     y = (-1 if link else 1) * settings.support_width
+    if ballside:
+        y += 0.20 * (s.ball[1] - y)
     return d * max(-20, min(46, progress)), y
+
+
+def _gk_line_pos(s: Snapshot) -> tuple[float, float]:
+    """GK on line from own goal center to ball at clamp(2.5 + 0.12*dist, 2.5, 7.0)m.
+    Tracks projected ball position (0.5s lookahead) to follow moving balls."""
+    d = s.direction
+    own_goal = (-d * _HALF_LENGTH, 0.0)
+    bx = s.ball[0] + 0.5 * s.velocity[0] if s.free else s.ball[0]
+    by = s.ball[1] + 0.5 * s.velocity[1] if s.free else s.ball[1]
+    bx = max(-_HALF_LENGTH, min(_HALF_LENGTH, bx))
+    by = max(-_HALF_WIDTH, min(_HALF_WIDTH, by))
+    dx, dy = bx - own_goal[0], by - own_goal[1]
+    dist_ball = math.hypot(dx, dy)
+    gkd = max(2.5, min(7.0, 2.5 + 0.12 * dist_ball))
+    if dist_ball > 0.5:
+        return own_goal[0] + gkd * dx / dist_ball, own_goal[1] + gkd * dy / dist_ball
+    return own_goal[0] + gkd * d, own_goal[1]
 
 
 _HALF_LENGTH = 55.0
@@ -413,6 +491,10 @@ def decide(
     s, p = snapshot, snapshot.player(player_id)
     rush, stage = _tactical_context(s)
     plan = {**assignments(s, settings), "rush": rush, "stage": stage}
+    # Per-player link/runner role for telemetry and positioning
+    plan["role"] = plan.get("fwd3_role", "none") if player_id == 3 else (
+        plan.get("fwd4_role", "none") if player_id == 4 else "none"
+    )
     if s.owner == (s.team, player_id):
         choices = (
             carrier_options(s, p, settings, style, gk_as_field=True)
@@ -430,20 +512,36 @@ def decide(
             y = max(-6.0, min(6.0, s.ball[1] * 0.3))
             return Decision(movement(s, p, x, y, urgent=True), "stage 2: GK advances", assignments=plan)
         d = s.direction
-        x = -d * min(52.0, max_move_x)
-        depth = 55 + d * x
+        x_goal = -d * min(52.0, max_move_x)
+        depth = 55 + d * x_goal
         y = s.ball[1] * depth / max(depth, d * s.ball[0] + 55)
         incoming = False
         if s.free and d * s.velocity[0] < -0.5:
-            t = (x - s.ball[0]) / s.velocity[0]
+            t = (x_goal - s.ball[0]) / s.velocity[0]
             if 0 < t < 3:
                 y = s.ball[1] + s.velocity[1] * t
                 goal_t = (-d * 55 - s.ball[0]) / s.velocity[0]
                 goal_y = s.ball[1] + s.velocity[1] * goal_t
                 incoming = abs(y) <= 2.8 or (0 < goal_t < 3 and abs(goal_y) <= 3)
         y = max(-2.8, min(2.8, y))
+        if _int_env("GK_LINE", 1) and not incoming:
+            # Exception: ball free in own penalty area and GK closest → old goal-line behavior
+            _PENALTY_DEPTH = 16.5
+            in_own_penalty = d * s.ball[0] < -(_HALF_LENGTH - _PENALTY_DEPTH)
+            if not (s.free and in_own_penalty and all(
+                distance(point(q), s.ball) >= distance(point(p), s.ball)
+                for q in s.players if q.team == s.team and q.id != 0
+            )):
+                lx, ly = _gk_line_pos(s)
+                own_goal = (-d * _HALF_LENGTH, 0.0)
+                plan["gkd"] = round(math.hypot(lx - own_goal[0], ly - own_goal[1]), 2)
+                return Decision(
+                    movement(s, p, lx, ly, urgent=False, sprint_distance=0.0),
+                    "keeper covers goal angle / projected shot",
+                    assignments=plan,
+                )
         return Decision(
-            movement(s, p, x, y, urgent=incoming, sprint_distance=0.0),
+            movement(s, p, x_goal, y, urgent=incoming, sprint_distance=0.0),
             "keeper covers goal angle / projected shot",
             assignments=plan,
         )
@@ -465,6 +563,19 @@ def decide(
             "designated press; teammate retains cover",
             assignments=plan,
         )
+    # §6 COUNTER_PRESS: second presser also presses
+    if plan.get("presser2") == player_id:
+        if s.owner is not None and tackle_ok(s, p, style):
+            return Decision(
+                command(s, player_id, "SLIDE_TACKLE", target_player_id=s.owner[1]),
+                "counter-press slide tackle",
+                assignments={**plan, "cp": 1},
+            )
+        return Decision(
+            command(s, player_id, "PRESS_BALL", intensity=0.8 if p.stamina >= 0.35 else 0.5),
+            "counter-press second presser",
+            assignments={**plan, "cp": 1},
+        )
     cap = attack_cap(s, player_id, style)
     if player_id in plan["marks"]:
         threat = next(o for o in s.opponents if o.id == plan["marks"][player_id])
@@ -474,6 +585,20 @@ def decide(
                 "hold block line; runner beyond cap",
                 assignments=plan,
             )
+        # §2 LANE_BLOCK: move to intercept point on ball→receiver lane
+        if _int_env("LANE_BLOCK", 1):
+            bx, by = s.ball
+            tx, ty = threat.x, threat.y
+            marker_dist = distance(point(p), point(threat))
+            if marker_dist > 2.5:
+                ix = bx + 0.65 * (tx - bx)
+                iy = by + 0.65 * (ty - by)
+                if math.hypot(ix - bx, iy - by) >= 4.0:
+                    return Decision(
+                        movement(s, p, ix, iy, urgent=True),
+                        "lane block intercept",
+                        assignments={**plan, "lb": 1},
+                    )
         return Decision(
             command(
                 s,
@@ -495,6 +620,35 @@ def decide(
         x, y = s.direction * (-0.08) * _HALF_LENGTH, 0.0
     elif stage >= 1 and player_id == 2:
         x, y = s.direction * 0.45 * _HALF_LENGTH, 0.0
+    # §8 FWD_ROLES: position link/runner when not in rush/stage
+    if not rush and stage == 0 and _int_env("FWD_ROLES", 1) and player_id in (3, 4):
+        fwd_role = plan.get("role", "none")
+        if fwd_role in ("link", "runner"):
+            d = s.direction
+            bp = d * s.ball[0]
+            defending = s.owner is None or s.owner[0] != s.team
+            shift = -6 if posture(s) == "protect" else 5 if posture(s) == "chase" else 0
+            sw = settings.support_width
+            if fwd_role == "link":
+                progress = min(bp + 5 + shift, bp + 5) if defending else bp + 5 + shift
+                x, y = d * max(-20, min(46, progress)), -sw
+            else:
+                progress = min(bp + 17 + shift, bp + 5) if defending else bp + 17 + shift
+                x, y = d * max(-20, min(46, progress)), sw
+            if _int_env("BALLSIDE", 1) and defending:
+                y += 0.20 * (s.ball[1] - y)
+            bx, by = s.ball
+            dist_ball = math.hypot(x - bx, y - by)
+            if 0 < dist_ball < 6.0:
+                x = bx + 6.0 * (x - bx) / dist_ball
+                y = by + 6.0 * (y - by) / dist_ball
+            elif dist_ball < 0.01:
+                x = bx + d * 6.0
+    # §3 COVER: override cover player position when cover_pos is set
+    cover_pos = plan.get("cover_pos")
+    if player_id == plan["cover"] and cover_pos is not None and _int_env("COVER", 1):
+        x, y = cover_pos
+        plan = {**plan, "cov": 1}
     x = capped(s, x, cap)
     return Decision(
         movement(s, p, x, y, urgent=s.owner is not None and s.owner[0] != s.team),

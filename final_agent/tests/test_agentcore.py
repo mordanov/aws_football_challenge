@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import math
 import os
 import unittest
 from pathlib import Path
@@ -174,9 +175,12 @@ class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
                 event = next(x[6:] for x in response.text.splitlines() if x.startswith("data: "))
                 command = json.loads(json.loads(event))[0]
                 self.assertEqual(command["commandType"], "MOVE_TO")
-                self.assertEqual(command["parameters"]["target_x"], -6.4 if team == 0 else 6.4)
-                self.assertGreater(command["parameters"]["target_y"], 0)
-                self.assertLessEqual(command["parameters"]["target_y"], 3.5)
+                distance = math.hypot(55, 16)
+                d = 1 if team == 0 else -1
+                canonical_x = round(d * (-55 + 7 * 55 / distance), 2)
+                canonical_y = round(7 * 16 / distance, 2)
+                self.assertEqual(command["parameters"]["target_x"], round(canonical_x / 8, 3))
+                self.assertEqual(command["parameters"]["target_y"], round(canonical_y / 8, 3))
             fitness = json.loads(payload(pid=0)["prompt"])
             for player in fitness["gameState"]["players"]:
                 player["stamina"] = 1
@@ -189,7 +193,7 @@ class AgentCoreTests(unittest.IsolatedAsyncioTestCase):
             )
         event = next(x[6:] for x in response.text.splitlines() if x.startswith("data: "))
         command = json.loads(json.loads(event))[0]
-        self.assertLess(command["parameters"]["target_x"], -50)
+        self.assertEqual(command["parameters"]["target_x"], -48)
         self.assertTrue(runtime.flush_logs())
         self.assertEqual(records[-1]["snapshot"]["players"][0]["stamina"], 0.01)
         self.assertIsNone(records[-1]["match_id"])

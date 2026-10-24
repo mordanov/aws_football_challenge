@@ -129,6 +129,12 @@ A deterministic learner can propose one bounded
 numeric remedy, evaluate it against fixed paired simulator fixtures and
 conditionally promote it for new match pins only.
 
+The prepared tactics-v2 code uses `match_profiles_tactics_v3` and separate
+namespace `aleksalotl_tactics_v3`; it has **not** replaced the deployed rush-v2
+players. Before deploying this revision, bootstrap `final-agent-s3-tactics-v3`
+with learning disabled and follow the controlled rollout in the learning guide.
+Never deploy only the new evaluator against the old players.
+
 For opponent-specific AgentCore Memory scouting, see
 [CloudWatch scouting and pre-match briefs](docs/offline_coaching.md#cloudwatch-scouting-and-pre-match-briefs).
 `scout` prepares source-bound observations locally; explicit `publish` stores

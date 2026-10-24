@@ -1,8 +1,8 @@
 {
   "account": "123456789012",
   "region": "us-east-1",
-  "team_id": "our_team",
-  "stack_name": "final-agent-s3-learning",
+  "team_id": "aleksalotl_tactics_v3",
+  "stack_name": "final-agent-s3-tactics-v3",
   "memory_id": "Memory_ourteam-abcdefghij",
   "artifact_bucket": "our-owned-existing-assets",
   "failure_bucket": "our-owned-private-failure-archive",
