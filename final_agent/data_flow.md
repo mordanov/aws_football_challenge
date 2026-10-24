@@ -179,6 +179,16 @@ exercise enabled modes. No regenerated golden fixture hides a behavior change.
 The deployment's `promotion_not_before_ms` flows to the Lambda environment and
 pre-reservation guard. This lets old runtime sessions expire before the new
 namespace may promote a profile; collection and exact Memory reads continue.
+The next, not-yet-deployed tactics-v2 revision uses code generation
+`match_profiles_tactics_v3`. Its checked-in player binding targets the separate
+`aleksalotl_tactics_v3` registry and `final-agent-s3-tactics-v3` stack; the S3
+example starts collection/learning disabled. Bootstrap that namespace and verify
+five-player/evaluator parity before enabling. No existing rush-v2 AWS state was
+modified by the code integration.
+Regression fixtures are independent: legacy optional-modes-off output remains
+byte-identical to main, while `tactics_v2_golden.json` records explicit default-on
+output. The fixture generator's `--tactics-v2` switch cannot replace the legacy
+fixture. Both tests and generation explicitly set mode flags.
 **Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
 `agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
 `agent/learning_source.py`, `agent/learning_policy.py`, `agent/learning_worker.py`,

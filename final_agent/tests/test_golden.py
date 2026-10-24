@@ -3,14 +3,12 @@ import os
 import unittest
 from unittest.mock import patch
 
-from golden import FIXTURE, responses
+from golden import FIXTURE, LEGACY_MODES, TACTICS_V2_FIXTURE, TACTICS_V2_MODES, responses
 
 
 class GoldenDecisionsTest(unittest.TestCase):
     def setUp(self):
-        modes = patch.dict(
-            os.environ, {"RUSH_ENABLED": "0", "DESPERATE_S": "-1", "DRAW_AT_ANY_COST": "0"}
-        )
+        modes = patch.dict(os.environ, LEGACY_MODES)
         modes.start()
         self.addCleanup(modes.stop)
 
@@ -34,6 +32,13 @@ class GoldenDecisionsTest(unittest.TestCase):
         )
         expected = json.loads(FIXTURE.read_text())["responses"]
         self.assertEqual(responses(v1), expected)
+
+
+class TacticsV2GoldenDecisionsTest(unittest.TestCase):
+    def test_enabled_modes_reproduce_reviewed_tactics_v2_decisions(self):
+        expected = json.loads(TACTICS_V2_FIXTURE.read_text())["responses"]
+        with patch.dict(os.environ, TACTICS_V2_MODES):
+            self.assertEqual(responses(), expected)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from .model import Profile
 from .profile import parse_profile
 
-CODE_GENERATION = "match_profiles_rush_v2"
+CODE_GENERATION = "match_profiles_tactics_v3"
 
 
 class RegistryError(RuntimeError):

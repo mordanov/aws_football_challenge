@@ -485,3 +485,42 @@ continue on their original runtime version. Keep the initial baseline unchanged
 through a rollout and disqualify mixed-code evidence. Registry cache misses add
 S3 network dependency/latency; small synthetic probes do not establish a
 production p95 latency guarantee.
+
+## Prepared tactics-v2 integration (not deployed)
+
+The source revision integrating the tactics-v2 PR has compatibility generation
+`match_profiles_tactics_v3`, player registry team `aleksalotl_tactics_v3` and
+stack `final-agent-s3-tactics-v3`. These are distinct from the deployed
+`match_profiles_rush_v2` / `aleksalotl_rush_v2` / `final-agent-s3-rush-v2`.
+This code review fix does not deploy players, change active profiles or disable
+the live learning stack.
+
+Dynamic link/runner anchors now apply the defensive BALLSIDE shift before
+the minimum separation correction and final movement guards. This preserves
+both features when their default-on flags are combined. Legacy golden decisions
+remain unchanged in `default_style_golden.json` with optional modes disabled;
+the independent `tactics_v2_golden.json` exercises explicitly enabled defaults.
+Generate them separately with `python tests/golden.py` and
+`python tests/golden.py --tactics-v2`. Review expected behavioral differences
+before regeneration. The BALLSIDE correction changes only 39 forward MOVE_TO
+decisions in the 750-command tactics-v2 fixture.
+
+Before deploying this revision:
+
+1. Copy `deploy/s3_learning.example.json`, supply the actual account, bucket,
+   existing Memory, failure archive and five log groups; keep learning disabled.
+   The example and player CDK binding share the new team/stack names.
+2. Provision and bootstrap the new namespace. Do not modify old ACTIVE objects
+   or immutable match pins. Never reuse the rush-v2 namespace for these tactics.
+3. Deploy all five players and the evaluator from the same source revision,
+   with matching tactical flags. Verify endpoints, artifacts, current-generation
+   digests and a shared match pin while learning remains disabled.
+4. Set `promotion_not_before_ms` to the latest completed player update plus
+   the actual maximum legacy-session lifetime and a safety margin. Enable the
+   new collector/learner and retire the old subscriptions. The deadline guards
+   promotion until legacy sessions expire; do not reuse the previous rollout's
+   timestamp. Until then keep the new numeric baseline identical to the old one.
+
+The registry and proposal guards reject previous-generation documents/evidence;
+changing only the generation label is not a substitute for this coordinated
+serving/evaluator deployment.

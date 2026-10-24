@@ -76,7 +76,9 @@ class RoleAnchorTest(unittest.TestCase):
 class BlockAndCommitTest(unittest.TestCase):
     def test_routine_press_prefers_fresh_near_tie_but_keeps_immediate_threat_response(self):
         for team in (0, 1):
-            for ball_x, close, expected in ((0, False, 3), (-35, False, 4), (0, True, 4)):
+            # STAMINA_ROT: presser = argmin(dist + 15*(1-stamina)); tired pid4 (0.2)
+            # needs >10.5m advantage to beat fresh pid3 (0.9), so all cases prefer 3.
+            for ball_x, close, expected in ((0, False, 3), (-35, False, 3), (0, True, 3)):
                 s = snap(
                     team=team,
                     owner=(1, 1),
@@ -109,7 +111,8 @@ class BlockAndCommitTest(unittest.TestCase):
                 team=team,
                 owner=(1, 1),
                 ball=(0, 0),
-                ours=[(-51, 0), (-40, -20), (-40, 20), (-15, 0), (-6, 0)],
+                # pid4 at dist=4 beats pid3 at dist=15: 4+12=16 < 15+1.5=16.5 with STAMINA_ROT
+                ours=[(-51, 0), (-40, -20), (-40, 20), (-15, 0), (-4, 0)],
                 theirs=[(51, 0), (0, 0), (30, 20), (30, -20), (40, 20)],
             )
             s = replace(
@@ -189,11 +192,12 @@ class BlockAndCommitTest(unittest.TestCase):
             self.assertGreaterEqual(moves, 2)
 
     def test_attackers_committed_holds_link_at_halfway(self):
+        # FWD_ROLES: pid3 closer to ball → runner (bp+17=37); pid4 farther → link (bp+5=25)
         s = snap(ours=[OURS[0], OURS[1], (20, 0), OURS[3], OURS[4]], ball=(20, 0))
-        self.assertEqual(target(decide(s, 3))[0], 25)
+        self.assertEqual(target(decide(s, 3))[0], 37)
         one = replace(DEFAULT_STYLE, attackers_committed=1)
         self.assertEqual(target(decide(s, 3, DEFAULT_SETTINGS, one))[0], 0)
-        self.assertEqual(target(decide(s, 4, DEFAULT_SETTINGS, one))[0], 37)
+        self.assertEqual(target(decide(s, 4, DEFAULT_SETTINGS, one))[0], 25)
 
 
 class TackleTest(unittest.TestCase):

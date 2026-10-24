@@ -163,8 +163,9 @@ class TacticalTests(unittest.TestCase):
         b = decide(snapshot, 4).command
         self.assertEqual(a["commandType"], "MOVE_TO")
         self.assertEqual(b["commandType"], "MOVE_TO")
-        self.assertLess(a["parameters"]["target_y"], 0)
-        self.assertGreater(b["parameters"]["target_y"], 0)
+        # FWD_ROLES: pid3 is runner (+y), pid4 is link (-y) based on proximity
+        self.assertGreater(a["parameters"]["target_y"], 0)
+        self.assertLess(b["parameters"]["target_y"], 0)
         self.assertNotEqual(a["parameters"]["target_x"], b["parameters"]["target_x"])
 
     def test_goalkeeper_tracks_projected_goal_crossing(self):

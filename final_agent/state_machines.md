@@ -169,8 +169,23 @@ old ACTIVE or pins -> deploy five players with learning disabled -> verify
 their artifacts, endpoints and common diagnostic pin -> enable learner.
 Older runtime sessions may continue unchanged, but their generation/digest
 cannot support a new-generation proposal. No formation changes occur.
+The prepared tactics-v2 rollout uses `match_profiles_tactics_v3` and an isolated
+`aleksalotl_tactics_v3` namespace. Existing rush-v2 evidence and pins cannot be
+reused or migrated in place; its serving endpoints remain unchanged until a
+separate controlled deployment.
 **Source:** `agent/profile_registry.py`, `agent/learning_policy.py`,
 `deploy/agentcore/cdk/cdk.json`, `deploy/s3_learning.py`.
+
+## Dynamic forward support
+
+**States:** fixed-seat support, dynamic link, dynamic runner; rush/desperate
+overrides.
+**Transitions:** each snapshot deterministically assigns link/runner roles when
+FWD_ROLES is enabled. Normal support -> role anchor -> defensive BALLSIDE shift
+-> minimum separation correction -> optional cover override -> attack cap and
+movement validation. Own possession skips the defensive BALLSIDE shift.
+Rush/desperate support keeps its explicit overrides. No state changes formation.
+**Source:** `agent/tactics.py`, `tests/test_tactics_v2.py`.
 
 ## Pass inference
 

@@ -38,14 +38,17 @@ An unpressured clear next segment rewards carrying over sideways recycling,
 without overriding protecting/slow-tempo posture or safe shots. Against a keeper
 projected behind the carrier, an unobstructed center shot is preferred to corner
 aiming; this is a targeting policy, not a guarantee of shot accuracy.
-Free-ball interception is outfield-only; the keeper retains its bounded goal-line
-position. The nearest active defender may press in midfield if the midfielder
-takes cover. A committed midfielder can support deeper attacks while retaining
+Free-ball interception is outfield-only. With GK_LINE enabled, the keeper covers
+the projected goal-to-ball angle; incoming shots and the own-penalty exception
+retain the bounded goal-line response. The nearest active defender may press
+in midfield if the midfielder takes cover. A committed midfielder can support deeper attacks while retaining
 the profile's attack cap and fixed formation.
 When a direct carry is blocked, short predicted-clear diagonal or lateral escapes
 may replace its target; an escape is not proof the ball will stay with the carrier.
-Routine pressing can prefer a materially fresher near-tie arrival, but close duels,
-deep defensive threats and free-ball interception retain the quickest response.
+With STAMINA_ROT disabled, routine pressing can prefer a materially fresher
+near-tie arrival while close duels and deep threats retain the quickest response.
+With it enabled, the presser minimizes distance plus a fatigue cost.
+Free-ball interception remains a separate quickest-arrival assignment.
 Unpressured carriers reserve stamina away from goal instead of always sprinting.
 _Avoid_: outcome, accepted action.
 
@@ -90,6 +93,11 @@ _Avoid_: live mutable shared memory.
 An identity shared by serving code, profile documents and evaluator semantics.
 Evidence lacking that exact identity and profile digest cannot support automatic
 promotion; a tactical rollout uses a new registry namespace.
+
+**Dynamic forward role**:
+A snapshot-derived link/runner assignment to the two fixed forward seats, not a
+formation change. BALLSIDE shifts their final support anchors toward the ball
+when defending; dynamic-role positioning retains the separation-from-ball guard.
 
 **Match profile pin**:
 One immutable selection of profile content and compatible code generation for

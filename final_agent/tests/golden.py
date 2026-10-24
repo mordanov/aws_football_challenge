@@ -4,12 +4,14 @@ Regenerate after inspecting each intended difference: `.venv/bin/python tests/go
 Three-match feedback additionally changes 36/750 commands: center shots against
 stranded keepers, progressive safe keeper outlets, midfield support and pressing.
 Carrying is separately covered with carry-enabled profiles in test_style_tactics.
-These legacy fixtures are checked with rush/desperate modes disabled; enabled
-modes have explicit scenario coverage in test_rush_tactics.
+Legacy fixtures disable the optional tactical modes. The tactics-v2 fixture
+explicitly enables their default behavior, with targeted scenario coverage
+in test_rush_tactics and test_tactics_v2.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import random
@@ -25,6 +27,24 @@ from agent.model import Profile  # noqa: E402
 from agent.runtime import Runtime  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "default_style_golden.json"
+TACTICS_V2_FIXTURE = FIXTURE.with_name("tactics_v2_golden.json")
+TACTICS_V2_FLAGS = (
+    "STAMINA_ROT", "LANE_BLOCK", "COVER", "BALLSIDE", "GK_LINE", "COUNTER_PRESS", "FWD_ROLES"
+)
+LEGACY_MODES = {
+    **dict.fromkeys(TACTICS_V2_FLAGS, "0"),
+    "RUSH_ENABLED": "0",
+    "DESPERATE_S": "-1",
+    "DRAW_AT_ANY_COST": "0",
+}
+TACTICS_V2_MODES = {
+    **dict.fromkeys(TACTICS_V2_FLAGS, "1"),
+    "RUSH_ENABLED": "1",
+    "RUSH_S": "15",
+    "DESPERATE_S": "30",
+    "GK_UP_S": "10",
+    "DRAW_AT_ANY_COST": "0",
+}
 SEED = 20261022
 PRESETS = ("", "go_all_out_attack", "slow_the_tempo", "press_high", "shoot_on_sight")
 
@@ -94,9 +114,11 @@ def responses(profile: Profile | None = None) -> list[list[str]]:
 
 
 if __name__ == "__main__":
-    FIXTURE.parent.mkdir(exist_ok=True)
-    with patch.dict(
-        os.environ, {"RUSH_ENABLED": "0", "DESPERATE_S": "-1", "DRAW_AT_ANY_COST": "0"}
-    ):
-        FIXTURE.write_text(json.dumps({"seed": SEED, "responses": responses()}, indent=1) + "\n")
-    print(f"wrote {FIXTURE}")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tactics-v2", action="store_true")
+    args = parser.parse_args()
+    fixture = TACTICS_V2_FIXTURE if args.tactics_v2 else FIXTURE
+    fixture.parent.mkdir(exist_ok=True)
+    with patch.dict(os.environ, TACTICS_V2_MODES if args.tactics_v2 else LEGACY_MODES):
+        fixture.write_text(json.dumps({"seed": SEED, "responses": responses()}, indent=1) + "\n")
+    print(f"wrote {fixture}")

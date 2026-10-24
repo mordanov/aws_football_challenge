@@ -109,6 +109,15 @@ def test_homogeneous_but_incompatible_code_generation_does_not_propose():
     assert propose(Profile(), docs) is None
 
 
+@pytest.mark.parametrize("generation", ["match_profiles_v1", "match_profiles_rush_v2"])
+def test_pre_tactics_v2_generations_cannot_support_new_tactics(generation):
+    docs = evidence()
+    for doc in docs:
+        doc["content"]["code_generation"] = generation
+        doc["observation_id"] = hashlib.sha256(canonical(doc["content"]).encode()).hexdigest()
+    assert propose(Profile(), docs) is None
+
+
 @pytest.mark.parametrize("field", ["profile_digest", "code_generation"])
 def test_unbound_legacy_evidence_cannot_support_automatic_promotion(field):
     docs = evidence()
