@@ -4,7 +4,7 @@
   "settings": {
     "pass_margin": 3.0,
     "press_radius": 22.0,
-    "shot_range": 29.0,
+    "shot_range": 32.0,
     "support_width": 15.0
   },
   "style": {

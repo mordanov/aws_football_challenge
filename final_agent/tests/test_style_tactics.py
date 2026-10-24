@@ -77,8 +77,9 @@ class BlockAndCommitTest(unittest.TestCase):
     def test_routine_press_prefers_fresh_near_tie_but_keeps_immediate_threat_response(self):
         for team in (0, 1):
             # STAMINA_ROT: presser = argmin(dist + 15*(1-stamina)); tired pid4 (0.2)
-            # needs >10.5m advantage to beat fresh pid3 (0.9), so all cases prefer 3.
-            for ball_x, close, expected in ((0, False, 3), (-35, False, 3), (0, True, 3)):
+            # needs >10.5m advantage to beat fresh pid3 (0.9), so mid-field cases prefer 3.
+            # ball_x=-35 (own half < -10): FWDs excluded, MID (pid=2) presses instead.
+            for ball_x, close, expected in ((0, False, 3), (-35, False, 2), (0, True, 3)):
                 s = snap(
                     team=team,
                     owner=(1, 1),
@@ -887,3 +888,42 @@ class KeeperDistributionTest(unittest.TestCase):
             self.assertEqual(decision.command["commandType"], "GK_DISTRIBUTE")
             self.assertEqual(decision.command["parameters"]["target_player_id"], 2)
             self.assertIn("safe", decision.reason)
+
+
+class FwdPressZoneTest(unittest.TestCase):
+    """FWDs must not be designated pressers when ball is deep in own half."""
+
+    def _snap_deep_own(self, team=0):
+        # FWD1 (pid=3) at x=-14 is geometrically closest to ball at x=-20,
+        # but since ball is in own half, DEF (pid=1) at x=-28 should press.
+        return snap(
+            team=team,
+            owner=(1, 1),   # opponent has ball
+            ball=(-20, 0),
+            ours=[(-51, 0), (-28, 0), (-40, 0), (-14, 0), (-10, 0)],
+            theirs=[(51, 0), (-20, 0), (15, 20), (15, -20), (20, 20)],
+        )
+
+    def test_fwd_not_presser_when_ball_deep_in_own_half(self):
+        """Evidence: match e0770ce5 — FWD1 pressed at x=-14 in own half, 0 shots entire match."""
+        for team in (0, 1):
+            with self.subTest(team=team):
+                plan = assignments(self._snap_deep_own(team))
+                self.assertNotIn(plan["presser"], (3, 4),
+                                 f"FWD designated presser in own half (team={team}): {plan['presser']}")
+
+    def test_fwd_can_still_press_in_opp_half(self):
+        """FWDs may press when ball is in opponent half — counter-press scenario."""
+        for team in (0, 1):
+            s = snap(
+                team=team,
+                owner=(1, 1),
+                ball=(15, 0),   # opp half
+                ours=[(-51, 0), (-20, 0), (-5, 0), (12, 0), (18, 0)],
+                theirs=[(51, 0), (15, 0), (25, 20), (25, -20), (30, 20)],
+            )
+            with self.subTest(team=team):
+                plan = assignments(s)
+                # FWD2 (pid=4) at x=18 is closest — allowed
+                self.assertIn(plan["presser"], (3, 4),
+                              f"FWD should press in opp half (team={team}): {plan['presser']}")

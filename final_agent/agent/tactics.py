@@ -117,13 +117,16 @@ def assignments(snapshot: Snapshot, settings: Settings = DEFAULT_SETTINGS) -> di
     presser = None
     if s.owner is not None and s.owner[0] != s.team:
         radius = min(30, settings.press_radius + (5 if s.coach == "press_high" else 0))
+        # FWDs hold attack half when ball is deep in own half; DEF/MID handle pressure
+        _deep = s.direction * s.ball[0] < -10.0
+        press_pool = (tuple(p for p in active if p.id not in (3, 4)) or active) if _deep else active
         if stamina_rot:
-            best = min(active, key=lambda p: (distance(point(p), s.ball) + 15.0 * (1.0 - p.stamina), p.id))
+            best = min(press_pool, key=lambda p: (distance(point(p), s.ball) + 15.0 * (1.0 - p.stamina), p.id))
         else:
-            best = min(active, key=lambda p: (arrival(p, s.ball), p.id))
+            best = min(press_pool, key=lambda p: (arrival(p, s.ball), p.id))
             if s.direction * s.ball[0] > -30 and distance(point(best), s.ball) > 3:
                 fresh = tuple(
-                    p for p in active
+                    p for p in press_pool
                     if p.stamina >= best.stamina + 0.2
                     and arrival(p, s.ball) <= arrival(best, s.ball) + 0.35
                     and distance(point(p), s.ball) <= radius
