@@ -14,5 +14,9 @@ build/
 # Zed
 .zed/
 
+# AWS credentials — never commit
+aws_creds.txt
+*.credentials
+
 # macOS
 .DS_Store
