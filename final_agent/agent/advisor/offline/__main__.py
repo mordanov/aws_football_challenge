@@ -8,6 +8,8 @@ Commands:
   analyze           Execute a previously generated script in the sandbox.
   evaluate          Score an existing run artifact with the evaluator.
   publish           Publish a scouting note to shared Memory.
+  scout             Prepare a source-bound scouting packet/note from saved telemetry.
+  prematch          Retrieve historical scouting and export review-only hypotheses.
 
 Exit codes:
   0  Completed proposal / service operation succeeded.
@@ -403,6 +405,88 @@ def _cmd_publish(args: argparse.Namespace, services: Services) -> int:
     return 0
 
 
+def _cmd_scout(args: argparse.Namespace) -> int:
+    from datetime import datetime
+
+    from .scouting import prepare_scouting
+
+    try:
+        path = Path(args.records)
+        with path.open("rb") as stream:
+            raw = stream.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024:
+            raise ValueError("telemetry exceeds 16 MiB")
+        text = raw.decode("utf-8")
+        records = (
+            json.loads(text)
+            if text.lstrip().startswith("[")
+            else [json.loads(line) for line in text.splitlines() if line.strip()]
+        )
+        packet, note = prepare_scouting(
+            _load_json(args.manifest),
+            records,
+            team_id=args.team,
+            profile=load_profile(args.profile),
+            expires_at=datetime.fromisoformat(args.expires_at),
+        )
+        write_atomic(Path(args.output), packet.model_dump_json(indent=2) + "\n")
+        write_atomic(Path(args.note_output), note.model_dump_json(indent=2) + "\n")
+    except (ValueError, OSError, TypeError) as exc:
+        print(f"scout error: {exc}", file=sys.stderr)
+        return 2
+    print(
+        json.dumps(
+            {
+                "evidence": args.output,
+                "note": args.note_output,
+                "digest": packet.digest,
+                "published": False,
+                "model_called": False,
+            }
+        )
+    )
+    return 0
+
+
+def _cmd_prematch(args: argparse.Namespace, services: Services) -> int:
+    from datetime import datetime
+
+    from .contracts import OfflineServiceError
+    from .scouting import build_brief
+
+    try:
+        config = _load_config(args.config)
+        kickoff = datetime.fromisoformat(args.kickoff)
+        profile = load_profile(args.profile)
+        scouts = services.scouts if services.scouts is not None else _real_scouts(config)
+        context = scouts.retrieve_before(args.team, args.opponent, kickoff)
+        brief, evidence = build_brief(
+            context,
+            team_id=args.team,
+            opponent_id=args.opponent,
+            match_id=args.match_id,
+            profile=profile,
+            kickoff=kickoff,
+        )
+        write_atomic(Path(args.output), json.dumps(brief, indent=2, sort_keys=True) + "\n")
+        write_atomic(Path(args.evidence_output), evidence.model_dump_json(indent=2) + "\n")
+    except (ValueError, OSError, OfflineServiceError) as exc:
+        print(f"prematch error: {exc}", file=sys.stderr)
+        return 2
+    print(
+        json.dumps(
+            {
+                "status": brief["status"],
+                "brief": args.output,
+                "evidence": args.evidence_output,
+                "profile_changed": False,
+                "model_called": False,
+            }
+        )
+    )
+    return 0
+
+
 # ── Argument parser ───────────────────────────────────────────────────────────
 
 
@@ -490,6 +574,25 @@ def _build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--note", required=True, metavar="N")
     pub.add_argument("--evidence", required=True, metavar="E")
 
+    scout = ops.add_parser("scout", help="prepare scouting from saved application telemetry")
+    scout.add_argument("--manifest", required=True)
+    scout.add_argument("--records", required=True, help="application JSON array or JSONL")
+    scout.add_argument("--profile", required=True)
+    scout.add_argument("--team", required=True)
+    scout.add_argument("--expires-at", required=True)
+    scout.add_argument("--output", required=True, help="evidence packet path")
+    scout.add_argument("--note-output", required=True)
+
+    prematch = ops.add_parser("prematch", help="read past opponent notes; never modify a profile")
+    prematch.add_argument("--config", required=True)
+    prematch.add_argument("--team", required=True)
+    prematch.add_argument("--opponent", required=True)
+    prematch.add_argument("--match-id", required=True)
+    prematch.add_argument("--kickoff", required=True, help="timezone-aware cutoff (exclusive)")
+    prematch.add_argument("--profile", required=True)
+    prematch.add_argument("--output", required=True, help="operator brief path")
+    prematch.add_argument("--evidence-output", required=True, help="offline advisor input path")
+
     return parser
 
 
@@ -517,6 +620,10 @@ def main(argv: list[str] | None = None, *, services: Services | None = None) -> 
             return _cmd_evaluate(args, services)
         if cmd == "publish":
             return _cmd_publish(args, services)
+        if cmd == "scout":
+            return _cmd_scout(args)
+        if cmd == "prematch":
+            return _cmd_prematch(args, services)
     except SystemExit:
         raise
     except Exception as exc:  # noqa: BLE001

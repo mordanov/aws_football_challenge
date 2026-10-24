@@ -72,6 +72,16 @@ _Avoid_: proven cause, automatic success.
 Recency-weighted observable opposing tendencies, not hidden intentions.
 _Avoid_: opponent mind-reading.
 
+**Scouting observation**:
+A deterministic count of an opponent position pattern in distinct sampled game
+clocks, bound to one confirmed match/opponent, profile version and snapshot digests.
+It is not a time-weighted frequency, confirmed action or causal explanation.
+
+**Pre-match brief**:
+An opponent-scoped review artifact built from unexpired historical scouting notes.
+It contains source-linked counter-tactic hypotheses, never approval or an applied
+profile. Insufficient history remains explicitly insufficient evidence.
+
 **Tactical profile**:
 Immutable versioned settings pinned consistently across all five players.
 _Avoid_: live mutable shared memory.
