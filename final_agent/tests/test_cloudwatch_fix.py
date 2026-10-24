@@ -16,7 +16,7 @@ Fix 3 (1v1 penalty area): lane threshold in shot_option lowered from 1.8 to 1.2
 import unittest
 from dataclasses import replace
 
-from agent.model import DEFAULT_SETTINGS, Player, Settings, Snapshot
+from agent.model import DEFAULT_SETTINGS, Player, Snapshot
 from agent.tactics import assignments, decide, support
 
 
@@ -102,7 +102,7 @@ class GkPossessionFwdPositionTest(unittest.TestCase):
             tx, _ = support(s, p, DEFAULT_SETTINGS, plan)
             # MID can be in own half (negative x for team 0) — only FWDs get new min
             self.assertIsNotNone(tx)
-            self.assertLess(d * tx, 0.0, f"MID should still be in own half when GK has ball")
+            self.assertLess(d * tx, 0.0, "MID should still be in own half when GK has ball")
 
 
 def _snap_carrier(
