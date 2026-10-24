@@ -6,7 +6,7 @@ import os
 import unittest
 import unittest.mock
 
-from agent.model import Player, Settings, Snapshot
+from agent.model import Player, Snapshot
 from agent.protocol import validate_command
 from agent.tactics import assignments, decide
 
@@ -131,7 +131,6 @@ class LaneBlockTest(unittest.TestCase):
     """AT-1: marker uses MOVE_TO on intercept point on ball-receiver lane."""
 
     def _lane_block_snap(self, team=0):
-        d = 1 if team == 0 else -1
         # Ball at opponent player, threat receiver at 20m forward, our marker nearby
         # opponent carrier at (20, 0), receiver at (40, 10)
         # Our player 2 near (25, 10) — will be assigned as marker
@@ -152,12 +151,10 @@ class LaneBlockTest(unittest.TestCase):
 
     def test_intercept_point_on_lane_at_k065(self):
         """Marker's target lies on ball→receiver segment, 65% from ball."""
-        d_dir = 1  # team 0
         team = 0
         # ball at (10, 0), receiver at (30, 20): intercept = (10,0) + 0.65*((30,20)-(10,0))
         # = (10 + 13, 0 + 13) = (23, 13)
         ball = (10.0, 0.0)
-        receiver_x, receiver_y = 30.0, 20.0
         expected_x = 10.0 + 0.65 * (30.0 - 10.0)  # = 23
         expected_y = 0.0 + 0.65 * (20.0 - 0.0)     # = 13
         ours = [(-52, 0), (-10, 0), (25, 8), (0, -15), (10, 15)]
@@ -467,7 +464,6 @@ class CounterPressTest(unittest.TestCase):
     def test_two_pressers_in_opp_half(self):
         """Two PRESS_BALL commands when ball in opp half and second player near ball."""
         s = self._cp_snap(ball_progress=15.0, second_dist=8.0, second_stamina=0.8)
-        plan = assignments(s)
         press_commands = 0
         for pid in range(1, 5):  # exclude GK
             dec = decide(s, pid)
@@ -479,7 +475,6 @@ class CounterPressTest(unittest.TestCase):
     def test_one_presser_when_second_stamina_low(self):
         """Only one presser when second candidate stamina < 0.3."""
         s = self._cp_snap(ball_progress=15.0, second_dist=8.0, second_stamina=0.2)
-        plan = assignments(s)
         press_commands = 0
         for pid in range(1, 5):
             dec = decide(s, pid)
@@ -532,7 +527,6 @@ class FwdRolesTest(unittest.TestCase):
     """AT-7 / AT-8: link/runner roles with correct positions and separation."""
 
     def _fwd_snap(self, ball=(5.0, 0.0), owner_pid=2, team=0):
-        d = 1 if team == 0 else -1
         ours = [(-52, 0), (-20, 0), (0, 0), (10, -10), (15, 10)]
         theirs = [(52, 0), (20, 0), (10, 5), (-5, -5), (-5, 5)]
         return snap(team=team, ball=ball, owner=(0, owner_pid), ours=ours, theirs=theirs)
@@ -598,7 +592,6 @@ class FwdRolesTest(unittest.TestCase):
     def test_bias_for_pid3_link_preference(self):
         """Player 3 has 3m bias → pid3 is link when equidistant from ball."""
         team = 0
-        d = 1
         # Both FWDs at same distance from ball (0,0), but pid3 has +3m bias → pid4 should be link
         ball = (0.0, 0.0)
         ours = [(-52, 0), (-20, 0), (0, 0), (10, 0), (10, 0)]  # pid3 and pid4 same dist
