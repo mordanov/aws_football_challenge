@@ -410,7 +410,7 @@ def support(
     kind, mirrored = role(p.id, formation)
     flip = -1 if mirrored else 1
     if kind == "DEF":
-        base_y = flip * (-8 if s.ball[1] > 0 else 8)
+        base_y: float = flip * (-8 if s.ball[1] > 0 else 8)
         if ballside:
             base_y += 0.50 * (s.ball[1] - base_y)
         return d * max(-42, min(-10, bp - 18)), base_y
