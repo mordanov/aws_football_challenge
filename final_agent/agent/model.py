@@ -48,7 +48,7 @@ class Snapshot:
 @dataclass(frozen=True)
 class Settings:
     pass_margin: float = 3.0
-    shot_range: float = 29.0
+    shot_range: float = 32.0
     press_radius: float = 22.0
     support_width: float = 15.0
 
