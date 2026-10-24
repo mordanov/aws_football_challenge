@@ -228,5 +228,78 @@ class PenaltyAreaShotTest(unittest.TestCase):
                 )
 
 
+def _snap_gk_long_kick(team: int = 0) -> Snapshot:
+    """GK at x=-51 with ball; FWD3 at x=+14.2 (65m away, past midfield).
+    Opponents placed off-axis (y=±20) so lane to FWD3 is clear.
+    Evidence: match 3c2fde52 t=8.2s — GK ignored FWD3 at x=14.2 because 65m > 60m safe limit.
+    """
+    d = 1 if team == 0 else -1
+    players = tuple([
+        Player(team, 0, d * -51.0,  0.0, stamina=0.9),  # GK has ball
+        Player(team, 1, d * -44.6,  0.0, stamina=0.9),  # DEF close (6.4m)
+        Player(team, 2, d *  -5.0,  0.0, stamina=0.9),  # MID at own half
+        Player(team, 3, d *  14.2,  0.0, stamina=0.9),  # FWD3 past midfield, 65m away
+        Player(team, 4, d * -40.0,  8.0, stamina=0.9),  # FWD4 deep
+        Player(1-team, 0, d *  51.0,  0.0, stamina=0.9),
+        Player(1-team, 1, d *  28.0, 20.0, stamina=0.9),  # off-axis: no lane block
+        Player(1-team, 2, d *  20.0,-20.0, stamina=0.9),
+        Player(1-team, 3, d *   5.0, 20.0, stamina=0.9),
+        Player(1-team, 4, d *   5.0,-20.0, stamina=0.9),
+    ])
+    return Snapshot(
+        team, 5, 8.2, 120.0, players,
+        (d * -51.0, 0.0), (0.0, 0.0),
+        (team, 0),  # GK owns ball
+        False, (0, 0),
+    )
+
+
+class GKLongKickTest(unittest.TestCase):
+    """GK should kick to FWD past midfield even when the distance exceeds 60m.
+
+    Root cause (match 3c2fde52 t=8.2s): FWD3 at x=14.2m is 65m from GK at x=-51m.
+    The safe pass limit is 60m, so FWD3 goes to keeper_outlets which is ignored when
+    a short safe pass exists (DEF at 6m). GK always distributes deep.
+    Fix: extend safe range to 80m for GK kicks beyond throw range (>25m).
+    """
+
+    def test_gk_kicks_to_fwd_past_midfield(self):
+        """GK distributes to FWD3 at x=14.2m (65m kick) not DEF at x=-44.6m.
+        Fails before fix: 65m > 60m safe limit → FWD3 goes to keeper_outlets → ignored.
+        """
+        from agent.tactics import carrier_options
+        for team in (0, 1):
+            d = 1 if team == 0 else -1
+            s = _snap_gk_long_kick(team=team)
+            gk = s.player(0)
+            opts = carrier_options(s, gk, DEFAULT_SETTINGS)
+            top_target = opts[0][1]["parameters"]["target_player_id"]
+            with self.subTest(team=team):
+                self.assertEqual(
+                    top_target, 3,
+                    f"GK should kick to FWD3 (x={d*14.2:.1f}, most forward) "
+                    f"but chose pid={top_target}. FWD3 at 65m exceeds old 60m limit.",
+                )
+
+    def test_gk_does_not_kick_beyond_80m(self):
+        """GK does not kick to a player beyond 80m even after the fix."""
+        from agent.tactics import carrier_options
+        from dataclasses import replace as dc_replace
+        # Move FWD3 to x=+35 (86m from GK at -51): beyond new 80m limit
+        d = 1
+        players = list(_snap_gk_long_kick(team=0).players)
+        # Replace FWD3 (index 3, team=0, pid=3)
+        players[3] = Player(0, 3, 35.0, 0.0, stamina=0.9)
+        s = dc_replace(_snap_gk_long_kick(team=0), players=tuple(players))
+        gk = s.player(0)
+        opts = carrier_options(s, gk, DEFAULT_SETTINGS)
+        top_target = opts[0][1]["parameters"]["target_player_id"]
+        # FWD3 at 86m should be excluded; DEF or MID should be chosen
+        self.assertNotEqual(
+            top_target, 3,
+            "FWD3 at x=35 (86m from GK) is beyond 80m limit and should not be chosen",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -335,7 +335,9 @@ def carrier_options(
             continue
         lane = clearance(point(p), point(mate), s.opponents)
         pressure = min(distance(point(mate, 0.5), point(o, 0.5)) for o in s.opponents)
-        safe = 3 <= length <= 60 and min(lane, pressure) >= settings.pass_margin
+        # GK kicks (>25m throw range) can reach up to 80m safely
+        max_pass_length = 80 if (is_gk and length > 25) else 60
+        safe = 3 <= length <= max_pass_length and min(lane, pressure) >= settings.pass_margin
         if not safe and not is_gk:
             continue
         gain = s.direction * (mate.x - p.x)
