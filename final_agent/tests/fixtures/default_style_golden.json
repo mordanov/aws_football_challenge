@@ -59,10 +59,10 @@
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 2.0, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 27.89, \"target_y\": 6.02, \"sprint\": true}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]",
+   "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_x\": 27.89, \"target_y\": 6.02, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]"
+   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": 0.68, \"sprint\": false}, \"duration\": 0}]",
@@ -152,7 +152,7 @@
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -2.8, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -54.0, \"target_y\": -7.41, \"sprint\": true}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 3, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
   ],
   [
@@ -166,7 +166,7 @@
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": 2.8, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 1, \"parameters\": {\"target_x\": 54.0, \"target_y\": 4.33, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 2, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"intensity\": 0.5}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 3, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 1, \"playerId\": 4, \"parameters\": {\"target_player_id\": 3, \"tightness\": \"TIGHT\"}, \"duration\": 0}]"
   ],
   [
@@ -256,9 +256,9 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": 1.61, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -38.8, \"target_y\": 3.38, \"sprint\": false}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 3, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]"
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 3, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"TIGHT\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"TIGHT\"}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -1.06, \"sprint\": false}, \"duration\": 0}]",
@@ -761,8 +761,8 @@
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -2.8, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -54.0, \"target_y\": -4.89, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -1.94, \"sprint\": false}, \"duration\": 0}]",
@@ -795,8 +795,8 @@
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 0, \"parameters\": {\"target_x\": -52.0, \"target_y\": -2.08, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -38.37, \"target_y\": -4.45, \"sprint\": true}, \"duration\": 0}]",
-   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"intensity\": 0.5}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
   ],
   [
@@ -986,7 +986,7 @@
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 0, \"playerId\": 1, \"parameters\": {\"target_x\": -45.5, \"target_y\": -5.05, \"sprint\": false}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 2, \"parameters\": {\"target_player_id\": 4, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
    "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 3, \"parameters\": {\"target_player_id\": 2, \"tightness\": \"LOOSE\"}, \"duration\": 0}]",
-   "[{\"commandType\": \"PRESS_BALL\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"intensity\": 0.8}, \"duration\": 0}]"
+   "[{\"commandType\": \"MARK\", \"teamId\": 0, \"playerId\": 4, \"parameters\": {\"target_player_id\": 1, \"tightness\": \"LOOSE\"}, \"duration\": 0}]"
   ],
   [
    "[{\"commandType\": \"MOVE_TO\", \"teamId\": 1, \"playerId\": 0, \"parameters\": {\"target_x\": 52.0, \"target_y\": -0.48, \"sprint\": false}, \"duration\": 0}]",
