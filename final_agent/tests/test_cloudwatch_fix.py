@@ -283,10 +283,10 @@ class GKLongKickTest(unittest.TestCase):
 
     def test_gk_does_not_kick_beyond_80m(self):
         """GK does not kick to a player beyond 80m even after the fix."""
-        from agent.tactics import carrier_options
         from dataclasses import replace as dc_replace
+
+        from agent.tactics import carrier_options
         # Move FWD3 to x=+35 (86m from GK at -51): beyond new 80m limit
-        d = 1
         players = list(_snap_gk_long_kick(team=0).players)
         # Replace FWD3 (index 3, team=0, pid=3)
         players[3] = Player(0, 3, 35.0, 0.0, stamina=0.9)
