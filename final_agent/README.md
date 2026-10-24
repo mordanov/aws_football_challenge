@@ -15,7 +15,7 @@ library. AWS serving is an optional, pinned extra.
 ```sh
 cd final_agent
 python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[deployment,offline,dev]'
+.venv/bin/python -m pip install -e '.[deployment,offline,learning,dev]'
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
@@ -117,6 +117,17 @@ there is no safe way to manufacture the intended team/player. A valid command
 shape is **not** evidence that a server accepted or executed it.
 
 ## Offline coaching
+
+For opt-in automatic provisional Memory collection and match-wide profile
+pinning, see [automatic shared-memory learning](docs/automatic_learning.md).
+The deployed workshop variant uses S3 coordination, CloudWatch-triggered Lambda
+workers and AgentCore Memory, without DynamoDB/SNS/SQS/EventBridge. Collection
+and learning have explicit switches. The rush/desperate-attack rollout uses
+`match_profiles_rush_v2` and an isolated registry namespace, with identical
+serving/evaluation tactics; see the deployment status in that document.
+A deterministic learner can propose one bounded
+numeric remedy, evaluate it against fixed paired simulator fixtures and
+conditionally promote it for new match pins only.
 
 For opponent-specific AgentCore Memory scouting, see
 [CloudWatch scouting and pre-match briefs](docs/offline_coaching.md#cloudwatch-scouting-and-pre-match-briefs).

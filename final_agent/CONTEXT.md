@@ -86,6 +86,27 @@ profile. Insufficient history remains explicitly insufficient evidence.
 Immutable versioned settings pinned consistently across all five players.
 _Avoid_: live mutable shared memory.
 
+**Tactical compatibility generation**:
+An identity shared by serving code, profile documents and evaluator semantics.
+Evidence lacking that exact identity and profile digest cannot support automatic
+promotion; a tactical rollout uses a new registry namespace.
+
+**Match profile pin**:
+One immutable selection of profile content and compatible code generation for
+a team, match UUID and side, shared by all five players. It is not a match-end
+signal or an atomic update of five runtime deployments.
+
+**Provisional team observation**:
+Source-linked canonical snapshot/attempt or redacted runtime failure recorded
+without an asserted opponent or final result. Multiple players and repeated
+game clocks do not create independent tactical support.
+_Avoid_: completed scouting, proven lesson, official outcome.
+
+**Observation outbox**:
+Durable pending/sent publication state retaining the exact first stored envelope
+for retry-safe Memory delivery. Sent is a delivery state, not match completion
+or lesson approval.
+
 **Parameter proposal**:
 A stored suggested correction with evidence references and an eligibility status;
 weak evidence remains a proposal without changing general settings.
@@ -95,6 +116,20 @@ _Avoid_: approved deployment.
 An explicit persisted operator decision to accept a candidate for evaluation.
 It records intent, not proof of successful runtime deployment.
 _Avoid_: export, proven improvement.
+
+**Automatic profile promotion**:
+A conditional active-generation update backed by a recorded paired evaluation
+of an allowlisted numeric candidate. It affects new match pins, not running
+matches, and is not proof of improvement on the real platform.
+
+**Automatic learning attempt**:
+One durable evaluation reservation per active profile generation. Additional
+evidence or process retries cannot repeatedly test the same baseline until it
+passes; failure and inconclusive results leave the active profile unchanged.
+
+**Learning wake-up**:
+A coalesced request to analyze newly collected evidence after an activity delay.
+It is neither match completion nor an instruction to retry a reserved evaluation.
 
 **Match manifest**:
 Operator-supplied match identity, opponent identity and final-result availability.

@@ -6,6 +6,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test test/*.test.cjs",
     "watch": "tsc -w",
     "cdk": "npm run build && cdk",
     "clean": "rm -rf dist"

@@ -107,10 +107,82 @@ The optional advisor reads a campaign or match report and writes a validated
 `AFC_PROFILE`; nothing deploys automatically.
 **Source:** `agent/archetypes.py`, `agent/advisor/`, `profiles/recommended.json`.
 
-There is no live database, LLM or network dependency in decision logic; the
-advisor runs only off-tick.
+With default startup there is no live database, LLM or network dependency in
+decision logic; the advisor runs only off-tick. The optional match-profile
+selector adds registry access on first selection/cache recovery, not tactical
+per-tick Memory or model access.
 Actual platform result/report delivery and trusted match-boundary collection
 remain unverified integration responsibilities.
+
+## Automatic learning foundations (opt-in)
+
+Five existing CloudWatch runtime log groups -> matching standalone JSON
+subscription events -> bounded Lambda decompression and canonical observation
+validation -> DynamoDB PENDING outbox -> exact AgentCore Memory event
+(`provisional_team_observation_v1`, semantic extraction skipped) -> SENT.
+Hash identity covers normalized allowlisted content; persisted first source
+envelope/timestamp makes replay stable even with a different delivery ID.
+Unknown match identity and framework logs are reported ignored; invalid recognized
+evidence fails. Side/seat, snapshot and command contracts are checked.
+Free-form reasons, requests/exceptions and unknown opponent mappings do not
+enter Memory. Repeated clocks share a support key; conflicting variants retain
+different IDs. None is a confirmed result or a complete scouting note.
+
+Failed/uncertain writes retain PENDING; Lambda async retries and a retained SQS
+failure destination support recovery. The generated CloudFormation stack
+includes alarms, an explicit subscription switch and an unattached least-privilege
+player policy. Packaging vendors the installed AWS SDK into an independent
+Lambda archive. Plan/package are local; apply/bootstrap are explicit account-checked
+operations. No role attachment or player deployment is performed by this tooling.
+
+Optional `AFC_PROFILE_TABLE`/`AFC_TEAM_ID` -> registry match pin, or consistent
+ACTIVE/document reads plus transactional first-pin creation -> digest-validated
+compatible profile -> bounded per-process cache -> request-local tactical settings.
+All five players use one pin. Cached matches ignore later ACTIVE changes;
+cache recovery re-reads the same durable binding. Failed selection logs and
+raises, never independently chooses the packaged baseline. Default and synthetic
+fitness serving retain the startup profile.
+An explicitly enabled scheduled learner queries the bounded recent team outbox
+index -> retrieves/verifies exact acknowledged Memory events -> homogeneous
+distinct-clock central-exposure evidence -> one bounded numeric candidate ->
+per-generation durable attempt reservation -> paired fixed simulator fixtures ->
+immutable evaluation receipt. Rejected/failed/inconclusive results do not move
+ACTIVE. Accepted results update ACTIVE and persist the receipt transactionally,
+conditioned on the evaluated digest/generation. An active change invalidates
+stale evaluations; existing match pins never change. The offline worker vendors
+`football_lab`; serving code does not import the simulator. No model calls
+or generated executable code enter this path.
+Large evaluation payloads flow into immutable registry chunks before the
+terminal receipt references their ordered keys and content digest. The optional
+player CDK binding imports the learning stack's table/policy exports and wires
+the same table/team plus restricted managed policy to all five runtimes;
+it defaults off and never enables the learner as a side effect.
+The workshop alternative replaces DynamoDB state with conditional S3 objects:
+collector -> immutable observation/day references -> exact Memory event ->
+immutable acknowledgement. An S3 CAS wake-up coalesces activity into one delayed
+learner; revision checks preserve arrivals during evaluation. Pending publication
+recovery precedes exact Memory reads; expired partial sessions cannot support
+proposals. Evaluation artifacts/generation ancestry are stored before ACTIVE CAS;
+the pointer binds the committed generation to its immutable receipt. A racing
+new match can pin the prior validated ACTIVE snapshot but all seats retain that
+winning pin. Async failures flow to the owned S3 bucket; visible CloudWatch alarms
+need no SNS/SQS/EventBridge. Serving roles can only read registry data and
+conditionally create match pins. Diagnostic deployment evidence is excluded from
+candidate input.
+The rush rollout uses `match_profiles_rush_v2` and team namespace
+`aleksalotl_rush_v2` for both serving registry and learner/Memory actor.
+Old registry objects and pins remain untouched. Collection may archive old
+runtime observations, but proposal guards require the exact current generation
+and profile digest. The simulator and players import the same merged tactics;
+legacy golden tests disable rush/desperate modes, while explicit scenario tests
+exercise enabled modes. No regenerated golden fixture hides a behavior change.
+The deployment's `promotion_not_before_ms` flows to the Lambda environment and
+pre-reservation guard. This lets old runtime sessions expire before the new
+namespace may promote a profile; collection and exact Memory reads continue.
+**Source:** `agent/profile_registry.py`, `agent/learning_observations.py`,
+`agent/learning_collector.py`, `agent/main.py`, `deploy/learning.py`,
+`agent/learning_source.py`, `agent/learning_policy.py`, `agent/learning_worker.py`,
+`agent/learning_evaluation.py`, `docs/automatic_learning.md`.
 
 ## Offline coaching pipeline
 

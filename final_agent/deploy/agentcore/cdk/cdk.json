@@ -5,6 +5,13 @@
     "exclude": ["README.md", "cdk*.json", "tsconfig.json", "package*.json", "yarn.lock", "node_modules", "dist", "test"]
   },
   "context": {
+    "afcLearning": {
+      "enabled": true,
+      "backend": "s3",
+      "bucket": "cdk-hnb659fds-assets-559922262840-us-east-1",
+      "stackName": "final-agent-s3-rush-v2",
+      "teamId": "aleksalotl_rush_v2"
+    },
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/aws-ecs-patterns:secGroupsDisablesImplicitOpenListener": true,
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,

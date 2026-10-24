@@ -88,6 +88,90 @@ diagnostic. No retry. Closing stops admission and attempts a bounded drain/join.
 Process freeze/termination can lose pending records without an acknowledgement.
 **Source:** `agent/telemetry.py`, `DecisionLog`.
 
+## Match profile selection (opt-in)
+
+**States:** unbound, active_read, content_validated, pinned, cached; failed.
+**Transitions:** recognized UUID and matching session team/seat -> consistent
+pin read -> existing immutable pin, or active pointer/content validation ->
+transactional unchanged-generation check plus conditional pin creation.
+Concurrent loser/uncertain acknowledgement -> read winning pin, never a local
+fallback. Bounded contention, missing/corrupt/incompatible content or unavailable
+registry -> `profile_selection_error` and failed invocation. Cache recovery
+reuses the persistent pin; interleaved matches keep request-local settings.
+Synthetic fitness retains the static profile. Default startup has no selector.
+The separately gated automatic learner may advance ACTIVE for new pins only;
+running match bindings remain immutable.
+**Source:** `agent/profile_registry.py`, `agent/runtime.py`, `agent/main.py`.
+
+## Provisional Memory delivery (opt-in)
+
+**States:** ignored, validated, PENDING, SENT; failed/retry/dead-letter.
+**Transitions:** subscription from one trusted seat/log group -> validate the
+whole batch -> content-addressed outbox create/read -> exact Memory event ->
+conditional SENT acknowledgement. Duplicate SENT -> no publication. PENDING
+retry reuses persisted content, timestamp and token; failed required writes
+raise rather than mark SENT. Exhausted Lambda async delivery -> failure queue
+and alarm; operator replay preserves outbox identity.
+Collection-disabled configuration removes subscriptions, not existing evidence.
+No clock, score, idle period, Memory write or new UUID transitions a match to
+complete/aborted. All observations remain provisional, including overtime.
+**Source:** `agent/learning_observations.py`, `agent/learning_collector.py`,
+`deploy/learning.py`.
+
+## Automatic candidate acceptance (opt-in)
+
+**States:** insufficient_evidence, reserved_attempt, evaluated, rejected,
+promoted, stale_baseline; failed.
+**Transitions:** recent acknowledged outbox sessions after analysis delay ->
+exact Memory integrity check -> homogeneous current-profile observations ->
+three independently supporting matches -> bounded numeric proposal.
+Missing profile digest or incompatible/missing tactical generation ->
+ineligible evidence, never a legacy compatibility fallback.
+Conditional generation reservation succeeds once -> fixed paired simulator
+evaluation -> rejected/failed receipt or conditional ACTIVE generation/digest
+update plus promotion receipt. Uncertain promotion response -> read receipt.
+Uncertain attempt write -> continue only if its invocation owner matches.
+Oversized raw evaluations -> immutable chunks with a digest/reference receipt.
+Concurrent baseline change -> stale_baseline, never overwrite. Repeating a
+reserved generation -> already_attempted, not another significance test.
+Neither analysis delay nor promotion confirms a match end or real efficacy.
+The S3 backend conditionally creates a winning match pin from a validated ACTIVE
+snapshot; a racing promotion can leave that new match on the preceding generation,
+but never splits its five players. ACTIVE compare-and-swap is its promotion commit.
+Evaluation budget too short -> continuation before reservation, not failed attempt.
+Eligible candidate before the configured legacy-session drain deadline ->
+rollout_cooldown without reserving an attempt. Activity after the deadline ->
+normal evaluation eligibility; no operator re-enable is required.
+**Source:** `agent/learning_source.py`, `learning_policy.py`, `learning_worker.py`,
+`learning_evaluation.py`, `profile_registry.py`.
+
+## S3 learning wake-up
+
+**States:** idle, dispatch_pending, dispatched, waiting_for_quiet, analyzing,
+continued, settled; expired.
+**Transitions:** observation delivery -> conditional work reservation and latest
+activity revision; Lambda acceptance -> dispatch acknowledgement. Further logs ->
+same owner, increased revision. Quiet activity delay -> exact evidence analysis.
+Insufficient invocation budget -> same-owner continuation without consuming an
+evaluation attempt. Settlement checks the observed revision; concurrent activity
+keeps work pending. Expired lease -> new owner on subsequent collection activity.
+Async errors exhausted -> retained S3 invocation record and CloudWatch metrics.
+No transition claims official match completion or unlimited automatic retry.
+**Source:** `agent/s3_trigger.py`, `agent/s3_worker.py`, `deploy/s3_learning.py`.
+
+## Tactical generation rollout
+
+**States:** learning_disabled, fresh_registry_bootstrapped, players_verified,
+learning_enabled.
+**Transitions:** integrate identical serving/evaluator tactics -> new compatibility
+generation and separate team namespace -> bootstrap baseline without modifying
+old ACTIVE or pins -> deploy five players with learning disabled -> verify
+their artifacts, endpoints and common diagnostic pin -> enable learner.
+Older runtime sessions may continue unchanged, but their generation/digest
+cannot support a new-generation proposal. No formation changes occur.
+**Source:** `agent/profile_registry.py`, `agent/learning_policy.py`,
+`deploy/agentcore/cdk/cdk.json`, `deploy/s3_learning.py`.
+
 ## Pass inference
 
 **States:** attempted, in flight on explicit free snapshots, possible completion,
