@@ -169,7 +169,7 @@ winning pin. Async failures flow to the owned S3 bucket; visible CloudWatch alar
 need no SNS/SQS/EventBridge. Serving roles can only read registry data and
 conditionally create match pins. Diagnostic deployment evidence is excluded from
 candidate input.
-The rush rollout uses `match_profiles_rush_v2` and team namespace
+The previous rush rollout used `match_profiles_rush_v2` and team namespace
 `aleksalotl_rush_v2` for both serving registry and learner/Memory actor.
 Old registry objects and pins remain untouched. Collection may archive old
 runtime observations, but proposal guards require the exact current generation
@@ -179,12 +179,14 @@ exercise enabled modes. No regenerated golden fixture hides a behavior change.
 The deployment's `promotion_not_before_ms` flows to the Lambda environment and
 pre-reservation guard. This lets old runtime sessions expire before the new
 namespace may promote a profile; collection and exact Memory reads continue.
-The next, not-yet-deployed tactics-v2 revision uses code generation
+The deployed v11 tactics-v2 revision uses code generation
 `match_profiles_tactics_v3`. Its checked-in player binding targets the separate
 `aleksalotl_tactics_v3` registry and `final-agent-s3-tactics-v3` stack; the S3
-example starts collection/learning disabled. Bootstrap that namespace and verify
-five-player/evaluator parity before enabling. No existing rush-v2 AWS state was
-modified by the code integration.
+example starts collection/learning disabled for safe provisioning. The verified
+2026-10-24 rollout bootstrapped generation 1, checked five-player/evaluator parity
+and enabled collection/learning. Rush-v2 subscriptions and learning are disabled;
+its registry/evidence remain intact. The current promotion guard expires at
+2026-10-24 15:38:04.078 UTC; ACTIVE remained generation 1 at rollout verification.
 Regression fixtures are independent: legacy optional-modes-off output remains
 byte-identical to main, while `tactics_v2_golden.json` records explicit default-on
 output. The fixture generator's `--tactics-v2` switch cannot replace the legacy
