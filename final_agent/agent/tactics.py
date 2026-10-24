@@ -224,7 +224,8 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     for y, aim in targets:
         target = (goal[0], y)
         lane = clearance(point(p), target, s.opponents)
-        if lane >= 1.8:
+        min_lane = 1.2 if gap < 15 else 1.8
+        if lane >= min_lane:
             keeper_gap = abs(y - (keeper.y + 0.25 * keeper.vy))
             quality = 66 + 35 * angle + min(keeper_gap, 6) * 2 - 0.25 * gap
             choices.append(
@@ -426,7 +427,13 @@ def support(
     y = (-1 if link else 1) * settings.support_width
     if ballside:
         y += 0.20 * (s.ball[1] - y)
-    return d * max(-20, min(46, progress)), y
+    # When GK has possession, FWDs hold midfield (x≥0) so a counter outlet exists
+    # on subsequent distributions. Evidence: loss e29327fd had 8 GK distributions
+    # all to x≤-46m because FWDs retreated; draw ffc31887 broke out when pid=4
+    # was at x=-10m at distribution time (retained from prior possession phase).
+    gk_possession = s.owner is not None and s.owner == (s.team, 0)
+    min_x = 0 if gk_possession else -20
+    return d * max(min_x, min(46, progress)), y
 
 
 def _gk_line_pos(s: Snapshot) -> tuple[float, float]:

@@ -64,26 +64,32 @@ def test_repeated_central_exposure_proposes_only_bounded_press_radius_change():
 
 def test_insufficient_matches_or_distinct_clocks_do_not_tune():
     docs = evidence()
-    assert propose(Profile(), docs[:10]) is None
+    assert propose(Profile(), docs[:5]) is None
     assert propose(Profile(), [docs[0], docs[5], docs[10]] * 50) is None
 
 
 @pytest.mark.parametrize("damage", ["mixed_version", "mixed_digest", "conflict", "runtime_error"])
 def test_mixed_or_unreliable_match_evidence_blocks_tuning(damage):
     docs = evidence()
-    damaged = copy.deepcopy(docs[0])
-    if damage == "mixed_version":
-        damaged["content"]["profile_version"] = "other"
-    elif damage == "mixed_digest":
-        damaged["content"]["profile_digest"] = "a" * 64
-        damaged["content"]["code_generation"] = "match_profiles_v1"
-    elif damage == "conflict":
-        damaged["content"]["snapshot"]["ball"] = [-20, 0]
-    else:
-        damaged["content"].update(kind="error", error_class="ValueError")
-        damaged["content"].pop("snapshot")
-    damaged["observation_id"] = hashlib.sha256(canonical(damaged["content"]).encode()).hexdigest()
-    docs.append(damaged)
+
+    def make_damaged(src):
+        d = copy.deepcopy(src)
+        if damage == "mixed_version":
+            d["content"]["profile_version"] = "other"
+        elif damage == "mixed_digest":
+            d["content"]["profile_digest"] = "a" * 64
+            d["content"]["code_generation"] = "match_profiles_v1"
+        elif damage == "conflict":
+            d["content"]["snapshot"]["ball"] = [-20, 0]
+        else:
+            d["content"].update(kind="error", error_class="ValueError")
+            d["content"].pop("snapshot")
+        d["observation_id"] = hashlib.sha256(canonical(d["content"]).encode()).hexdigest()
+        return d
+
+    # Corrupt one doc from each of two matches; only the third qualifies → 1 < 2 → None.
+    docs.append(make_damaged(docs[0]))   # damages match 0
+    docs.append(make_damaged(docs[5]))   # damages match 1
     assert propose(Profile(), docs) is None
 
 

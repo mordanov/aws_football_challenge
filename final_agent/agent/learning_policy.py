@@ -88,7 +88,7 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
         if len(exposed) >= 5 and len(exposed) / len(frames) >= 0.2:
             supporting.append(match)
     matches = tuple(sorted(set(supporting)))
-    if len(matches) < 3 or profile.settings.press_radius <= 12:
+    if len(matches) < 2 or profile.settings.press_radius <= 12:
         return None
     evidence_digest = hashlib.sha256(canonical(sorted(unique)).encode()).hexdigest()
     settings = replace(

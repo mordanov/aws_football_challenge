@@ -181,7 +181,7 @@ class TacticalRegressions(unittest.TestCase):
         actions = [decide(after, pid).command for pid in range(5)]
         self.assertEqual(sum(c["commandType"] == "PRESS_BALL" for c in actions), 1)
 
-        raw = edit(payload(owner=(0, 3), ball=(24, -5), pid=3), lambda s: position(s, 0, 3, 24, -5))
+        raw = edit(payload(owner=(0, 3), ball=(22, -5), pid=3), lambda s: position(s, 0, 3, 22, -5))
         before, _ = decode(raw)
         after, _ = decode(edit(raw, lambda s: s.update(coachInstruction="shoot_on_sight")))
         self.assertNotEqual(decide(before, 3).command["commandType"], "SHOOT")
