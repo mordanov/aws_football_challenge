@@ -181,6 +181,12 @@ class Runtime:
                 "assignments": decision.assignments,
                 "rush": (decision.assignments or {}).get("rush", 0),
                 "stage": (decision.assignments or {}).get("stage", 0),
+                "role": (decision.assignments or {}).get("role", "none"),
+                "fsep": (decision.assignments or {}).get("fsep", 0.0),
+                "lb": (decision.assignments or {}).get("lb", 0),
+                "cov": (decision.assignments or {}).get("cov", 0),
+                "cp": (decision.assignments or {}).get("cp", 0),
+                "gkd": (decision.assignments or {}).get("gkd"),
                 "latency_ms": round((time.perf_counter() - start) * 1000, 3),
                 "learning_context": "identified"
                 if self.match_id and self.opponent_id

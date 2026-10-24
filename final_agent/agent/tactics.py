@@ -175,30 +175,30 @@ def assignments(snapshot: Snapshot, settings: Settings = DEFAULT_SETTINGS) -> di
                 cy = presser_p.y + 6.0 * uy
                 cy = max(presser_p.y - 4.0, min(presser_p.y + 4.0, cy))
                 cover_pos = (cx, cy)
-    # §8 FWD_ROLES: assign link/runner to players 3 and 4
+    # §8 FWD_ROLES: assign link/runner to players 3 and 4; §9 fsep telemetry
     fwd3_role = "none"
     fwd4_role = "none"
-    if _int_env("FWD_ROLES", 1):
-        p3 = next((p for p in s.ours if p.id == 3), None)
-        p4 = next((p for p in s.ours if p.id == 4), None)
-        if p3 is not None and p4 is not None:
-            carrier_id = s.owner[1] if s.owner is not None and s.owner[0] == s.team else None
-            if carrier_id == 3:
-                fwd3_role, fwd4_role = "carrier", "runner"
-            elif carrier_id == 4:
-                fwd3_role, fwd4_role = "runner", "carrier"
+    p3 = next((p for p in s.ours if p.id == 3), None)
+    p4 = next((p for p in s.ours if p.id == 4), None)
+    fsep = round(distance(point(p3), point(p4)), 1) if (p3 and p4) else 0.0
+    if _int_env("FWD_ROLES", 1) and p3 is not None and p4 is not None:
+        carrier_id = s.owner[1] if s.owner is not None and s.owner[0] == s.team else None
+        if carrier_id == 3:
+            fwd3_role, fwd4_role = "carrier", "runner"
+        elif carrier_id == 4:
+            fwd3_role, fwd4_role = "runner", "carrier"
+        else:
+            # pid3 has 3m runner bias: subtract 3 from its effective distance
+            dist3_adj = distance(point(p3), s.ball) - 3.0
+            dist4_adj = distance(point(p4), s.ball)
+            if dist3_adj >= dist4_adj:
+                fwd3_role, fwd4_role = "link", "runner"
             else:
-                # pid3 has 3m runner bias: subtract 3 from its effective distance
-                dist3_adj = distance(point(p3), s.ball) - 3.0
-                dist4_adj = distance(point(p4), s.ball)
-                if dist3_adj >= dist4_adj:
-                    fwd3_role, fwd4_role = "link", "runner"
-                else:
-                    fwd3_role, fwd4_role = "runner", "link"
+                fwd3_role, fwd4_role = "runner", "link"
     return {
         "presser": presser, "cover": cover, "interceptor": interceptor, "marks": marks,
         "presser2": presser2, "cover_pos": cover_pos,
-        "fwd3_role": fwd3_role, "fwd4_role": fwd4_role,
+        "fwd3_role": fwd3_role, "fwd4_role": fwd4_role, "fsep": fsep,
     }
 
 
