@@ -10,7 +10,7 @@ from .model import DEFAULT_STYLE, Profile, Settings, Style
 from .protocol import number
 
 BOUNDS = {
-    "pass_margin": (2.5, 4.5),
+    "pass_margin": (1.5, 4.5),
     "shot_range": (20.0, 34.0),
     "press_radius": (12.0, 30.0),
     "support_width": (10.0, 22.0),
