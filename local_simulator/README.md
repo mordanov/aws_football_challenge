@@ -1,69 +1,99 @@
 # Local football lab
 
-Current milestone: **M5 — tactical-profile evolution**. Bounded Gaussian
-parameter search over redesign_4's four tactical settings, evaluated against
-four frozen opponents, with selection gating, final-test lock, and paired
-bootstrap promotion decision.
+Offline simulator for running football matches between `football_agent` instances.
+Use it to test tactic changes, run self-play matches, and evolve tactical profiles.
 
-Requires Python 3.11+. Run from `local_simulator/`.
+Requires Python 3.11+. Run all commands from `local_simulator/`.
+
+## Setup
 
 ```sh
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -e '.[dev]'
-.venv/bin/python -m playwright install chromium
-.venv/bin/python -m football_lab --seed 7 --output local/wiring.json
 ```
 
-The command invokes two trusted trivial subprocesses and records unchanged
-positions plus one hardcoded next frame. It prints the saved artifact path only
-after successful publication. Existing artifacts are never overwritten.
-Seeds must be integers from 0 through 4294967295.
+## Run a single match
 
-To view, run the following command and keep that terminal open:
+Two `football_agent` instances play each other (seed 7, team 0 vs team 1):
 
 ```sh
-.venv/bin/python -m http.server 8000 --bind 127.0.0.1 \
-  --directory src/football_lab/viewer
+PYTHONPATH=src python3 -m football_lab --seed 7 --output local/match.json
 ```
 
-Open http://127.0.0.1:8000/ and choose `local/wiring.json` in the file picker.
-The artifact stays in the browser; no upload or cloud service is used.
-Stop the server with Ctrl-C when finished.
+Seeds are integers 0–4294967295. The command writes a replay JSON to `local/match.json`.
+
+## View a replay
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m ruff check .
-.venv/bin/python -m ruff format --check .
-.venv/bin/python -m mypy
+python3 -m http.server 8000 --bind 127.0.0.1 --directory src/football_lab/viewer
 ```
 
-The development browser is required for the full acceptance suite. A browser
-installation failure is not a successful or skipped acceptance check.
+Open http://127.0.0.1:8000/ and load `local/match.json` in the file picker.
 
-Run a profile evolution experiment:
+## Run a campaign (round-robin)
+
+Multiple seeds, results aggregated into standings:
 
 ```sh
-python -m football_lab evolve init \
+PYTHONPATH=src python3 -m football_lab campaign init \
+  --entrants football_agent_v1 \
+  --blocks 20 --seed-pool-start 1000 \
+  --output local/campaign/manifest.json
+
+PYTHONPATH=src python3 -m football_lab campaign run \
+  --manifest local/campaign/manifest.json \
+  --replays local/campaign/replays
+
+PYTHONPATH=src python3 -m football_lab campaign report \
+  --manifest local/campaign/manifest.json \
+  --json local/campaign/report.json
+```
+
+## Run a tactical profile evolution experiment
+
+Bounded search over the four tactical parameters (`pass_margin`, `shot_range`,
+`press_radius`, `support_width`) playing `football_agent_v1` against itself:
+
+```sh
+# 1. You need a stage-1 manifest first (run a campaign with --blocks 2 and save it):
+PYTHONPATH=src python3 -m football_lab campaign init \
+  --entrants football_agent_v1 --blocks 2 --seed-pool-start 0 \
+  --output local/stage1/manifest.json
+PYTHONPATH=src python3 -m football_lab campaign run \
+  --manifest local/stage1/manifest.json
+
+# 2. Init and run the evolution experiment:
+PYTHONPATH=src python3 -m football_lab evolve init \
   --dir local/exp1 \
   --stage1-manifest local/stage1/manifest.json \
   --experiment-seed 42
 
-python -m football_lab evolve run --dir local/exp1
-python -m football_lab evolve report --dir local/exp1
+PYTHONPATH=src python3 -m football_lab evolve run --dir local/exp1
+PYTHONPATH=src python3 -m football_lab evolve report --dir local/exp1
 ```
 
-See `docs/m5-evolution.md` for full protocol details.
+See `docs/m5-evolution.md` for the full protocol.
 
-Run a rules v2 cross campaign (profile variants + scripted coach):
+## Tests
 
 ```sh
-python -m football_lab campaign init --rules v2 --blocks 20 --seed-pool-start 5000 \
-  --challengers r4v2_balanced_none,r4v2_balanced_rules --pool initial_idea_v1,redesign_4_v1 \
-  --output local/r4v2/a/manifest.json
-python -m football_lab campaign run --manifest local/r4v2/a/manifest.json \
-  --replays local/r4v2/a/replays --discard-replays
-python -m football_lab campaign report --manifest local/r4v2/a/manifest.json \
-  --json local/r4v2/a/report.json --baseline r4v2_balanced_none
+PYTHONPATH=src pytest tests/ --ignore=tests/test_viewer.py
 ```
 
-See `docs/rules-v2.md` for the foul model and its assumptions.
+(`test_viewer.py` requires playwright — skip it unless you install it separately.)
+
+Linters:
+
+```sh
+python3 -m ruff check src/
+python3 -m mypy src/football_lab/evolution/ --ignore-missing-imports
+```
+
+## Entrants
+
+| ID | Source | Notes |
+|----|--------|-------|
+| `football_agent_v1` | `football_agent/` | The main agent; used for all self-play |
+
+The entrant shim is at `entrants/football_agent/shim.py`. It wraps `football_agent`'s
+`Runtime` and serves the simulator's stdin/stdout protocol.
