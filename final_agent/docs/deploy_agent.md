@@ -215,6 +215,12 @@ Capture output in an ignored local log and inspect the exit status.
 **Gate:** deployment succeeds for the intended existing project. A printed ARN
 or a successful CLI exit alone is not final verification.
 
+**Optional: enable live coaching.** To allow the Nova Pro `CoachLoop` to adjust
+parameters mid-match, set `AFC_LIVE_COACH_BUCKET=<bucket>` on all five runtimes.
+The value must match the bucket passed to `CoachLoop`. `AFC_MATCH_ID` must also be
+set (or injected per-session) for the S3 key lookup to activate. Omit both to
+deploy without live coaching.
+
 ## 7. Verify serving and evaluator parity before enabling learning
 
 For every runtime:
