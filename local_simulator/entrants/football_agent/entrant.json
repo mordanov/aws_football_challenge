@@ -1,0 +1,9 @@
+{
+  "id": "football_agent_v1",
+  "source_name": "football_agent",
+  "topology": "per_player",
+  "shim": "entrants/football_agent/shim.py",
+  "entrant_hash": "8b427e6c8341a21b32bf3400e351ae9cfebcc61f11ce6dae9aa4c7dc1869cf02",
+  "rules_version": "v1",
+  "track": "patched"
+}

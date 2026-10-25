@@ -13,8 +13,8 @@ from .contracts import BlockResult, EvaluationError, PoolSpec, Settings
 from .mutation import profile_hash
 from .pools import pool_seed
 
-PROFILE_SHIM = "entrants/redesign_4/profile_shim.py"
-INCUMBENT_ID = "redesign_4_v1"
+PROFILE_SHIM = "entrants/football_agent/profile_shim.py"
+INCUMBENT_ID = "football_agent_v1"
 
 
 def _points(own: int, other: int) -> int:

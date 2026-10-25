@@ -1,8 +1,0 @@
-{
-  "match_id": "example-match",
-  "opponent_id": "example-opponent",
-  "team_id": 0,
-  "played_at": "2026-10-20T00:00:00+00:00",
-  "complete": false,
-  "result": null
-}

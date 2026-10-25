@@ -7,8 +7,8 @@ on:
     branches: ["main"]
 
 jobs:
-  final-agent-deployment:
-    name: Final agent deployment binding
+  agent-deployment:
+    name: Agent deployment binding
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,14 +19,14 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: final_agent/deploy/agentcore/cdk/package-lock.json
+          cache-dependency-path: football_agent/deploy/agentcore/cdk/package-lock.json
       - name: Stage standalone serving code
-        working-directory: final_agent
+        working-directory: football_agent
         run: python deploy/deploy.py --stage-only
       - name: Install required Python bundler
         run: python -m pip install uv
       - name: Verify five-player CDK bindings
-        working-directory: final_agent/deploy/agentcore/cdk
+        working-directory: football_agent/deploy/agentcore/cdk
         run: npm ci --no-fund --no-audit && npm test
 
   unit-tests:
@@ -55,13 +55,13 @@ jobs:
             --ignore=tests/test_viewer.py \
             -v --tb=short
 
-  redesign4-tests:
-    name: Agent tests (final_agent, Python 3.12)
+  agent-tests:
+    name: Agent tests (Python 3.12)
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: final_agent
+        working-directory: football_agent
 
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
   deploy:
     name: Deploy to AgentCore
     runs-on: ubuntu-latest
-    needs: [final-agent-deployment, unit-tests, redesign4-tests]
+    needs: [agent-deployment, unit-tests, agent-tests]
     # Only deploy on direct push to main, not on PRs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -105,7 +105,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: final_agent/deploy/agentcore/cdk/package-lock.json
+          cache-dependency-path: football_agent/deploy/agentcore/cdk/package-lock.json
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -121,11 +121,11 @@ jobs:
           npm install -g @aws/agentcore
 
       - name: Install Python deps
-        working-directory: final_agent
+        working-directory: football_agent
         run: pip install -e ".[learning]"
 
       - name: Deploy all five runtimes
-        working-directory: final_agent
+        working-directory: football_agent
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
