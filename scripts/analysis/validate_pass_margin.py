@@ -3,7 +3,7 @@ Validate that pass_margin=2.0 enables passes blocked by pass_margin=3.0.
 Tests the specific scenario observed in matches: opponent 2.5m from receiver.
 """
 import sys, os
-sys.path.insert(0, '/Users/aleksandr/Local/EPAM/aws_football_challenge/.worktrees/final-agent-s3/final_agent')
+sys.path.insert(0, '/Users/aleksandr/Local/EPAM/aws_football_challenge/.worktrees/final-agent-s3/football_agent')
 
 from agent.model import Player, Settings, Style, Snapshot, DEFAULT_STYLE
 from agent.tactics import carrier_options, decide
