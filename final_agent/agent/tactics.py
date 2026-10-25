@@ -478,7 +478,12 @@ def _tactical_context(s: Snapshot) -> tuple[int, int]:
     our_score = s.score[s.team]
     opp_score = s.score[1 - s.team]
     losing = opp_score > our_score
-    ball_not_at_opp = s.owner is None or s.owner[0] == s.team
+    # Rush requires free ball to be near/past center: if ball is deep in our half (≥10m)
+    # and unclaimed, rushing players into attack leaves defense exposed.
+    ball_in_front = s.ball[0] * s.direction >= -10
+    ball_not_at_opp = (s.owner is None and ball_in_front) or (
+        s.owner is not None and s.owner[0] == s.team
+    )
     rush = int(
         bool(_int_env("RUSH_ENABLED", 1))
         and s.clock < rush_s
