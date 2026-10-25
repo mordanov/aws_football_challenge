@@ -156,7 +156,7 @@ def prepare_scouting(
                 if s.direction * next(p for p in s.opponents if p.id == 0).x <= 30
             ]
         elif metric == "opponent_possession_dominance":
-            positives = [s.tick for s in samples if s.owner[0] != s.team]
+            positives = [s.tick for s in samples if s.owner is not None and s.owner[0] != s.team]
         else:  # all_players_attacking
             positives = [s.tick for s in samples if all(s.direction * p.x < 0 for p in s.opponents)]
         observation = ScoutingObservation(

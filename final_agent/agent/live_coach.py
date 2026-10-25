@@ -189,8 +189,8 @@ class CoachLoop:
     ):
         import datetime
 
-        import boto3  # type: ignore[import]
-        from botocore.config import Config  # type: ignore[import]
+        import boto3
+        from botocore.config import Config
 
         self.match_id = match_id
         self.team_side = team_side
