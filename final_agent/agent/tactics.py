@@ -469,18 +469,24 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-def _tactical_context(s: Snapshot) -> tuple[int, int]:
-    """(rush: 0/1, stage: 0/1/2). Pure function of snapshot + env vars; no side effects."""
-    rush_s = _int_env("RUSH_S", 15)
-    desperate_s = _int_env("DESPERATE_S", 30)
+def _tactical_context(s: Snapshot, live: dict | None = None) -> tuple[int, int]:
+    """(rush: 0/1, stage: 0/1/2). Pure function of snapshot + env vars + live overrides."""
+    _live = live or {}
+    rush_s = _live.get("rush_s", _int_env("RUSH_S", 15))
+    desperate_s = _live.get("desperate_s", _int_env("DESPERATE_S", 30))
     gk_up_s = _int_env("GK_UP_S", 10)
     remaining = s.duration - s.clock
     our_score = s.score[s.team]
     opp_score = s.score[1 - s.team]
     losing = opp_score > our_score
-    ball_not_at_opp = s.owner is None or s.owner[0] == s.team
+    # Rush requires free ball to be near/past center: if ball is deep in our half (≥10m)
+    # and unclaimed, rushing players into attack leaves defense exposed.
+    ball_in_front = s.ball[0] * s.direction >= -10
+    ball_not_at_opp = (s.owner is None and ball_in_front) or (
+        s.owner is not None and s.owner[0] == s.team
+    )
     rush = int(
-        bool(_int_env("RUSH_ENABLED", 1))
+        bool(_live.get("rush_enabled", _int_env("RUSH_ENABLED", 1)))
         and s.clock < rush_s
         and our_score == 0 and opp_score == 0
         and ball_not_at_opp
@@ -499,9 +505,19 @@ def decide(
     style: Style = DEFAULT_STYLE,
     *,
     max_move_x: float = 54.0,
+    live: dict | None = None,
 ) -> Decision:
+    if live:
+        kw = {}
+        if "press_radius" in live:
+            kw["press_radius"] = float(live["press_radius"])
+        if "support_width" in live:
+            kw["support_width"] = float(live["support_width"])
+        if kw:
+            from dataclasses import replace as _replace
+            settings = _replace(settings, **kw)
     s, p = snapshot, snapshot.player(player_id)
-    rush, stage = _tactical_context(s)
+    rush, stage = _tactical_context(s, live)
     plan = {**assignments(s, settings), "rush": rush, "stage": stage}
     # Per-player link/runner role for telemetry and positioning
     plan["role"] = plan.get("fwd3_role", "none") if player_id == 3 else (

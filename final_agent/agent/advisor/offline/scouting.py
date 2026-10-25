@@ -19,7 +19,7 @@ from .contracts import (
 )
 
 _MAX_SAMPLES = 256
-_Metric = Literal["keeper_advanced", "all_players_attacking"]
+_Metric = Literal["keeper_advanced", "all_players_attacking", "opponent_possession_dominance"]
 _HYPOTHESES: dict[_Metric, str] = {
     "keeper_advanced": (
         "Test quicker safe counterattacks when the opponent keeper is advanced; "
@@ -28,6 +28,10 @@ _HYPOTHESES: dict[_Metric, str] = {
     "all_players_attacking": (
         "Test a safe outlet after regaining possession against an all-player attack; "
         "retain defensive cover and compare against the unchanged profile."
+    ),
+    "opponent_possession_dominance": (
+        "Test a deeper defensive shape against opponents who control possession; "
+        "compare park_the_bus and balanced archetypes in possession-dominated matches."
     ),
 }
 _LIMITATIONS = (
@@ -138,22 +142,23 @@ def prepare_scouting(
     )
     claims = []
     for metric in _HYPOTHESES:
-        samples = (
-            observations
-            if metric == "keeper_advanced"
-            else [s for s in observations if s.owner is not None and s.owner[0] != s.team]
-        )
+        if metric == "keeper_advanced":
+            samples = observations
+        elif metric == "opponent_possession_dominance":
+            samples = [s for s in observations if s.owner is not None]
+        else:  # all_players_attacking
+            samples = [s for s in observations if s.owner is not None and s.owner[0] != s.team]
         if not samples:
             continue
-        positives = [
-            s.tick
-            for s in samples
-            if (
-                s.direction * next(p for p in s.opponents if p.id == 0).x <= 30
-                if metric == "keeper_advanced"
-                else all(s.direction * p.x < 0 for p in s.opponents)
-            )
-        ]
+        if metric == "keeper_advanced":
+            positives = [
+                s.tick for s in samples
+                if s.direction * next(p for p in s.opponents if p.id == 0).x <= 30
+            ]
+        elif metric == "opponent_possession_dominance":
+            positives = [s.tick for s in samples if s.owner is not None and s.owner[0] != s.team]
+        else:  # all_players_attacking
+            positives = [s.tick for s in samples if all(s.direction * p.x < 0 for p in s.opponents)]
         observation = ScoutingObservation(
             metric=metric,
             samples=len(samples),

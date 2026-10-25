@@ -93,13 +93,33 @@ def main() -> None:
             team_id=team_id,
             owner_account=os.environ["AFC_OWNER_ACCOUNT"],
         )
+    live_settings = None
+    live_bucket = os.getenv("AFC_LIVE_COACH_BUCKET")
+    live_match_id = os.getenv("AFC_MATCH_ID")
+    if live_bucket and live_match_id:
+        import boto3
+        from botocore.config import Config as _Config
+
+        from .live_settings import LiveSettingsCache
+
+        live_settings = LiveSettingsCache(
+            boto3.client(
+                "s3",
+                config=_Config(
+                    connect_timeout=0.5, read_timeout=1.0, retries={"total_max_attempts": 1}
+                ),
+            ),
+            live_bucket,
+            live_match_id,
+        )
     runtime = Runtime(
         load_profile(path) if path else Profile(),
-        match_id=os.getenv("AFC_MATCH_ID"),
+        match_id=live_match_id,
         opponent_id=os.getenv("AFC_OPPONENT_ID"),
         stamina_scale=float(os.getenv("AFC_STAMINA_SCALE", "1")),
         competition_adapter=competition == "1",
         profile_selector=selector,
+        live_settings=live_settings,
     )
     try:
         create_app(runtime, None if seat is None else int(seat)).run()

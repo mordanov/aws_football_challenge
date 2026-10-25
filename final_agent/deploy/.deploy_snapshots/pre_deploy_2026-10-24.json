@@ -1,0 +1,14 @@
+{
+  "snapshot_time": "2026-10-24",
+  "commit": "3ab82c5",
+  "rollout_path": "compatible_same_namespace",
+  "runtimes": [
+    {"name": "r4_gk",   "version": "11", "status": "READY", "arn": "arn:aws:bedrock-agentcore:us-east-1:559922262840:runtime/Redesign4_default_r4_gk-nxusigFggA",   "maxLifetime": 28800},
+    {"name": "r4_def",  "version": "11", "status": "READY", "arn": "arn:aws:bedrock-agentcore:us-east-1:559922262840:runtime/Redesign4_default_r4_def-t1Kh1c7eeZ",  "maxLifetime": 28800},
+    {"name": "r4_mid",  "version": "11", "status": "READY", "arn": "arn:aws:bedrock-agentcore:us-east-1:559922262840:runtime/Redesign4_default_r4_mid-Nq5Hfb67re",  "maxLifetime": 28800},
+    {"name": "r4_fwd1", "version": "11", "status": "READY", "arn": "arn:aws:bedrock-agentcore:us-east-1:559922262840:runtime/Redesign4_default_r4_fwd1-7vRt5lCgqV", "maxLifetime": 28800},
+    {"name": "r4_fwd2", "version": "11", "status": "READY", "arn": "arn:aws:bedrock-agentcore:us-east-1:559922262840:runtime/Redesign4_default_r4_fwd2-syVGGx7Rzk", "maxLifetime": 28800}
+  ],
+  "team_id": "aleksalotl_tactics_v3",
+  "profile_bucket": "cdk-hnb659fds-assets-559922262840-us-east-1"
+}

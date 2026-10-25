@@ -118,6 +118,9 @@ shape is **not** evidence that a server accepted or executed it.
 
 ## Offline coaching
 
+For an explanation of the deployed adaptation loop, its safeguards and current
+limitations, see [How the football agents learn](docs/self_learning.md).
+
 For opt-in automatic provisional Memory collection and match-wide profile
 pinning, see [automatic shared-memory learning](docs/automatic_learning.md).
 The deployed workshop variant uses S3 coordination, CloudWatch-triggered Lambda
@@ -262,6 +265,41 @@ python -m agent.advisor.offline run \
 Exit codes: 0 = proposal, 2 = service/validation failure, 3 = rejected by evaluator.
 Player runtimes (`r4_gk`/`r4_def`/`r4_mid`/`r4_fwd1`/`r4_fwd2`) are never touched.
 
+## Live in-match coach (Nova Pro)
+
+A lightweight loop that runs **alongside a live match** and adjusts tactical
+parameters in real time without redeploying. It reads CloudWatch decision logs,
+calls Nova Pro (`us.amazon.nova-pro-v1:0`) every 25 s, and writes a JSON override
+to S3. Each player runtime reads that key every 10 s and applies the changes to
+the next tick.
+
+**Start the coach manually when the match begins:**
+
+```sh
+python -c "
+from agent.live_coach import CoachLoop
+CoachLoop(
+    match_id='<match-uuid>',
+    team_side='team0',   # or team1
+    bucket='<AFC_LIVE_COACH_BUCKET>',
+).run()
+"
+```
+
+**Controllable parameters:**
+
+| Parameter | Range | Default | Effect |
+|---|---|---|---|
+| `rush_s` | 0–20 s | 15 | Rush tactic window at kick-off |
+| `rush_enabled` | 0/1 | 1 | Disable rush entirely |
+| `press_radius` | 15–28 m | 20 | Distance to trigger pressing |
+| `desperate_s` | 20–50 s | 30 | Remaining time to enter desperate-attack mode |
+| `support_width` | 5–20 m | 12 | Lateral spread of support players |
+
+Set `AFC_LIVE_COACH_BUCKET` (and ensure `AFC_MATCH_ID` is set) on each AgentCore
+runtime for the advice to be read automatically. Omitting the bucket disables live
+coaching with no code change.
+
 ## Advisor (optional)
 
 An off-tick LangChain helper. It is never imported by the live runtime.
@@ -290,14 +328,14 @@ string, the same framing as the official sample (`yield json.dumps(commands)`).
 | Environment variable | Behavior |
 |---|---|
 | `AFC_PROFILE` | Optional path to validated exported JSON; loaded once at startup; invalid/missing supplied file fails startup |
-| `AFC_MATCH_ID` | Optional trusted single-match context for telemetry only; omit if autoplay match binding is not established |
+| `AFC_MATCH_ID` | Optional trusted single-match context for telemetry and live-coach S3 key; omit if autoplay match binding is not established |
 | `AFC_OPPONENT_ID` | Optional trusted opponent identity for startup profile selection and telemetry |
 | `AFC_STAMINA_SCALE` | `1` (local default) or `100` (set by `deploy/` for AWS percentage inputs); invalid values fail startup |
 | `AFC_COMPETITION_ADAPTER` | `0` (local default) or `1` (set by `deploy/`): recognize live-match SDK session IDs and convert compact geometry/fractional stamina; invalid values fail startup |
 | `AFC_PLAYER_ID` | Optional seat `0`-`4` used **only** when an invocation omits `myPlayers`; explicit routing always wins. Set per runtime by `deploy/` |
+| `AFC_LIVE_COACH_BUCKET` | Optional S3 bucket name. When set together with `AFC_MATCH_ID`, each runtime reads `final-agent-learning/live-coach/{match_id}.json` every 10 s and applies any parameter overrides to the current tick. Omit to run without live coaching. |
 
-There is intentionally no `LLM_ENABLED`, S3 bucket, Bedrock model ID or
-credential environment setting in this implementation. Do not reuse pinned
+Do not reuse pinned
 match/opponent context across unrelated autoplay matches. All five runtimes must
 load the same version and opponent context before a match; updating individual
 endpoints mid-match breaks the shared-plan prerequisite.

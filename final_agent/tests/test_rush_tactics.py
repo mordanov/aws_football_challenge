@@ -58,6 +58,29 @@ class TacticalContextTest(unittest.TestCase):
         rush, _ = _tactical_context(s)
         self.assertEqual(rush, 0)
 
+    def test_rush_off_when_free_ball_deep_in_own_half(self):
+        """Rush must not activate when ball is free but deep in our own half (≥10m from center).
+
+        Regression: free ball at x=+26 for team1 (own half) was triggering rush because
+        ball_not_at_opp only checked owner, not ball position. Rush then sent players toward
+        opponent territory while the opponent had a clear path to our goal — causing early goals.
+        """
+        for team in (0, 1):
+            # ball=(-26, 0) in snap120 coords → actual x = m*(-26); for team1 m=-1 → x=+26 (own half)
+            # for team0 m=+1 → x=-26 (also own half). Both cases should suppress rush.
+            s = snap120(team=team, clock=7.0, score=(0, 0), owner=None, ball=(-26, 0))
+            rush, _ = _tactical_context(s)
+            with self.subTest(team=team):
+                self.assertEqual(rush, 0, f"rush should be off for free ball deep in own half (team={team})")
+
+    def test_rush_still_on_when_free_ball_near_center(self):
+        """Rush activates when ball is free near or past center line."""
+        for team in (0, 1):
+            s = snap120(team=team, clock=5.0, score=(0, 0), owner=None, ball=(5, 0))
+            rush, _ = _tactical_context(s)
+            with self.subTest(team=team):
+                self.assertEqual(rush, 1, f"rush should activate for free ball in opponent half (team={team})")
+
     def test_rush_disabled_by_env(self):
         s = snap120(clock=5.0, score=(0, 0), owner=(0, 2))
         with unittest.mock.patch.dict(os.environ, {"RUSH_ENABLED": "0"}):
