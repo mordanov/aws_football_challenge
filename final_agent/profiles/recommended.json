@@ -2,7 +2,7 @@
   "coach_policy": "none",
   "opponents": null,
   "settings": {
-    "pass_margin": 3.0,
+    "pass_margin": 2.0,
     "press_radius": 22.0,
     "shot_range": 32.0,
     "support_width": 15.0
