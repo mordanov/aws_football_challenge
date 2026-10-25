@@ -21,7 +21,7 @@ from .selection import FinalTestLock, FinalTestLockError, select_finalist
 
 _ENTRANTS_ROOT = Path(__file__).resolve().parents[3] / "entrants"
 
-OPPONENTS: list[str] = []  # populated once football_agent entrant is registered
+OPPONENTS: list[str] = ["football_agent_v1"]
 
 
 def _incumbent_settings() -> Settings:

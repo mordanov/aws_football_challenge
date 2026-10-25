@@ -1,4 +1,4 @@
-"""Bounds and validation taken from redesign_4's frozen profile validator."""
+"""Bounds and validation from football_agent's profile module."""
 from __future__ import annotations
 
 import importlib.util
@@ -8,8 +8,8 @@ from types import ModuleType
 
 from .contracts import Bounds, Settings
 
-AGENT_DIR = Path(__file__).resolve().parents[3] / "entrants" / "redesign_4" / "agent"
-_PKG = "_redesign4_agent"
+AGENT_DIR = Path(__file__).resolve().parents[4] / "football_agent" / "agent"
+_PKG = "_football_agent"
 
 
 def _load() -> ModuleType:

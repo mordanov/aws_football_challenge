@@ -182,3 +182,31 @@ def test_process_crash(tmp_path):
         with pytest.raises(RunnerError, match="crash|exit|EOF"):
             r.decide(_make_state())
 
+
+# ── Integration test: real football_agent entrant ─────────────────────────────
+
+def test_football_agent_one_tick():
+    """football_agent shim returns 5 valid commands for one game tick."""
+    from pathlib import Path
+
+    entrant_dir = (
+        Path(__file__).resolve().parents[1] / "entrants" / "football_agent"
+    )
+    spec: EntrantSpec = {
+        "id": "football_agent_v1",
+        "source_name": "football_agent",
+        "topology": "per_player",
+        "shim": str(entrant_dir / "shim.py"),
+        "entrant_hash": "0" * 64,
+        "rules_version": "v1",
+        "track": "patched",
+    }
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        with TeamRunner(spec, team_id=0, budget=_stub_budget(), work_dir=Path(td)) as runner:
+            cmds = runner.decide(_make_state())
+    assert len(cmds) == 5
+    assert all(c["team_id"] == 0 for c in cmds)
+    assert all("command_type" in c for c in cmds)
+    assert all("player_id" in c for c in cmds)
+

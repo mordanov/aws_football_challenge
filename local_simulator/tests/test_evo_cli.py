@@ -18,7 +18,7 @@ def test_init_records_bounds_pools_hashes_and_disjointness(tmp_path, monkeypatch
     m = json.loads((_init(tmp_path, monkeypatch) / "manifest.json").read_text())
     assert set(m["bounds"]) == {"pass_margin", "shot_range", "press_radius", "support_width"}
     assert [m["pools"][k]["blocks"] for k in ("training", "selection", "final")] == [8, 20, 100]
-    assert len(m["frozen_hashes"]) == 5
+    assert len(m["frozen_hashes"]) == 1  # one self-play opponent: football_agent_v1
     assert m["population"] == 12 and m["generations"] == 10
 
 
