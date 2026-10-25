@@ -139,14 +139,17 @@ class S3Reader:
                     if cv != pv and cv is not None and pv is not None:
                         changes[field] = {"before": pv, "after": cv}
 
-            # Status: head generation is "promoted" (it IS the active one)
-            if i == 0:
+            # Head with a predecessor was actually promoted; baseline with no predecessor
+            # defaults to "no_attempt" unless a results doc says otherwise.
+            if i == 0 and gen_doc.get("predecessor") is not None:
                 status = "promoted"
                 reject_reason = None
             else:
                 result_doc = self._get(self._reg + f"results/{gen_num}.json")
                 if result_doc is None:
-                    status = "no_attempt" if i == len(chain) - 1 else "pending"
+                    # no predecessor = original baseline, never attempted yet
+                    no_pred = gen_doc.get("predecessor") is None
+                    status = "no_attempt" if (no_pred or i == len(chain) - 1) else "pending"
                     reject_reason = None
                 else:
                     status = result_doc.get("status", "unknown")
