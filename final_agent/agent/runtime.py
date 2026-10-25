@@ -5,6 +5,10 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import replace
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .advisor.in_match import AdviceEvent, InMatchAdvisor
 
 from .coach import choose_preset
 from .model import Profile
@@ -39,6 +43,8 @@ class Runtime:
         emit: Callable[[dict], None] | None = None,
         profile_selector: ProfileSelector | None = None,
         live_settings=None,
+        llm: Any = None,
+        advice_flush: "Callable[[list[AdviceEvent]], None] | None" = None,
     ):
         self.profile = parse_profile((profile if profile is not None else Profile()).to_dict())
         self.settings = effective_settings(self.profile, opponent_id)
@@ -51,6 +57,12 @@ class Runtime:
         self.profile_selector = profile_selector
         self._live_settings = live_settings
         self._log = DecisionLog(emit if emit is not None else emit_json)
+        self._advisor: InMatchAdvisor | None = None
+        self._advice_flush = advice_flush
+        self._advisor_match_id: str | None = None
+        if llm is not None:
+            from .advisor.in_match import InMatchAdvisor
+            self._advisor = InMatchAdvisor(llm, str(match_id or ""))
 
     @property
     def log_status(self) -> dict:
@@ -119,6 +131,16 @@ class Runtime:
             )
             if profile.coach_policy == "rules":
                 snapshot = replace(snapshot, coach=choose_preset(snapshot))
+
+            # Per-match reset and in-match advisor
+            current_match = match.group(1) if match is not None else None
+            if (self._advisor is not None and current_match is not None
+                    and current_match != self._advisor_match_id):
+                self._advisor.reset(current_match)
+                self._advisor_match_id = current_match
+            if self._advisor is not None:
+                self._advisor.maybe_advise(snapshot)
+
             live = self._live_settings.get() if self._live_settings is not None else None
             decision = decide(
                 snapshot,
@@ -127,11 +149,14 @@ class Runtime:
                 profile.style,
                 max_move_x=MATCH_X_LIMIT * MATCH_COORDINATE_SCALE if compact else 54.0,
                 live=live,
+                advice=self._advisor.current_mode() if self._advisor is not None else None,
             )
             selected = decision.command
             if compact:
                 selected = match_command(selected)
             validate_command(selected)
+            if self._advisor is not None and snapshot.clock >= snapshot.duration - 1:
+                self._advisor.flush_advice_log(self._advice_flush)
         except (ValueError, KeyError, TypeError, StopIteration, ArithmeticError) as exc:
             selected = {
                 "commandType": "SET_STANCE",

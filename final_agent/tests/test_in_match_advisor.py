@@ -295,3 +295,91 @@ class TestCallLlm:
         adv.reset("m1")
         result = adv._call_llm([])
         assert result.mode == "normal"
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Runtime wiring
+# ---------------------------------------------------------------------------
+import json as _json
+
+
+class FakeAdvisor:
+    """Stateless fake that returns a fixed TacticalAdvice on every tick."""
+    def __init__(self, advice: TacticalAdvice):
+        self._advice = advice
+        self.reset_calls: list = []
+        self.advise_calls: int = 0
+        self.flush_calls: list = []
+
+    def reset(self, match_id: str) -> None:
+        self.reset_calls.append(match_id)
+
+    def maybe_advise(self, s) -> None:
+        self.advise_calls += 1
+
+    def current_mode(self) -> TacticalAdvice:
+        return self._advice
+
+    def flush_advice_log(self, flush_fn) -> None:
+        self.flush_calls.append(flush_fn)
+        if flush_fn is not None:
+            flush_fn([])
+
+
+def _make_payload(team: int, pid: int, clock: float, duration: float = 120.0,
+                  score=(0, 0)) -> dict:
+    d = 1 if team == 0 else -1
+    # 5 positions per team; both teams share agentId_0..4 (different teamCode)
+    xs = [-50, -25, 0, 25, 25]
+    ys = [0, 0, 0, -10, 10]
+    players_raw = []
+    for tcode, sgn in (("HOME", d), ("away", -d)):
+        for j in range(5):
+            players_raw.append({
+                "agentId": f"agentId_{j}", "teamCode": tcode,
+                "position": {"x": sgn * xs[j], "y": ys[j]},
+                "velocity": {"x": 0, "y": 0}, "stamina": 0.9,
+            })
+    state = {
+        "tick": 5,
+        "gameTime": clock,
+        "matchDuration": duration,
+        "players": players_raw,
+        "score": {"home": score[0], "away": score[1]},
+        "ball": {"position": {"x": 0.0, "y": 0.0}, "velocity": {"x": 0, "y": 0}, "isFree": True},
+    }
+    return {"prompt": _json.dumps({"gameState": state, "teamId": team, "myPlayers": [pid]})}
+
+
+class TestRuntimeWiring:
+    def _runtime_with_fake(self, advice: TacticalAdvice):
+        from agent.runtime import Runtime
+        rt = Runtime()
+        fake = FakeAdvisor(advice)
+        rt._advisor = fake
+        return rt, fake
+
+    def test_maybe_advise_called_each_tick(self):
+        rt, fake = self._runtime_with_fake(
+            TacticalAdvice(mode="normal", def_x_fraction=0.0, gk_stays=False, rationale="x")
+        )
+        rt.handle(_make_payload(0, 1, clock=30.0))
+        assert fake.advise_calls == 1
+
+    def test_flush_called_on_last_tick(self):
+        rt, fake = self._runtime_with_fake(
+            TacticalAdvice(mode="normal", def_x_fraction=0.0, gk_stays=False, rationale="x")
+        )
+        flushed = []
+        rt._advice_flush = flushed.append
+        rt.handle(_make_payload(0, 1, clock=119.0, duration=120.0))
+        assert len(fake.flush_calls) == 1
+
+    def test_flush_not_called_mid_match(self):
+        rt, fake = self._runtime_with_fake(
+            TacticalAdvice(mode="normal", def_x_fraction=0.0, gk_stays=False, rationale="x")
+        )
+        flushed = []
+        rt._advice_flush = flushed.append
+        rt.handle(_make_payload(0, 1, clock=30.0, duration=120.0))
+        assert len(fake.flush_calls) == 0
