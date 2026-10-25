@@ -65,3 +65,87 @@ class TestExtractFeatures:
         f = _extract_features(s)
         expected = (0.9 + 0.8 + 0.7 + 0.6 + 0.5) / 5
         assert abs(f["avg_stamina"] - expected) < 0.01
+
+
+# ---------------------------------------------------------------------------
+# Task 2: InMatchAdvisor skeleton
+# ---------------------------------------------------------------------------
+from agent.advisor.in_match import InMatchAdvisor
+
+
+class TestInMatchAdvisor:
+    def _advisor(self):
+        return InMatchAdvisor(llm=None, team_id="test-team")
+
+    def test_default_mode_is_normal(self):
+        adv = self._advisor()
+        assert adv.current_mode().mode == "normal"
+
+    def test_trigger_fires_on_first_tick(self):
+        """First tick always fires: clock - (-inf) >= 20."""
+        adv = self._advisor()
+        adv.reset("m1")
+        calls = []
+        adv._call_llm = lambda feats: calls.append(feats) or adv._cache
+        adv.maybe_advise(_snap(clock=0.0))
+        assert len(calls) == 1
+
+    def test_trigger_fires_on_score_change(self):
+        adv = self._advisor()
+        adv.reset("m1")
+        calls = []
+        adv._call_llm = lambda feats: calls.append(feats) or adv._cache
+        adv.maybe_advise(_snap(clock=0.0))          # first trigger
+        adv.maybe_advise(_snap(clock=5.0))          # no trigger (too soon, score same)
+        adv.maybe_advise(_snap(clock=5.0, score=(1, 0)))  # score changed → trigger
+        assert len(calls) == 2
+
+    def test_no_double_trigger_when_both_conditions_met(self):
+        """Score change AND >=20 s: fire exactly once, not twice."""
+        adv = self._advisor()
+        adv.reset("m1")
+        calls = []
+        adv._call_llm = lambda feats: calls.append(feats) or adv._cache
+        adv.maybe_advise(_snap(clock=0.0))             # first
+        adv.maybe_advise(_snap(clock=25.0, score=(1, 0)))  # both conditions
+        assert len(calls) == 2
+
+    def test_trigger_fires_on_20s_elapsed(self):
+        adv = self._advisor()
+        adv.reset("m1")
+        calls = []
+        adv._call_llm = lambda feats: calls.append(feats) or adv._cache
+        adv.maybe_advise(_snap(clock=0.0))
+        adv.maybe_advise(_snap(clock=19.9))   # no trigger
+        adv.maybe_advise(_snap(clock=20.0))   # trigger (20.0 - 0.0 >= 20)
+        assert len(calls) == 2
+
+    def test_outcome_filled_on_next_advice(self):
+        """Previous event gets outcome when next advice fires >=20 s later."""
+        adv = self._advisor()
+        adv.reset("m1")
+        adv._call_llm = lambda feats: adv._cache
+        adv.maybe_advise(_snap(clock=0.0, score=(0, 0)))
+        assert adv._advice_log[0].outcome is None
+        adv.maybe_advise(_snap(clock=20.0, score=(1, 0)))
+        assert adv._advice_log[0].outcome is not None
+        assert adv._advice_log[0].outcome["score_delta"] == 1
+
+    def test_reset_clears_log_and_cache(self):
+        adv = self._advisor()
+        adv.reset("m1")
+        adv._call_llm = lambda feats: adv._cache
+        adv.maybe_advise(_snap(clock=0.0))
+        adv.reset("m2")
+        assert adv._advice_log == []
+        assert adv.current_mode().mode == "normal"
+
+    def test_flush_clears_log(self):
+        adv = self._advisor()
+        adv.reset("m1")
+        adv._call_llm = lambda feats: adv._cache
+        adv.maybe_advise(_snap(clock=0.0))
+        flushed = []
+        adv.flush_advice_log(flushed.append)
+        assert len(flushed) == 1
+        assert adv._advice_log == []   # cleared after flush
