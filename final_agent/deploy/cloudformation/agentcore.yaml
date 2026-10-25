@@ -1,0 +1,441 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "final-agent — 5 BedrockAgentCore runtimes (GK, DEF, MID, FWD1, FWD2)"
+
+Parameters:
+  AppName:
+    Type: String
+    Default: "FinalAgent"
+    AllowedPattern: "[A-Za-z0-9]{1,40}"
+    Description: "Application name prefix used in runtime names"
+
+  TeamId:
+    Type: String
+    AllowedPattern: "[A-Za-z0-9_-]{1,64}"
+    Description: "Team identifier — written into AFC_TEAM_ID env var"
+
+  ArtifactBucket:
+    Type: String
+    Description: "S3 bucket holding the agent code ZIP (created by storage stack)"
+
+  CodeS3Key:
+    Type: String
+    Description: "S3 key of the agent code ZIP, e.g. code/agent-v1.zip"
+
+  StaminaScale:
+    Type: Number
+    Default: 100
+
+  CompetitionAdapter:
+    Type: Number
+    Default: 1
+
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # Runtime log groups — created explicitly so learning.yaml subscription
+  # filters can reference them before the runtimes have run the first time.
+  # Naming: /aws/bedrock-agentcore/runtimes/<RuntimeName>-DEFAULT
+  # where DEFAULT comes from the AgentCore target name.
+  # ---------------------------------------------------------------------------
+
+  GkLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_gk-DEFAULT"
+      RetentionInDays: 30
+
+  DefLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_def-DEFAULT"
+      RetentionInDays: 30
+
+  MidLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_mid-DEFAULT"
+      RetentionInDays: 30
+
+  Fwd1LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_fwd1-DEFAULT"
+      RetentionInDays: 30
+
+  Fwd2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_fwd2-DEFAULT"
+      RetentionInDays: 30
+
+  # ---------------------------------------------------------------------------
+  # Shared managed policy — same permissions for all 5 runtimes.
+  # Each role has a different trust policy; the attached managed policy is shared.
+  # ---------------------------------------------------------------------------
+
+  SharedRuntimePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${AppName}-runtime-shared-policy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: LogGroupAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:DescribeLogStreams
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+
+          - Sid: DescribeLogGroups
+            Effect: Allow
+            Action: logs:DescribeLogGroups
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+
+          - Sid: LogStreamAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*:log-stream:*"
+
+          - Sid: LogEventsAccess
+            Effect: Allow
+            Action:
+              - logs:FilterLogEvents
+              - logs:GetLogEvents
+              - logs:PutResourcePolicy
+            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/*"
+
+          - Sid: XRayAccess
+            Effect: Allow
+            Action:
+              - xray:GetSamplingRules
+              - xray:GetSamplingTargets
+              - xray:PutTelemetryRecords
+              - xray:PutTraceSegments
+            Resource: "*"
+
+          - Sid: CloudWatchMetrics
+            Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: "*"
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: bedrock-agentcore
+
+          - Sid: GetAgentAccessToken
+            Effect: Allow
+            Action:
+              - bedrock-agentcore:GetWorkloadAccessToken
+              - bedrock-agentcore:GetWorkloadAccessTokenForJWT
+              - bedrock-agentcore:GetWorkloadAccessTokenForUserId
+            Resource:
+              - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default"
+              - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*"
+
+          - Sid: BedrockModelInvoke
+            Effect: Allow
+            Action:
+              - bedrock:CountTokens
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+            Resource:
+              - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/*"
+              - "arn:aws:bedrock:*::foundation-model/*"
+
+          - Sid: ConfigurationBundles
+            Effect: Allow
+            Action:
+              - bedrock-agentcore:CreateConfigurationBundle
+              - bedrock-agentcore:DeleteConfigurationBundle
+              - bedrock-agentcore:GetConfigurationBundle
+              - bedrock-agentcore:GetConfigurationBundleVersion
+              - bedrock-agentcore:ListConfigurationBundleVersions
+              - bedrock-agentcore:ListConfigurationBundles
+              - bedrock-agentcore:UpdateConfigurationBundle
+            Resource: "arn:aws:bedrock-agentcore:*:*:configuration-bundle/*"
+
+          # S3 learning: read profile registry
+          - Sid: S3ReadRegistry
+            Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${ArtifactBucket}/final-agent-learning/${TeamId}/registry/*"
+            Condition:
+              StringEquals:
+                s3:ResourceAccount: !Ref AWS::AccountId
+
+          - Sid: S3ListBucket
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !Sub "arn:aws:s3:::${ArtifactBucket}"
+            Condition:
+              StringEquals:
+                s3:ResourceAccount: !Ref AWS::AccountId
+
+          # Write match observation — if-none-match prevents overwriting existing records
+          - Sid: S3WriteMatches
+            Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${ArtifactBucket}/final-agent-learning/${TeamId}/registry/matches/*"
+            Condition:
+              StringEquals:
+                s3:ResourceAccount: !Ref AWS::AccountId
+                s3:if-none-match: "*"
+
+          - Sid: S3ReadAll
+            Effect: Allow
+            Action:
+              - s3:GetBucket*
+              - s3:GetObject*
+              - s3:List*
+            Resource:
+              - !Sub "arn:aws:s3:::${ArtifactBucket}"
+              - !Sub "arn:aws:s3:::${ArtifactBucket}/*"
+
+  # ---------------------------------------------------------------------------
+  # GK (player 0)
+  # ---------------------------------------------------------------------------
+
+  GkRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-runtime-gk-${AWS::Region}"
+      ManagedPolicyArns: [!Ref SharedRuntimePolicy]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/${AppName}_gk*"
+
+  GkRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    DependsOn: GkRole
+    Properties:
+      AgentRuntimeName: !Sub "${AppName}_gk"
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref ArtifactBucket
+              Prefix: !Ref CodeS3Key
+          EntryPoint: [main.py]
+          Runtime: PYTHON_3_12
+      EnvironmentVariables:
+        AFC_PLAYER_ID: "0"
+        AFC_STAMINA_SCALE: !Sub "${StaminaScale}"
+        AFC_COMPETITION_ADAPTER: !Sub "${CompetitionAdapter}"
+        AFC_PROFILE_BUCKET: !Ref ArtifactBucket
+        AFC_TEAM_ID: !Ref TeamId
+        AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      ProtocolConfiguration: HTTP
+      RoleArn: !GetAtt GkRole.Arn
+
+  # ---------------------------------------------------------------------------
+  # DEF (player 1)
+  # ---------------------------------------------------------------------------
+
+  DefRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-runtime-def-${AWS::Region}"
+      ManagedPolicyArns: [!Ref SharedRuntimePolicy]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/${AppName}_def*"
+
+  DefRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    DependsOn: DefRole
+    Properties:
+      AgentRuntimeName: !Sub "${AppName}_def"
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref ArtifactBucket
+              Prefix: !Ref CodeS3Key
+          EntryPoint: [main.py]
+          Runtime: PYTHON_3_12
+      EnvironmentVariables:
+        AFC_PLAYER_ID: "1"
+        AFC_STAMINA_SCALE: !Sub "${StaminaScale}"
+        AFC_COMPETITION_ADAPTER: !Sub "${CompetitionAdapter}"
+        AFC_PROFILE_BUCKET: !Ref ArtifactBucket
+        AFC_TEAM_ID: !Ref TeamId
+        AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      ProtocolConfiguration: HTTP
+      RoleArn: !GetAtt DefRole.Arn
+
+  # ---------------------------------------------------------------------------
+  # MID (player 2)
+  # ---------------------------------------------------------------------------
+
+  MidRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-runtime-mid-${AWS::Region}"
+      ManagedPolicyArns: [!Ref SharedRuntimePolicy]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/${AppName}_mid*"
+
+  MidRuntime:
+    Type: AWS::BedrockAgentCore::Runtime
+    DependsOn: MidRole
+    Properties:
+      AgentRuntimeName: !Sub "${AppName}_mid"
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref ArtifactBucket
+              Prefix: !Ref CodeS3Key
+          EntryPoint: [main.py]
+          Runtime: PYTHON_3_12
+      EnvironmentVariables:
+        AFC_PLAYER_ID: "2"
+        AFC_STAMINA_SCALE: !Sub "${StaminaScale}"
+        AFC_COMPETITION_ADAPTER: !Sub "${CompetitionAdapter}"
+        AFC_PROFILE_BUCKET: !Ref ArtifactBucket
+        AFC_TEAM_ID: !Ref TeamId
+        AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      ProtocolConfiguration: HTTP
+      RoleArn: !GetAtt MidRole.Arn
+
+  # ---------------------------------------------------------------------------
+  # FWD1 (player 3)
+  # ---------------------------------------------------------------------------
+
+  Fwd1Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-runtime-fwd1-${AWS::Region}"
+      ManagedPolicyArns: [!Ref SharedRuntimePolicy]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/${AppName}_fwd1*"
+
+  Fwd1Runtime:
+    Type: AWS::BedrockAgentCore::Runtime
+    DependsOn: Fwd1Role
+    Properties:
+      AgentRuntimeName: !Sub "${AppName}_fwd1"
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref ArtifactBucket
+              Prefix: !Ref CodeS3Key
+          EntryPoint: [main.py]
+          Runtime: PYTHON_3_12
+      EnvironmentVariables:
+        AFC_PLAYER_ID: "3"
+        AFC_STAMINA_SCALE: !Sub "${StaminaScale}"
+        AFC_COMPETITION_ADAPTER: !Sub "${CompetitionAdapter}"
+        AFC_PROFILE_BUCKET: !Ref ArtifactBucket
+        AFC_TEAM_ID: !Ref TeamId
+        AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      ProtocolConfiguration: HTTP
+      RoleArn: !GetAtt Fwd1Role.Arn
+
+  # ---------------------------------------------------------------------------
+  # FWD2 (player 4)
+  # ---------------------------------------------------------------------------
+
+  Fwd2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-runtime-fwd2-${AWS::Region}"
+      ManagedPolicyArns: [!Ref SharedRuntimePolicy]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:runtime/${AppName}_fwd2*"
+
+  Fwd2Runtime:
+    Type: AWS::BedrockAgentCore::Runtime
+    DependsOn: Fwd2Role
+    Properties:
+      AgentRuntimeName: !Sub "${AppName}_fwd2"
+      AgentRuntimeArtifact:
+        CodeConfiguration:
+          Code:
+            S3:
+              Bucket: !Ref ArtifactBucket
+              Prefix: !Ref CodeS3Key
+          EntryPoint: [main.py]
+          Runtime: PYTHON_3_12
+      EnvironmentVariables:
+        AFC_PLAYER_ID: "4"
+        AFC_STAMINA_SCALE: !Sub "${StaminaScale}"
+        AFC_COMPETITION_ADAPTER: !Sub "${CompetitionAdapter}"
+        AFC_PROFILE_BUCKET: !Ref ArtifactBucket
+        AFC_TEAM_ID: !Ref TeamId
+        AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+      NetworkConfiguration:
+        NetworkMode: PUBLIC
+      ProtocolConfiguration: HTTP
+      RoleArn: !GetAtt Fwd2Role.Arn
+
+Outputs:
+  GkRuntimeArn:
+    Value: !GetAtt GkRuntime.AgentRuntimeArn
+  DefRuntimeArn:
+    Value: !GetAtt DefRuntime.AgentRuntimeArn
+  MidRuntimeArn:
+    Value: !GetAtt MidRuntime.AgentRuntimeArn
+  Fwd1RuntimeArn:
+    Value: !GetAtt Fwd1Runtime.AgentRuntimeArn
+  Fwd2RuntimeArn:
+    Value: !GetAtt Fwd2Runtime.AgentRuntimeArn

@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "final-agent — S3 storage: agent artifacts and learning failure archive"
+
+Parameters:
+  TeamId:
+    Type: String
+    AllowedPattern: "[A-Za-z0-9_-]{1,64}"
+    Description: "Unique team identifier used in bucket names and S3 prefixes"
+
+Resources:
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "final-agent-${TeamId}-artifacts-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldCodeZips
+            Status: Enabled
+            Prefix: "code/"
+            NoncurrentVersionExpirationInDays: 30
+          - Id: ExpireOldRegistryVersions
+            Status: Enabled
+            Prefix: "final-agent-learning/"
+            NoncurrentVersionExpirationInDays: 90
+
+  FailureBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "final-agent-${TeamId}-failures-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldFailures
+            Status: Enabled
+            ExpirationInDays: 90
+
+Outputs:
+  ArtifactBucketName:
+    Value: !Ref ArtifactBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ArtifactBucket"
+
+  FailureBucketName:
+    Value: !Ref FailureBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-FailureBucket"
