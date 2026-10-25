@@ -24,10 +24,6 @@ Parameters:
     Type: String
     Description: "S3 key of the Lambda code ZIP (same ZIP as AgentCore runtimes)"
 
-  MemoryId:
-    Type: String
-    Description: "BedrockAgentCore Memory ID, e.g. Memory_ourteam-abcdefghij"
-
   # Alarm notifications SNS topic — leave empty to skip alarm creation
   AlarmEmail:
     Type: String
@@ -59,6 +55,21 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AppName}-learner-${TeamId}"
       RetentionInDays: 30
+
+  # ---------------------------------------------------------------------------
+  # Bedrock AgentCore Memory — tactical learning store; persists across updates
+  # Name: pattern ^[a-zA-Z][a-zA-Z0-9_]{0,47}$ (no hyphens); create-only field
+  # ---------------------------------------------------------------------------
+
+  AgentMemory:
+    Type: AWS::BedrockAgentCore::Memory
+    Properties:
+      Name: !Sub "${AppName}Tactics"
+      Description: !Sub "Tactical learning memory for team ${TeamId}"
+      EventExpiryDuration: 7
+      MemoryStrategies:
+        - SemanticMemoryStrategy:
+            Name: TacticsInsights
 
   # ---------------------------------------------------------------------------
   # IAM — Worker (collector)
@@ -146,8 +157,8 @@ Resources:
                   - bedrock-agentcore:ListMemoryRecords
                   - bedrock-agentcore:DeleteMemoryRecord
                 Resource:
-                  - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/${MemoryId}"
-                  - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/${MemoryId}/*"
+                  - !GetAtt AgentMemory.MemoryArn
+                  - !Sub "${AgentMemory.MemoryArn}/*"
 
   # ---------------------------------------------------------------------------
   # Lambda — Worker (collector, invoked by AgentCore per match)
@@ -174,7 +185,7 @@ Resources:
           AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
           AFC_TEAM_ID: !Ref TeamId
           AFC_LEARNER_FUNCTION: !Sub "${AppName}-learner-${TeamId}"
-          AFC_MEMORY_ID: !Ref MemoryId
+          AFC_MEMORY_ID: !GetAtt AgentMemory.MemoryId
 
   WorkerEventInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
@@ -210,7 +221,7 @@ Resources:
           AFC_LEARNING_BUCKET: !Ref ArtifactBucket
           AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
           AFC_TEAM_ID: !Ref TeamId
-          AFC_MEMORY_ID: !Ref MemoryId
+          AFC_MEMORY_ID: !GetAtt AgentMemory.MemoryId
 
   LearnerEventInvokeConfig:
     Type: AWS::Lambda::EventInvokeConfig
@@ -413,6 +424,14 @@ Resources:
       FilterPattern: '{ $.type = "decision" }'
 
 Outputs:
+  MemoryId:
+    Value: !GetAtt AgentMemory.MemoryId
+    Export:
+      Name: !Sub "${AWS::StackName}-MemoryId"
+
+  MemoryArn:
+    Value: !GetAtt AgentMemory.MemoryArn
+
   WorkerFunctionArn:
     Value: !GetAtt WorkerFunction.Arn
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Deploy all final-agent stacks from scratch.
-# Usage: ./deploy_cfn.sh <team_id> <memory_id> [app_name]
+# Usage: ./deploy_cfn.sh <team_id> [app_name]
 # Example:
-#   ./deploy_cfn.sh aleksalotl_tactics_v3 Memory_ourteam-abcdefghij FinalAgent
+#   ./deploy_cfn.sh aleksalotl_tactics_v3 FinalAgent
+#
+# The learning stack creates the AgentCore Memory via CloudFormation.
+# The Memory ID is emitted as a stack output after deployment.
 #
 # Prerequisites:
 #   - aws CLI configured with credentials for the target account
@@ -11,9 +14,8 @@
 
 set -euo pipefail
 
-TEAM_ID="${1:?Usage: deploy_cfn.sh TEAM_ID MEMORY_ID [APP_NAME]}"
-MEMORY_ID="${2:?Usage: deploy_cfn.sh TEAM_ID MEMORY_ID [APP_NAME]}"
-APP_NAME="${3:-FinalAgent}"
+TEAM_ID="${1:?Usage: deploy_cfn.sh TEAM_ID [APP_NAME]}"
+APP_NAME="${2:-FinalAgent}"
 
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -123,14 +125,17 @@ aws cloudformation deploy \
       ArtifactBucket="${ARTIFACT_BUCKET}" \
       FailureBucket="${FAILURE_BUCKET}" \
       CodeS3Key="${CODE_KEY}" \
-      MemoryId="${MEMORY_ID}" \
   --no-fail-on-empty-changeset \
   --region "${REGION}"
+
+MEMORY_ID=$(aws cloudformation describe-stacks \
+  --stack-name "${LEARNING_STACK}" \
+  --region "${REGION}" \
+  --query 'Stacks[0].Outputs[?OutputKey==`MemoryId`].OutputValue' \
+  --output text)
 
 echo ""
 echo "=== Deploy complete ==="
 echo "  Runtimes: ${APP_NAME}_gk / _def / _mid / _fwd1 / _fwd2"
+echo "  Memory ID: ${MEMORY_ID}"
 echo "  Learner schedule: every 15 minutes"
-echo ""
-echo "  NOTE: Create AgentCore memory before deploying if not already done:"
-echo "    agentcore memory create --name ${MEMORY_ID} --region ${REGION}"
