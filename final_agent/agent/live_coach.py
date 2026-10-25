@@ -188,6 +188,7 @@ class CoachLoop:
         region: str = "us-east-1",
     ):
         import datetime
+
         import boto3  # type: ignore[import]
         from botocore.config import Config  # type: ignore[import]
 

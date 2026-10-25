@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import time
 import unittest
 import unittest.mock
 
@@ -15,7 +14,6 @@ from agent.live_coach import (
     write_advice,
 )
 from agent.live_settings import LiveSettingsCache
-
 
 # ---------------------------------------------------------------------------
 # LiveSettingsCache
