@@ -89,6 +89,20 @@ def test_current_profile_registry_missing():
         S3Reader(client, BUCKET, TEAM, ACCOUNT).current_profile()
 
 
+def test_current_profile_malformed_active():
+    """ACTIVE.json present but missing 'digest' → RegistryMissing, not KeyError."""
+    client = _client({PREFIX + "registry/ACTIVE.json": {}})
+    with pytest.raises(RegistryMissing):
+        S3Reader(client, BUCKET, TEAM, ACCOUNT).current_profile()
+
+
+def test_promotion_history_malformed_active():
+    """ACTIVE.json present but missing 'commit' → RegistryMissing, not KeyError."""
+    client = _client({PREFIX + "registry/ACTIVE.json": {"generation": 1}})
+    with pytest.raises(RegistryMissing):
+        S3Reader(client, BUCKET, TEAM, ACCOUNT).promotion_history()
+
+
 # ---------------------------------------------------------------------------
 # Task 2: promotion_history()
 # ---------------------------------------------------------------------------

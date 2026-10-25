@@ -67,7 +67,9 @@ class S3Reader:
         if active is None:
             raise RegistryMissing("ACTIVE.json not found — registry not bootstrapped")
 
-        digest = active["digest"]
+        digest = active.get("digest")
+        if digest is None:
+            raise RegistryMissing("ACTIVE.json malformed — missing 'digest' field")
         profile_doc = self._get(self._reg + f"profiles/{digest}.json") or {}
         profile = profile_doc.get("profile", {})
         settings_raw = profile.get("settings", {})
@@ -93,7 +95,9 @@ class S3Reader:
 
         # Walk the generation chain; collect (gen_number, gen_key, gen_doc) tuples
         chain: list[tuple[int, str, dict]] = []
-        current_key = active["commit"]
+        current_key = active.get("commit")
+        if current_key is None:
+            raise RegistryMissing("ACTIVE.json malformed — missing 'commit' field")
         seen_keys: set[str] = set()
 
         for _ in range(_CHAIN_CAP):
@@ -175,6 +179,7 @@ class S3Reader:
     def match_activity(self, days: int = 8) -> list[dict]:
         """Return match counts per day for the last `days` days, oldest first."""
         obs_prefix = f"{_S3_PREFIX}/{self._team}/observations/_days/"
+        # shortcut: single page only (≤1000 keys); busy agents may undercount matches
         resp = self._client.list_objects_v2(Bucket=self._bucket, Prefix=obs_prefix)
         contents = resp.get("Contents", [])
 
