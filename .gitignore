@@ -20,3 +20,6 @@ aws_creds.txt
 
 # macOS
 .DS_Store
+
+# Analysis cache — generated, not committed
+.analysis/
