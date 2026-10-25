@@ -32,22 +32,34 @@ Open http://127.0.0.1:8000/ and load `local/match.json` in the file picker.
 
 ## Run a campaign (round-robin)
 
-Multiple seeds, results aggregated into standings:
+A campaign plays all C(n,2) pairs × 2 legs × n blocks and produces standings.
+It requires **at least two distinct entrant IDs**. With only `football_agent_v1`
+registered there are no pairs, so round-robin is not yet useful on its own.
+
+Add a profile variant (a second entrant JSON pointing to a different profile file)
+and then run:
 
 ```sh
 PYTHONPATH=src python3 -m football_lab campaign init \
-  --entrants football_agent_v1 \
+  --entrants football_agent_v1,football_agent_v1_tuned \
   --blocks 20 --seed-pool-start 1000 \
   --output local/campaign/manifest.json
 
 PYTHONPATH=src python3 -m football_lab campaign run \
   --manifest local/campaign/manifest.json \
-  --replays local/campaign/replays
+  --replays local/campaign/replays --discard-replays
 
 PYTHONPATH=src python3 -m football_lab campaign report \
   --manifest local/campaign/manifest.json \
-  --json local/campaign/report.json
+  --json local/campaign/report.json \
+  --baseline football_agent_v1
 ```
+
+To compare a specific profile against the default, use cross mode instead
+(`--challengers` vs `--pool`); see `docs/m5-evolution.md`.
+
+For systematic multi-seed self-play analysis use the **evolution** section below —
+it runs the agent against itself across many seeds automatically.
 
 ## Run a tactical profile evolution experiment
 
