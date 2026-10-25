@@ -38,6 +38,7 @@ class Runtime:
         competition_adapter: bool = False,
         emit: Callable[[dict], None] | None = None,
         profile_selector: ProfileSelector | None = None,
+        live_settings=None,
     ):
         self.profile = parse_profile((profile if profile is not None else Profile()).to_dict())
         self.settings = effective_settings(self.profile, opponent_id)
@@ -48,6 +49,7 @@ class Runtime:
         self.stamina_scale = stamina_scale
         self.competition_adapter = competition_adapter
         self.profile_selector = profile_selector
+        self._live_settings = live_settings
         self._log = DecisionLog(emit if emit is not None else emit_json)
 
     @property
@@ -117,12 +119,14 @@ class Runtime:
             )
             if profile.coach_policy == "rules":
                 snapshot = replace(snapshot, coach=choose_preset(snapshot))
+            live = self._live_settings.get() if self._live_settings is not None else None
             decision = decide(
                 snapshot,
                 pid,
                 settings,
                 profile.style,
                 max_move_x=MATCH_X_LIMIT * MATCH_COORDINATE_SCALE if compact else 54.0,
+                live=live,
             )
             selected = decision.command
             if compact:

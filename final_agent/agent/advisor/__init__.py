@@ -4,7 +4,10 @@ import os
 import tempfile
 from pathlib import Path
 
-from .core import Advisor, AdvisorError, ArchetypeAdvice, SettingsAdvice
+try:
+    from .core import Advisor, AdvisorError, ArchetypeAdvice, SettingsAdvice
+except ImportError:
+    pass
 
 
 def write_atomic(path: Path, text: str) -> None:

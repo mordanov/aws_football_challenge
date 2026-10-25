@@ -118,6 +118,9 @@ shape is **not** evidence that a server accepted or executed it.
 
 ## Offline coaching
 
+For an explanation of the deployed adaptation loop, its safeguards and current
+limitations, see [How the football agents learn](docs/self_learning.md).
+
 For opt-in automatic provisional Memory collection and match-wide profile
 pinning, see [automatic shared-memory learning](docs/automatic_learning.md).
 The deployed workshop variant uses S3 coordination, CloudWatch-triggered Lambda

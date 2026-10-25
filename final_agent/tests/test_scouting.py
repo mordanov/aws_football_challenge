@@ -78,9 +78,16 @@ def prepare(rows=None, team=0, match="match-a"):
 def test_observations_are_mirrored_deduplicated_and_bound_to_sources(team):
     packet, note = prepare(team=team)
     metrics = [json.loads(c.text) for c in packet.claims]
-    assert {m["metric"] for m in metrics} == {"keeper_advanced", "all_players_attacking"}
-    assert all((m["positive"], m["samples"]) == (2, 3) for m in metrics)
-    assert all(m["positive_ticks"] == [1, 4] for m in metrics)
+    assert {m["metric"] for m in metrics} == {
+        "keeper_advanced", "all_players_attacking", "opponent_possession_dominance"
+    }
+    by_metric = {m["metric"]: m for m in metrics}
+    assert (by_metric["keeper_advanced"]["positive"], by_metric["keeper_advanced"]["samples"]) == (2, 3)
+    assert by_metric["keeper_advanced"]["positive_ticks"] == [1, 4]
+    assert (by_metric["all_players_attacking"]["positive"], by_metric["all_players_attacking"]["samples"]) == (2, 3)
+    assert by_metric["all_players_attacking"]["positive_ticks"] == [1, 4]
+    assert (by_metric["opponent_possession_dominance"]["positive"], by_metric["opponent_possession_dominance"]["samples"]) == (3, 3)
+    assert by_metric["opponent_possession_dominance"]["positive_ticks"] == [1, 3, 4]
     assert note.packet_digest == packet.digest
     assert all(sid in packet.source_digests for c in note.claims for sid in c.source_ids)
     client = FakeMemoryClient()
@@ -187,7 +194,10 @@ def test_single_match_and_duplicate_notes_are_not_repeated_opponent_evidence():
     )
     assert brief["distinct_matches"] == 1
     assert brief["status"] == "insufficient_evidence"
-    assert all(item["positive"] == 2 for item in brief["hypotheses"])
+    by_metric = {h["metric"]: h for h in brief["hypotheses"]}
+    assert by_metric["keeper_advanced"]["positive"] == 2
+    assert by_metric["all_players_attacking"]["positive"] == 2
+    assert by_metric["opponent_possession_dominance"]["positive"] == 3
     assert not evidence.claims
 
 
@@ -216,6 +226,29 @@ def test_advisor_retrieval_does_not_reintroduce_upcoming_match_or_expiry_before_
         kickoff=NOW + timedelta(hours=2),
     )
     assert memory.retrieve(query).notes == ()
+
+
+def test_possession_dominance_fires_when_opponent_holds_ball():
+    """opponent_possession_dominance counts ticks where opponent had possession."""
+    packet, _ = prepare()
+    by_metric = {json.loads(c.text)["metric"]: json.loads(c.text) for c in packet.claims}
+    assert "opponent_possession_dominance" in by_metric
+    obs = by_metric["opponent_possession_dominance"]
+    # All 3 distinct-clock observations have opponent possession
+    assert obs["positive"] == obs["samples"] == 3
+    assert obs["positive_ticks"] == [1, 3, 4]
+
+
+def test_possession_dominance_absent_when_possession_unknown():
+    """Free ball = unknown owner; possession dominance requires known ownership."""
+    rows = records()
+    for row in rows:
+        row["snapshot"]["owner"] = None
+        row["snapshot"]["free"] = True
+    packet, _ = prepare(rows)
+    assert "opponent_possession_dominance" not in {
+        json.loads(c.text)["metric"] for c in packet.claims
+    }
 
 
 def test_unknown_possession_cannot_establish_a_full_team_attack():
@@ -380,7 +413,7 @@ def test_cli_round_trip_generates_publishable_notes_and_advisor_evidence(tmp_pat
     )
     assert json.loads(paths["brief"].read_text())["status"] == "review_required"
     query = EvidencePacket.model_validate_json(paths["prematch"].read_text())
-    assert len(query.claims) == 2
+    assert len(query.claims) == 3
     assert len(memory.retrieve(query).notes) == 2
     assert paths["profile"].read_bytes() == original_profile
     pytest.importorskip("langchain_core")
