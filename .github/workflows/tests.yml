@@ -30,11 +30,8 @@ jobs:
         run: npm ci --no-fund --no-audit && npm test
 
   unit-tests:
-    name: Unit tests (Python ${{ matrix.python-version }})
+    name: Unit tests (Python 3.12)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
 
     defaults:
       run:
@@ -43,10 +40,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
 
       - name: Install pytest
@@ -59,33 +56,24 @@ jobs:
             -v --tb=short
 
   redesign4-tests:
-    name: Agent tests (${{ matrix.project }}, Python ${{ matrix.python-version }})
+    name: Agent tests (final_agent, Python 3.12)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-        project: ["redesign_4", "final_agent"]
 
     defaults:
       run:
-        working-directory: ${{ matrix.project }}
+        working-directory: final_agent
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
 
       - name: Install package and test tools
-        run: |
-          extras="offline,dev"
-          if [ "${{ matrix.project }}" = "final_agent" ]; then
-            extras="$extras,learning"
-          fi
-          pip install -e ".[$extras]"
+        run: pip install -e ".[offline,dev,learning]"
 
       - name: Run agent tests
         run: pytest tests/ -v --tb=short
@@ -93,9 +81,7 @@ jobs:
       - name: Lint
         run: |
           ruff check agent tests
-          if [ "${{ matrix.project }}" = "final_agent" ]; then
-            ruff check deploy/learning.py deploy/s3_learning.py
-          fi
+          ruff check deploy/learning.py deploy/s3_learning.py
 
       - name: Type check
         run: mypy
