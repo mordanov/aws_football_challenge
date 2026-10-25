@@ -149,3 +149,149 @@ class TestInMatchAdvisor:
         adv.flush_advice_log(flushed.append)
         assert len(flushed) == 1
         assert adv._advice_log == []   # cleared after flush
+
+
+# ---------------------------------------------------------------------------
+# Task 3: decide() integration
+# ---------------------------------------------------------------------------
+from agent.tactics import decide
+from agent.advisor.in_match import TacticalAdvice
+
+_ATTACK_ADVICE = TacticalAdvice(mode="attack", def_x_fraction=0.3, gk_stays=True, rationale="test")
+_NORMAL_ADVICE = TacticalAdvice(mode="normal", def_x_fraction=0.0, gk_stays=False, rationale="test")
+
+
+class TestDecideWithAdvice:
+    def _target_x(self, pid, s, advice=None):
+        d = decide(s, pid, advice=advice)
+        return d.command["parameters"]["target_x"]
+
+    def test_def_moves_forward_in_attack_mode(self):
+        """DEF (pid 1) x-position should be further forward with attack advice."""
+        for team in (0, 1):
+            direction = 1 if team == 0 else -1
+            s = _snap(team=team, clock=60.0)
+            x_normal = self._target_x(1, s)
+            x_attack = self._target_x(1, s, advice=_ATTACK_ADVICE)
+            assert direction * x_attack > direction * x_normal, f"team={team}"
+
+    def test_def_unaffected_by_normal_advice(self):
+        """advice.mode='normal' does not change DEF position."""
+        s = _snap(clock=60.0)
+        assert self._target_x(1, s) == self._target_x(1, s, advice=_NORMAL_ADVICE)
+
+    def test_def_unaffected_when_advice_is_none(self):
+        """No advice → existing behavior unchanged."""
+        s = _snap(clock=60.0)
+        assert self._target_x(1, s) == self._target_x(1, s, advice=None)
+
+    def test_gk_stays_near_goal_line(self):
+        """GK (pid 0) with gk_stays=True should be at x near -0.90 * 55 from our side."""
+        for team in (0, 1):
+            direction = 1 if team == 0 else -1
+            s = _snap(team=team, clock=60.0)
+            x = self._target_x(0, s, advice=_ATTACK_ADVICE)
+            assert direction * x <= -45.0, f"GK not near goal line: x={x}, team={team}"
+
+    def test_gk_with_ball_not_overridden(self):
+        """GK carrying the ball → gk_stays does not apply (carrier block returns first)."""
+        s = _snap(team=0, owner=(0, 0), clock=60.0)  # GK has ball
+        d = decide(s, 0, advice=_ATTACK_ADVICE)
+        # GK with ball gets a carrier action (PASS/SHOOT/MOVE_TO with forward target),
+        # not repositioned to goal line
+        if d.command["commandType"] == "MOVE_TO":
+            assert d.command["parameters"]["target_x"] > -45.0
+
+
+# ---------------------------------------------------------------------------
+# Task 4: _call_llm
+# ---------------------------------------------------------------------------
+
+import sys
+import types
+import unittest.mock
+
+def _make_fake_langchain():
+    """Inject a stub langchain_core.messages into sys.modules for tests."""
+    mod = types.ModuleType("langchain_core")
+    msgs = types.ModuleType("langchain_core.messages")
+
+    class SystemMessage:
+        def __init__(self, content):
+            self.content = content
+
+    class HumanMessage:
+        def __init__(self, content):
+            self.content = content
+
+    msgs.SystemMessage = SystemMessage
+    msgs.HumanMessage = HumanMessage
+    mod.messages = msgs
+    sys.modules.setdefault("langchain_core", mod)
+    sys.modules.setdefault("langchain_core.messages", msgs)
+    return msgs
+
+
+class _FakeLLM:
+    def __init__(self, response_json: str):
+        self._response_json = response_json
+
+    def invoke(self, messages):
+        class _Resp:
+            pass
+        r = _Resp()
+        r.content = self._response_json
+        return r
+
+
+class TestCallLlm:
+    def setup_method(self):
+        _make_fake_langchain()
+
+    def _advisor(self, llm):
+        return InMatchAdvisor(llm=llm, team_id="test-team")
+
+    def test_valid_response_parsed(self):
+        """Happy path: LLM returns valid JSON → TacticalAdvice with that mode."""
+        import json
+        payload = json.dumps({"mode": "attack", "def_x_fraction": 0.3, "gk_stays": True, "rationale": "go"})
+        adv = self._advisor(_FakeLLM(payload))
+        adv.reset("m1")
+        result = adv._call_llm([])
+        assert result.mode == "attack"
+        assert result.def_x_fraction == 0.3
+        assert result.gk_stays is True
+
+    def test_invalid_mode_returns_cache(self):
+        """LLM returns unknown mode → fall back to cached advice."""
+        import json
+        payload = json.dumps({"mode": "blitz", "def_x_fraction": 0.0, "gk_stays": False, "rationale": "x"})
+        adv = self._advisor(_FakeLLM(payload))
+        adv.reset("m1")
+        result = adv._call_llm([])
+        assert result.mode == "normal"  # default cache
+
+    def test_malformed_json_returns_cache(self):
+        """LLM returns garbage → fall back to cached advice, no exception."""
+        adv = self._advisor(_FakeLLM("not-json!!!"))
+        adv.reset("m1")
+        result = adv._call_llm([])
+        assert result.mode == "normal"
+
+    def test_extra_fields_ignored(self):
+        """LLM returns extra keys in JSON → no TypeError, parses cleanly."""
+        import json
+        payload = json.dumps({"mode": "defend", "def_x_fraction": -0.2, "gk_stays": False,
+                              "rationale": "hold", "extra_field": "ignored"})
+        adv = self._advisor(_FakeLLM(payload))
+        adv.reset("m1")
+        result = adv._call_llm([])
+        assert result.mode == "defend"
+        assert result.def_x_fraction == -0.2
+
+    def test_none_llm_returns_cache(self):
+        """llm=None → _call_llm returns cache immediately."""
+        adv = self._advisor(None)
+        adv.reset("m1")
+        result = adv._call_llm([])
+        assert result.mode == "normal"
