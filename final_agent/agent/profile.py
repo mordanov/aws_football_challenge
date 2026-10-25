@@ -22,7 +22,7 @@ STYLE_BOUNDS = {
     "carry": (0.0, 1.0),
 }
 FORMATIONS = ("1-1-2", "2-1-1", "1-2-1")
-COACH_POLICIES = ("none", "rules")
+COACH_POLICIES = ("none", "rules", "llm")
 _REQUIRED = {"version", "settings", "opponents"}
 _OPTIONAL = {"style", "coach_policy"}
 

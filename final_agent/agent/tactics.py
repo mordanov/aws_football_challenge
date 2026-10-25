@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import math
 import os
+from typing import TYPE_CHECKING
 
 from .model import DEFAULT_SETTINGS, DEFAULT_STYLE, Decision, Player, Settings, Snapshot, Style
 from .protocol import MATCH_COORDINATE_SCALE, MATCH_Y_LIMIT
+
+if TYPE_CHECKING:
+    from .advisor.in_match import TacticalAdvice
 
 
 def distance(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -506,6 +510,7 @@ def decide(
     *,
     max_move_x: float = 54.0,
     live: dict | None = None,
+    advice: TacticalAdvice | None = None,
 ) -> Decision:
     if live:
         kw = {}
@@ -539,6 +544,14 @@ def decide(
             x = s.direction * 0.10 * _HALF_LENGTH
             y = max(-6.0, min(6.0, s.ball[1] * 0.3))
             return Decision(movement(s, p, x, y, urgent=True), "stage 2: GK advances", assignments=plan)
+        if advice is not None and advice.gk_stays:
+            _lx = s.direction * -0.90 * _HALF_LENGTH
+            _ly = max(-6.0, min(6.0, s.ball[1] * 0.3))
+            return Decision(
+                movement(s, p, _lx, _ly, urgent=False, sprint_distance=0.0),
+                "advice: GK stays",
+                assignments=plan,
+            )
         d = s.direction
         x_goal = -d * min(52.0, max_move_x)
         depth = 55 + d * x_goal
@@ -648,6 +661,9 @@ def decide(
         x, y = s.direction * (-0.08) * _HALF_LENGTH, 0.0
     elif stage >= 1 and player_id == 2:
         x, y = s.direction * 0.45 * _HALF_LENGTH, 0.0
+    if advice is not None and advice.mode == "attack" and player_id == 1:
+        x = s.direction * advice.def_x_fraction * _HALF_LENGTH
+        y = 0.0
     # §8 FWD_ROLES: position link/runner when not in rush/stage
     if not rush and stage == 0 and _int_env("FWD_ROLES", 1) and player_id in (3, 4):
         fwd_role = plan.get("role", "none")
