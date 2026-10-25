@@ -44,13 +44,22 @@ echo "Account: $ACCOUNT  OK"
 mkdir -p "$DOWNLOAD_DIR"
 
 echo "Downloading via s3 sync (this may take a few minutes)..."
+# WSParticipantRole has explicit deny on s3:ListBucket and some KMS keys —
+# sync exits non-zero on permission errors; we keep whatever downloaded.
 aws s3 sync \
   "s3://$BUCKET/$S3_PREFIX/" \
   "$DOWNLOAD_DIR/" \
   --no-progress \
-  --exclude "*.tmp"
+  --exclude "*.tmp" || SYNC_EXIT=$?
 
 OBJECT_COUNT="$(find "$DOWNLOAD_DIR" -type f | wc -l | tr -d ' ')"
+if [ "${SYNC_EXIT:-0}" -ne 0 ]; then
+  echo "WARNING: sync exited with code ${SYNC_EXIT} (permission errors expected with WSParticipantRole)"
+  echo "         Archive will contain only the objects that were accessible."
+fi
+if [ "$OBJECT_COUNT" -eq 0 ]; then
+  echo "ERROR: nothing downloaded — aborting" >&2; exit 1
+fi
 echo "Downloaded $OBJECT_COUNT objects"
 
 echo ""
