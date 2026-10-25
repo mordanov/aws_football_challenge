@@ -1,7 +1,10 @@
-import math
-from dataclasses import replace
+import json as _json
+import sys
+import types
+
+from agent.advisor.in_match import InMatchAdvisor, TacticalAdvice, _extract_features
 from agent.model import Player, Snapshot
-from agent.advisor.in_match import TacticalAdvice, AdviceEvent, _extract_features
+from agent.tactics import decide
 
 
 def _snap(team=0, clock=30.0, score=(0, 0), owner=None, ball=(5.0, 0.0)):
@@ -70,7 +73,6 @@ class TestExtractFeatures:
 # ---------------------------------------------------------------------------
 # Task 2: InMatchAdvisor skeleton
 # ---------------------------------------------------------------------------
-from agent.advisor.in_match import InMatchAdvisor
 
 
 class TestInMatchAdvisor:
@@ -154,8 +156,6 @@ class TestInMatchAdvisor:
 # ---------------------------------------------------------------------------
 # Task 3: decide() integration
 # ---------------------------------------------------------------------------
-from agent.tactics import decide
-from agent.advisor.in_match import TacticalAdvice
 
 _ATTACK_ADVICE = TacticalAdvice(mode="attack", def_x_fraction=0.3, gk_stays=True, rationale="test")
 _NORMAL_ADVICE = TacticalAdvice(mode="normal", def_x_fraction=0.0, gk_stays=False, rationale="test")
@@ -206,10 +206,6 @@ class TestDecideWithAdvice:
 # ---------------------------------------------------------------------------
 # Task 4: _call_llm
 # ---------------------------------------------------------------------------
-
-import sys
-import types
-import unittest.mock
 
 def _make_fake_langchain():
     """Inject a stub langchain_core.messages into sys.modules for tests."""
@@ -300,7 +296,6 @@ class TestCallLlm:
 # ---------------------------------------------------------------------------
 # Task 5: Runtime wiring
 # ---------------------------------------------------------------------------
-import json as _json
 
 
 class FakeAdvisor:

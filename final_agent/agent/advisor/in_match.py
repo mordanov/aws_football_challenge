@@ -117,7 +117,7 @@ class InMatchAdvisor:
         if self._llm is None:
             return self._cache
         try:
-            from langchain_core.messages import SystemMessage, HumanMessage
+            from langchain_core.messages import HumanMessage, SystemMessage
             history_summary = [
                 {"clock": e.clock, "advice": e.advice.mode}
                 for e in self._advice_log[-5:]
