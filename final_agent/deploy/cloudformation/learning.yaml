@@ -1,0 +1,420 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "final-agent — S3-backed learning: collector Lambda, learner Lambda, monitoring"
+
+Parameters:
+  AppName:
+    Type: String
+    Default: "FinalAgent"
+    AllowedPattern: "[A-Za-z0-9]{1,40}"
+
+  TeamId:
+    Type: String
+    AllowedPattern: "[A-Za-z0-9_-]{1,64}"
+    Description: "Team identifier, used in S3 prefixes"
+
+  ArtifactBucket:
+    Type: String
+    Description: "S3 bucket for learning registry and agent code"
+
+  FailureBucket:
+    Type: String
+    Description: "S3 bucket for Lambda failure payloads"
+
+  CodeS3Key:
+    Type: String
+    Description: "S3 key of the Lambda code ZIP (same ZIP as AgentCore runtimes)"
+
+  MemoryId:
+    Type: String
+    Description: "BedrockAgentCore Memory ID, e.g. Memory_ourteam-abcdefghij"
+
+  # Alarm notifications SNS topic — leave empty to skip alarm creation
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: "Email address for CloudWatch alarm notifications (optional)"
+
+  LearningSchedule:
+    Type: String
+    Default: "rate(15 minutes)"
+    Description: "EventBridge schedule expression for the learner invocation"
+
+Conditions:
+  CreateAlarmTopic: !Not [!Equals [!Ref AlarmEmail, ""]]
+
+Resources:
+
+  # ---------------------------------------------------------------------------
+  # CloudWatch Log Groups
+  # ---------------------------------------------------------------------------
+
+  WorkerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AppName}-worker-${TeamId}"
+      RetentionInDays: 30
+
+  LearnerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AppName}-learner-${TeamId}"
+      RetentionInDays: 30
+
+  # ---------------------------------------------------------------------------
+  # IAM — Worker (collector)
+  # ---------------------------------------------------------------------------
+
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-worker-role-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WorkerS3
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadRegistry
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactBucket}"
+                  - !Sub "arn:aws:s3:::${ArtifactBucket}/final-agent-learning/${TeamId}/*"
+              - Sid: WriteObservations
+                Effect: Allow
+                Action: s3:PutObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactBucket}/final-agent-learning/${TeamId}/observations/*"
+              - Sid: WriteFailures
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${FailureBucket}/*"
+
+  # ---------------------------------------------------------------------------
+  # IAM — Learner
+  # ---------------------------------------------------------------------------
+
+  LearnerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AppName}-learner-role-${AWS::Region}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LearnerS3AndMemory
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadWriteRegistry
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${ArtifactBucket}"
+                  - !Sub "arn:aws:s3:::${ArtifactBucket}/final-agent-learning/${TeamId}/*"
+              - Sid: WriteFailures
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${FailureBucket}/*"
+              - Sid: AgentCoreMemory
+                Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateMemory
+                  - bedrock-agentcore:GetMemory
+                  - bedrock-agentcore:CreateMemoryRecord
+                  - bedrock-agentcore:GetMemoryRecord
+                  - bedrock-agentcore:ListMemoryRecords
+                  - bedrock-agentcore:DeleteMemoryRecord
+                Resource:
+                  - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/${MemoryId}"
+                  - !Sub "arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:memory/${MemoryId}/*"
+
+  # ---------------------------------------------------------------------------
+  # Lambda — Worker (collector, invoked by AgentCore per match)
+  # ---------------------------------------------------------------------------
+
+  WorkerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: WorkerLogs
+    Properties:
+      FunctionName: !Sub "${AppName}-worker-${TeamId}"
+      Runtime: python3.12
+      Handler: agent.s3_worker.collector
+      Role: !GetAtt WorkerRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref CodeS3Key
+      Timeout: 60
+      MemorySize: 256
+      LoggingConfig:
+        LogGroup: !Ref WorkerLogs
+      Environment:
+        Variables:
+          AFC_LEARNING_BUCKET: !Ref ArtifactBucket
+          AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+          AFC_TEAM_ID: !Ref TeamId
+          AFC_LEARNER_FUNCTION: !Sub "${AppName}-learner-${TeamId}"
+          AFC_MEMORY_ID: !Ref MemoryId
+
+  WorkerEventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref WorkerFunction
+      Qualifier: "$LATEST"
+      MaximumRetryAttempts: 0
+      DestinationConfig:
+        OnFailure:
+          Destination: !Sub "arn:aws:s3:::${FailureBucket}"
+
+  # ---------------------------------------------------------------------------
+  # Lambda — Learner (triggered on schedule)
+  # ---------------------------------------------------------------------------
+
+  LearnerFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LearnerLogs
+    Properties:
+      FunctionName: !Sub "${AppName}-learner-${TeamId}"
+      Runtime: python3.12
+      Handler: agent.s3_worker.learner
+      Role: !GetAtt LearnerRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref CodeS3Key
+      Timeout: 300
+      MemorySize: 512
+      LoggingConfig:
+        LogGroup: !Ref LearnerLogs
+      Environment:
+        Variables:
+          AFC_LEARNING_BUCKET: !Ref ArtifactBucket
+          AFC_OWNER_ACCOUNT: !Ref AWS::AccountId
+          AFC_TEAM_ID: !Ref TeamId
+          AFC_MEMORY_ID: !Ref MemoryId
+
+  LearnerEventInvokeConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref LearnerFunction
+      Qualifier: "$LATEST"
+      MaximumRetryAttempts: 0
+      DestinationConfig:
+        OnFailure:
+          Destination: !Sub "arn:aws:s3:::${FailureBucket}"
+
+  # ---------------------------------------------------------------------------
+  # EventBridge schedule — triggers the learner periodically
+  # ---------------------------------------------------------------------------
+
+  LearningScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AppName}-learning-schedule-${TeamId}"
+      Description: "Trigger learner Lambda to consolidate observations into memory"
+      ScheduleExpression: !Ref LearningSchedule
+      State: ENABLED
+      Targets:
+        - Id: LearnerTarget
+          Arn: !GetAtt LearnerFunction.Arn
+
+  LearningSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LearnerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LearningScheduleRule.Arn
+
+  # ---------------------------------------------------------------------------
+  # CloudWatch alarms
+  # ---------------------------------------------------------------------------
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: CreateAlarmTopic
+    Properties:
+      TopicName: !Sub "${AppName}-learning-alarms-${TeamId}"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlarmEmail
+
+  WorkerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AppName}/${TeamId}/worker-errors"
+      AlarmDescription: "Worker Lambda errors in the past 5 minutes"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref WorkerFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If
+        - CreateAlarmTopic
+        - [!Ref AlarmTopic]
+        - []
+
+  WorkerThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AppName}/${TeamId}/worker-throttles"
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref WorkerFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If
+        - CreateAlarmTopic
+        - [!Ref AlarmTopic]
+        - []
+
+  LearnerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AppName}/${TeamId}/learner-errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LearnerFunction
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If
+        - CreateAlarmTopic
+        - [!Ref AlarmTopic]
+        - []
+
+  # ---------------------------------------------------------------------------
+  # CloudWatch Logs subscriptions — route AgentCore runtime logs to worker
+  # (one per runtime; log group names derive from the runtime names set in
+  # agentcore.yaml: /aws/bedrock-agentcore/runtimes/${AppName}_<pos>-*)
+  # ---------------------------------------------------------------------------
+
+  SubscriptionPermissionGk:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WorkerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: !Sub "logs.${AWS::Region}.amazonaws.com"
+      SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${AppName}_gk-*:*"
+      SourceAccount: !Ref AWS::AccountId
+
+  SubscriptionPermissionDef:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WorkerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: !Sub "logs.${AWS::Region}.amazonaws.com"
+      SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${AppName}_def-*:*"
+      SourceAccount: !Ref AWS::AccountId
+
+  SubscriptionPermissionMid:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WorkerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: !Sub "logs.${AWS::Region}.amazonaws.com"
+      SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${AppName}_mid-*:*"
+      SourceAccount: !Ref AWS::AccountId
+
+  SubscriptionPermissionFwd1:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WorkerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: !Sub "logs.${AWS::Region}.amazonaws.com"
+      SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${AppName}_fwd1-*:*"
+      SourceAccount: !Ref AWS::AccountId
+
+  SubscriptionPermissionFwd2:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WorkerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: !Sub "logs.${AWS::Region}.amazonaws.com"
+      SourceArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/bedrock-agentcore/runtimes/${AppName}_fwd2-*:*"
+      SourceAccount: !Ref AWS::AccountId
+
+  # Subscription filters are created after runtime log groups exist.
+  # Set FilterPattern to match AFC telemetry decision records (JSON).
+  SubscriptionGk:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: SubscriptionPermissionGk
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_gk-DEFAULT"
+      DestinationArn: !GetAtt WorkerFunction.Arn
+      FilterPattern: '{ $.type = "decision" }'
+
+  SubscriptionDef:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: SubscriptionPermissionDef
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_def-DEFAULT"
+      DestinationArn: !GetAtt WorkerFunction.Arn
+      FilterPattern: '{ $.type = "decision" }'
+
+  SubscriptionMid:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: SubscriptionPermissionMid
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_mid-DEFAULT"
+      DestinationArn: !GetAtt WorkerFunction.Arn
+      FilterPattern: '{ $.type = "decision" }'
+
+  SubscriptionFwd1:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: SubscriptionPermissionFwd1
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_fwd1-DEFAULT"
+      DestinationArn: !GetAtt WorkerFunction.Arn
+      FilterPattern: '{ $.type = "decision" }'
+
+  SubscriptionFwd2:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: SubscriptionPermissionFwd2
+    Properties:
+      LogGroupName: !Sub "/aws/bedrock-agentcore/runtimes/${AppName}_fwd2-DEFAULT"
+      DestinationArn: !GetAtt WorkerFunction.Arn
+      FilterPattern: '{ $.type = "decision" }'
+
+Outputs:
+  WorkerFunctionArn:
+    Value: !GetAtt WorkerFunction.Arn
+
+  LearnerFunctionArn:
+    Value: !GetAtt LearnerFunction.Arn
