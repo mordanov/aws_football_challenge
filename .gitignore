@@ -23,3 +23,6 @@ aws_creds.txt
 
 # Analysis cache — generated, not committed
 .analysis/
+
+# Backup
+backups/

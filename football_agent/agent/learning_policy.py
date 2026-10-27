@@ -85,7 +85,7 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
                 for p in s.ours
             )
         ]
-        if len(exposed) >= 5 and len(exposed) / len(frames) >= 0.2:
+        if len(exposed) >= 3 and len(exposed) / len(frames) >= 0.10:
             supporting.append(match)
     matches = tuple(sorted(set(supporting)))
     if len(matches) < 2 or profile.settings.press_radius <= 12:
