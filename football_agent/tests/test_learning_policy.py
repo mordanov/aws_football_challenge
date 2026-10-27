@@ -10,7 +10,12 @@ from test_learning_automation import observation
 from agent.learning_observations import prepare_observation
 from agent.learning_policy import propose
 from agent.model import Profile
-from agent.profile_registry import CODE_GENERATION, canonical, profile_document, replace_settings_only
+from agent.profile_registry import (
+    CODE_GENERATION,
+    canonical,
+    profile_document,
+    replace_settings_only,
+)
 
 
 def evidence():
