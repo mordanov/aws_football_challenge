@@ -231,10 +231,10 @@ def shot_option(s: Snapshot, p: Player, settings: Settings) -> tuple[float, dict
     for y, aim in targets:
         target = (goal[0], y)
         lane = clearance(point(p), target, s.opponents)
-        min_lane = 1.2 if gap < 15 else 1.8
+        min_lane = 0.8 if gap < 15 else 1.2
         if lane >= min_lane:
             keeper_gap = abs(y - (keeper.y + 0.25 * keeper.vy))
-            quality = 66 + 35 * angle + min(keeper_gap, 6) * 2 - 0.25 * gap
+            quality = 74 + 35 * angle + min(keeper_gap, 6) * 2 - 0.25 * gap
             choices.append(
                 (
                     quality,
