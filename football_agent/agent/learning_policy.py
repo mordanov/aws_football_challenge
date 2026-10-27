@@ -91,7 +91,7 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
                 for p in s.ours
             )
         ]
-        if len(exposed) >= 3 and len(exposed) / len(frames) >= 0.10:
+        if len(exposed) >= 3 and len(exposed) / len(frames) >= 0.07:
             press_supporting.append(match)
         # Evidence: midfield dispossession with nearby support — opponent wins ball in midfield
         # while ≥2 of our non-GK are within 10m, suggesting pass_margin blocked viable lanes
@@ -108,7 +108,7 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
                 and (p.x - s.ball[0]) ** 2 + (p.y - s.ball[1]) ** 2 < 100
             ) >= 2
         ]
-        if len(mid_loss) >= 3 and len(mid_loss) / len(frames) >= 0.10:
+        if len(mid_loss) >= 3 and len(mid_loss) / len(frames) >= 0.07:
             margin_supporting.append(match)
         # Evidence: narrow attacking shape — all support players within 40% of support_width
         width_threshold = profile.settings.support_width
@@ -120,7 +120,7 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
             supports = [p for p in s.ours if p.id != 0 and p.id != carrier_id]
             if len(supports) >= 2 and all(abs(p.y) < width_threshold * 0.4 for p in supports):
                 narrow.append(s)
-        if len(narrow) >= 3 and len(narrow) / len(frames) >= 0.10:
+        if len(narrow) >= 3 and len(narrow) / len(frames) >= 0.07:
             width_supporting.append(match)
         # Evidence: clear attacking position near shot range with no opponent blocking lane
         shot_threshold = profile.settings.shot_range
@@ -138,7 +138,7 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
                 for p in s.players
             )
         ]
-        if len(at_range) >= 3 and len(at_range) / len(frames) >= 0.10:
+        if len(at_range) >= 3 and len(at_range) / len(frames) >= 0.07:
             shot_supporting.append(match)
     evidence_digest = hashlib.sha256(canonical(sorted(unique)).encode()).hexdigest()
     # Select the first qualifying candidate: press_radius (defensive) first, then the others
