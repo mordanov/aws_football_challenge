@@ -374,19 +374,23 @@ class S3ObservationOutbox(_EvidenceObjects):
         if self._status(key, envelope) == "SENT":
             return False
         content = document["content"]
-        self.memory.create_event(
-            memoryId=self.memory_id,
-            actorId=f"team_{self.team_id}",
-            sessionId=f"observations_v1_{content['match_id']}_{content['team_side']}",
-            eventTimestamp=datetime.fromtimestamp(
-                document["source"]["timestamp_ms"] / 1000, timezone.utc
-            ),
-            clientToken=document["observation_id"],
-            extractionMode="SKIP",
-            payload=[
-                {"conversational": {"role": "USER", "content": {"text": canonical(document)}}}
-            ],
-        )
+        try:
+            self.memory.create_event(
+                memoryId=self.memory_id,
+                actorId=f"team_{self.team_id}",
+                sessionId=f"observations_v1_{content['match_id']}_{content['team_side']}",
+                eventTimestamp=datetime.fromtimestamp(
+                    document["source"]["timestamp_ms"] / 1000, timezone.utc
+                ),
+                clientToken=document["observation_id"],
+                extractionMode="SKIP",
+                payload=[
+                    {"conversational": {"role": "USER", "content": {"text": canonical(document)}}}
+                ],
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                raise
         ack = self._ack(envelope)
         if self._create(self._ack_key(key), ack) != ack:
             raise RuntimeError("S3 observation acknowledgement conflicts")
