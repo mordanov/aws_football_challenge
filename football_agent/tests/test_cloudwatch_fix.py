@@ -12,6 +12,10 @@ Fix 2 (long-range shots): shot_range raised 29→32m so the agent shoots from
 Fix 3 (1v1 penalty area): lane threshold in shot_option lowered from 1.8 to 1.2
   when gap<15m (player inside penalty area). Prevents carrier at x≈45 from running
   into the GK because no shot was generated (keeper partially blocking both corners).
+
+Fix 4 (shoot more aggressively): far-range threshold also lowered from 1.8 to 1.2
+  (gap≥15m), and shot base quality raised 66→74 so shots reliably beat a clear-run
+  carry. Hypothesis: scoring the first goal faster.
 """
 import unittest
 from dataclasses import replace
@@ -164,7 +168,7 @@ class LongRangeShotTest(unittest.TestCase):
 
 
 class PenaltyAreaShotTest(unittest.TestCase):
-    """Close-range lane threshold lowered: shoot with lane 1.2-1.8 when gap<15m."""
+    """Lane threshold lowered to 1.2 for all ranges; shoot with lane 1.2-1.8."""
 
     def test_shot_attempted_at_43m_with_keeper_partially_blocking(self):
         """AT: carrier at x=43 (gap=12m) should SHOOT even with keeper partially blocking.
@@ -210,21 +214,17 @@ class PenaltyAreaShotTest(unittest.TestCase):
                 )
 
     def test_far_range_still_requires_clear_lane(self):
-        """Beyond penalty area (gap≥15m), lane threshold stays at 1.8: no change."""
+        """Beyond penalty area (gap≥15m), lane threshold is 1.2: shoot with lane 1.2-1.8."""
         for team in (0, 1):
-            # Carrier at x=38 (gap=17m): keeper at x=48, lane from 38 to corners through (48,0):
-            # direction=(17,2.6), t=(48-38)*17/(17^2+2.6^2)=170/295.76=0.575
-            # closest=(38+17*0.575,2.6*0.575)=(47.775,1.495); dist=sqrt(0.05+2.235)=1.51m
-            # lane=1.51 < 1.8: gap=17 ≥ 15 → OLD threshold applies → no SHOOT
+            # Carrier at x=38 (gap=17m): keeper at x=48, lane≈1.51m > 1.2 → SHOOT expected
             s = _snap_carrier(team, carrier_x=38.0, keeper_x=48.0)
             with self.subTest(team=team):
                 decision = decide(s, 4, DEFAULT_SETTINGS)
-                # SHOOT not expected because gap=17 ≥ 15 → threshold stays at 1.8
-                # lane≈1.51 < 1.8 → shot_option returns None → MOVE_TO chosen
-                self.assertNotEqual(
+                # SHOOT expected: gap=17 ≥ 15 → threshold=1.2, lane≈1.51 ≥ 1.2
+                self.assertEqual(
                     decision.command["commandType"],
                     "SHOOT",
-                    "at gap=17m (≥15), lane=1.51 < 1.8 → no SHOOT (old threshold still applies)",
+                    "at gap=17m (≥15), lane=1.51 ≥ 1.2 → SHOOT (new threshold)",
                 )
 
 
