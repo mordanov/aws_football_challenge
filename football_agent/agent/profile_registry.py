@@ -389,11 +389,24 @@ class DynamoProfileRegistry:
         )
 
 
+_TUNING: dict[str, tuple[float, float, float]] = {
+    # name: (step, lo, hi)
+    "press_radius": (-2.0, 12.0, 30.0),
+    "shot_range":   (+2.0, 20.0, 34.0),
+    "support_width": (+2.0, 10.0, 22.0),
+    "pass_margin":  (-0.5,  1.5,  4.5),
+}
+
+
 def replace_settings_only(baseline: Profile, candidate: Profile) -> bool:
-    """Initial automated remedy only decreases press radius by a bounded two-unit step."""
+    """Validate that exactly one setting changed by its allowed auto-tuning step."""
     before, after = baseline.to_dict()["settings"], candidate.to_dict()["settings"]
-    return (
-        after["press_radius"] == max(12.0, before["press_radius"] - 2.0)
-        and after["press_radius"] < before["press_radius"]
-        and all(before[k] == after[k] for k in before if k != "press_radius")
-    )
+    changed = [k for k in before if before[k] != after[k]]
+    if len(changed) != 1:
+        return False
+    key = changed[0]
+    if key not in _TUNING:
+        return False
+    step, lo, hi = _TUNING[key]
+    expected = max(lo, min(hi, before[key] + step))
+    return after[key] == expected and before[key] != after[key]
