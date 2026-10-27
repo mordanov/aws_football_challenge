@@ -4,6 +4,7 @@ import json
 import re
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -63,6 +64,8 @@ class Runtime:
         if llm is not None:
             from .advisor.in_match import InMatchAdvisor
             self._advisor = InMatchAdvisor(llm, str(match_id or ""))
+        self._response_cache: dict[str, str] = {}
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rt-bg")
 
     @property
     def log_status(self) -> dict:
@@ -72,9 +75,28 @@ class Runtime:
         return self._log.flush(timeout)
 
     def close(self, timeout: float = 1.0) -> bool:
+        self._executor.shutdown(wait=False, cancel_futures=True)
         return self._log.close(timeout)
 
     def handle(self, payload: dict, *, session_id: str | None = None) -> str:
+        # In competition mode, return the previous tick's cached response immediately
+        # and compute the new decision in the background for use on the next tick.
+        # First tick (no cache entry) falls through to synchronous compute.
+        if self.competition_adapter and session_id is not None:
+            cached = self._response_cache.get(session_id)
+            if cached is not None:
+                self._executor.submit(self._update_cache, payload, session_id)
+                return cached
+        response = self._run(payload, session_id=session_id)
+        if self.competition_adapter and session_id is not None:
+            self._response_cache[session_id] = response
+        return response
+
+    def _update_cache(self, payload: dict, session_id: str) -> None:
+        response = self._run(payload, session_id=session_id)
+        self._response_cache[session_id] = response
+
+    def _run(self, payload: dict, *, session_id: str | None = None) -> str:
         start = time.perf_counter()
         data, team, pid = envelope(payload)
         match = re.fullmatch(
