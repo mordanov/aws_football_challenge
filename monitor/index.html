@@ -499,10 +499,10 @@
       // Settings grid
       var s = p.settings || {};
       var fields = [
-        { key: 'press_radius',  label: 'Press Radius',  tuned: true  },
-        { key: 'pass_margin',   label: 'Pass Margin',   tuned: false },
-        { key: 'shot_range',    label: 'Shot Range',    tuned: false },
-        { key: 'support_width', label: 'Support Width', tuned: false },
+        { key: 'press_radius',  label: 'Press Radius',  tuned: true },
+        { key: 'pass_margin',   label: 'Pass Margin',   tuned: true },
+        { key: 'shot_range',    label: 'Shot Range',    tuned: true },
+        { key: 'support_width', label: 'Support Width', tuned: true },
       ];
       document.getElementById('settings-grid').innerHTML = fields.map(function(f) {
         return '<div class="stat">' +
