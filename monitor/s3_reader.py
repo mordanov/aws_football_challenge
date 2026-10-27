@@ -179,21 +179,32 @@ class S3Reader:
     def match_activity(self, days: int = 8) -> list[dict]:
         """Return match counts per day for the last `days` days, oldest first."""
         obs_prefix = f"{_S3_PREFIX}/{self._team}/observations/_days/"
-        # shortcut: single page only (≤1000 keys); busy agents may undercount matches
-        resp = self._client.list_objects_v2(Bucket=self._bucket, Prefix=obs_prefix)
-        contents = resp.get("Contents", [])
-
-        # Parse match_ids per date from keys: {prefix}{date}/{match_id}/{side}/{obs_id}
-        counts: dict[str, set[str]] = {}
-        for item in contents:
-            key = item["Key"]
-            relative = key[len(obs_prefix):]
-            parts = relative.split("/")
-            if len(parts) >= 2:
-                day_str, match_id = parts[0], parts[1]
-                counts.setdefault(day_str, set()).add(match_id)
-
         today = datetime.now(timezone.utc).date()
+        window = {(today - timedelta(days=days - 1 - i)).isoformat() for i in range(days)}
+        counts: dict[str, set[str]] = {}
+
+        def list_common_prefixes(prefix: str) -> list[str]:
+            result = []
+            token = None
+            while True:
+                kw: dict = {"Bucket": self._bucket, "Prefix": prefix, "Delimiter": "/"}
+                if token:
+                    kw["ContinuationToken"] = token
+                page = self._client.list_objects_v2(**kw)
+                result.extend(cp["Prefix"] for cp in page.get("CommonPrefixes", []))
+                if not page.get("IsTruncated"):
+                    break
+                token = page["NextContinuationToken"]
+            return result
+
+        for date_prefix in list_common_prefixes(obs_prefix):
+            date_str = date_prefix[len(obs_prefix):].rstrip("/")
+            if date_str not in window:
+                continue
+            for match_prefix in list_common_prefixes(date_prefix):
+                match_id = match_prefix[len(date_prefix):].rstrip("/")
+                counts.setdefault(date_str, set()).add(match_id)
+
         return [
             {
                 "date": (today - timedelta(days=days - 1 - i)).isoformat(),
