@@ -26,18 +26,35 @@ def test_match_activity_empty():
 
 
 def test_match_activity_counts_distinct_matches():
-    contents = [
-        {"Key": OBS_PREFIX + "2026-10-24/match-aaa/0/obs1.json"},
-        {"Key": OBS_PREFIX + "2026-10-24/match-bbb/0/obs2.json"},
-        {"Key": OBS_PREFIX + "2026-10-23/match-aaa/0/obs3.json"},
-    ]
+    from datetime import date, timedelta
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+
+    # list_objects_v2 with Delimiter="/" returns CommonPrefixes for virtual dirs.
+    # First call: enumerate date prefixes. Second+ calls: enumerate match IDs per date.
+    def _list(Bucket, Prefix, Delimiter, **_):
+        if Prefix == OBS_PREFIX:
+            return {"CommonPrefixes": [
+                {"Prefix": OBS_PREFIX + today + "/"},
+                {"Prefix": OBS_PREFIX + yesterday + "/"},
+            ], "IsTruncated": False}
+        if Prefix == OBS_PREFIX + today + "/":
+            return {"CommonPrefixes": [
+                {"Prefix": OBS_PREFIX + today + "/match-aaa/"},
+                {"Prefix": OBS_PREFIX + today + "/match-bbb/"},
+            ], "IsTruncated": False}
+        if Prefix == OBS_PREFIX + yesterday + "/":
+            return {"CommonPrefixes": [
+                {"Prefix": OBS_PREFIX + yesterday + "/match-aaa/"},
+            ], "IsTruncated": False}
+        return {"IsTruncated": False}
+
     client = MagicMock()
-    client.list_objects_v2.return_value = {"Contents": contents, "IsTruncated": False}
+    client.list_objects_v2.side_effect = _list
     result = S3Reader(client, BUCKET, TEAM, ACCOUNT).match_activity(days=3)
     by_date = {r["date"]: r["match_count"] for r in result}
-    # Two distinct matches on 2026-10-24, one on 2026-10-23
-    assert by_date.get("2026-10-24", 0) == 2
-    assert by_date.get("2026-10-23", 0) == 1
+    assert by_date.get(today, 0) == 2
+    assert by_date.get(yesterday, 0) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -87,3 +104,18 @@ def test_api_status_s3_error():
         resp = app.test_client().get("/api/status")
     assert resp.status_code == 500
     assert "error" in json.loads(resp.data)
+
+
+def test_api_status_registry_missing_still_returns_match_activity(mock_reader):
+    """RegistryMissing on current_profile must not block match_activity."""
+    from monitor.s3_reader import RegistryMissing
+    mock_reader.current_profile.side_effect = RegistryMissing("not bootstrapped")
+    mock_reader.promotion_history.side_effect = RegistryMissing("not bootstrapped")
+    app = create_app(BUCKET, TEAM, ACCOUNT)
+    with patch("monitor.monitor.S3Reader", return_value=mock_reader):
+        resp = app.test_client().get("/api/status")
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert "error" in data["current_profile"]
+    assert data["promotion_history"] == []
+    assert data["match_activity"] == [{"date": "2026-10-24", "match_count": 0}]

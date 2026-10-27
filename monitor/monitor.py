@@ -24,12 +24,23 @@ def create_app(bucket: str, team_id: str, owner_account: str) -> Flask:
         try:
             client = boto3.client("s3")
             reader = S3Reader(client, bucket, team_id, owner_account)
+
+            try:
+                current_profile = reader.current_profile()
+            except RegistryMissing as exc:
+                current_profile = {"error": str(exc)}
+
+            try:
+                promotion_history = reader.promotion_history()
+            except RegistryMissing:
+                promotion_history = []
+
             return jsonify(
                 {
                     "fetched_at": datetime.now(timezone.utc).isoformat(),
                     "team_id": team_id,
-                    "current_profile": reader.current_profile(),
-                    "promotion_history": reader.promotion_history(),
+                    "current_profile": current_profile,
+                    "promotion_history": promotion_history,
                     "match_activity": reader.match_activity(),
                 }
             )
