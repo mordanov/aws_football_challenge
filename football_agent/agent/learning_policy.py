@@ -140,18 +140,18 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
             shot_supporting.append(match)
     evidence_digest = hashlib.sha256(canonical(sorted(unique)).encode()).hexdigest()
     # Select the first qualifying candidate: press_radius (defensive) first, then the others
-    s = profile.settings
+    st = profile.settings
     _proposals = [
-        (press_supporting, "press_radius", max(12.0, s.press_radius - 2.0), s.press_radius > 12,
+        (press_supporting, "press_radius", max(12.0, st.press_radius - 2.0), st.press_radius > 12,
          "repeated observed central exposure: test smaller routine press radius; "
          "no causal failure or guaranteed improvement inferred"),
-        (margin_supporting, "pass_margin", max(1.5, s.pass_margin - 0.5), s.pass_margin > 1.5,
+        (margin_supporting, "pass_margin", max(1.5, st.pass_margin - 0.5), st.pass_margin > 1.5,
          "repeated midfield dispossession with nearby support: test lower pass margin; "
          "no causal failure or guaranteed improvement inferred"),
-        (width_supporting, "support_width", min(22.0, s.support_width + 2.0), s.support_width < 22,
+        (width_supporting, "support_width", min(22.0, st.support_width + 2.0), st.support_width < 22,
          "repeated narrow attacking shape: test wider support positions; "
          "no causal failure or guaranteed improvement inferred"),
-        (shot_supporting, "shot_range", min(34.0, s.shot_range + 2.0), s.shot_range < 34,
+        (shot_supporting, "shot_range", min(34.0, st.shot_range + 2.0), st.shot_range < 34,
          "repeated clear attacking positions near shot range: test extended shot range; "
          "no causal failure or guaranteed improvement inferred"),
     ]
