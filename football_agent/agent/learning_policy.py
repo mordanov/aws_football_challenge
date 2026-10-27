@@ -44,9 +44,11 @@ def propose(profile: Profile, documents: list[dict]) -> Candidate | None:
     width_supporting: list[str] = []
     shot_supporting: list[str] = []
     for (match, side), records in sorted(groups.items()):
+        records = [r for r in records if r["kind"] == "decision"]
+        if not records:
+            continue
         if any(
-            r["kind"] != "decision"
-            or r["profile_version"] != profile.version
+            r["profile_version"] != profile.version
             or r["profile_digest"] != digest
             or r["code_generation"] != CODE_GENERATION
             or r["final_result"] is not None

@@ -73,7 +73,7 @@ def test_insufficient_matches_or_distinct_clocks_do_not_tune():
     assert propose(Profile(), [docs[0], docs[5], docs[10]] * 50) is None
 
 
-@pytest.mark.parametrize("damage", ["mixed_version", "mixed_digest", "conflict", "runtime_error"])
+@pytest.mark.parametrize("damage", ["mixed_version", "mixed_digest", "conflict"])
 def test_mixed_or_unreliable_match_evidence_blocks_tuning(damage):
     docs = evidence()
 
@@ -86,9 +86,6 @@ def test_mixed_or_unreliable_match_evidence_blocks_tuning(damage):
             d["content"]["code_generation"] = "match_profiles_v1"
         elif damage == "conflict":
             d["content"]["snapshot"]["ball"] = [-20, 0]
-        else:
-            d["content"].update(kind="error", error_class="ValueError")
-            d["content"].pop("snapshot")
         d["observation_id"] = hashlib.sha256(canonical(d["content"]).encode()).hexdigest()
         return d
 
@@ -96,6 +93,27 @@ def test_mixed_or_unreliable_match_evidence_blocks_tuning(damage):
     docs.append(make_damaged(docs[0]))   # damages match 0
     docs.append(make_damaged(docs[5]))   # damages match 1
     assert propose(Profile(), docs) is None
+
+
+def test_error_records_in_session_are_tolerated():
+    """Error records (kind=error, no snapshot) must not poison the whole session."""
+    docs = evidence()
+
+    def make_error(src):
+        d = copy.deepcopy(src)
+        d["content"].update(kind="error", error_class="ValueError", tick=0)
+        d["content"].pop("snapshot")
+        d["content"].pop("input_format", None)
+        d["content"].pop("input_contract", None)
+        d["observation_id"] = hashlib.sha256(canonical(d["content"]).encode()).hexdigest()
+        return d
+
+    # Add error records to all three matches — sessions must still qualify.
+    docs.append(make_error(docs[0]))   # match 0 gets an error record
+    docs.append(make_error(docs[5]))   # match 1 gets an error record
+    docs.append(make_error(docs[10]))  # match 2 gets an error record
+    candidate = propose(Profile(), docs)
+    assert candidate is not None, "error records should be filtered out, not block the session"
 
 
 def test_central_cover_and_no_numeric_room_leave_baseline_unchanged():
