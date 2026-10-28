@@ -8,7 +8,7 @@
     "afcLearning": {
       "enabled": true,
       "backend": "s3",
-      "bucket": "cdk-hnb659fds-assets-559922262840-us-east-1",
+      "bucket": "team-databucketforknowledge-u9z1zjf5xgva",
       "stackName": "final-agent-s3-tactics-v3",
       "teamId": "aleksalotl_tactics_v3"
     },
